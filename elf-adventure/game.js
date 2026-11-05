@@ -2310,17 +2310,26 @@
       }
       if(d.name===state.bat.carryingDragon){d.biting=false;d.follow=[];d.escape=null;continue;}
       const guardedKey=state.items.whiteKey;
-      const guardingKey=d.name==='Vesper'&&d.room==='mosswoodHollow'&&guardedKey.room===d.room;
+      const guardingKey=d.name==='Vesper'&&guardedKey.room==='mosswoodHollow';
       if(guardingKey){
-        d.follow=[];d.escape=null;
-        // Defend the key locally instead of following visitors out of the Hollow.
-        if(state.room!==d.room||Math.hypot(state.player.x-guardedKey.x,state.player.y-guardedKey.y)>200||Math.hypot(d.x-guardedKey.x,d.y-guardedKey.y)>200){
+        d.keyPursuitTime=d.room==='mosswoodHollow'?0:(d.keyPursuitTime||0)+dt;
+        if(d.keyPursuitTime>=6)d.returningToKey=true;
+        const post={x:guardedKey.x+24,y:guardedKey.y-26};
+        // Give chase, then return to the key even if the player stays outside.
+        if(d.returningToKey||d.room==='mosswoodHollow'&&state.room!==d.room&&!d.follow.length&&!d.escape){
           d.biting=false;d.biteTimer=0;
-          const post={x:guardedKey.x+24,y:guardedKey.y-26};
-          if(Math.hypot(d.x-post.x,d.y-post.y)>8)moveDragonToward(d,post,dt);
+          d.follow=[];d.escape=null;
+          if(d.room!=='mosswoodHollow'){
+            const door=stalkerDoor(d,'mosswoodHollow');
+            if(door){
+              moveDragonToward(d,door.exit,dt);
+              if(!d.dead&&Math.hypot(d.x-door.exit.x,d.y-door.exit.y)<24){d.room=door.to;d.x=door.entry.x;d.y=door.entry.y;d.path=[];d.pathTimer=0;d.navigationTimer=0;}
+            }
+          }else if(Math.hypot(d.x-post.x,d.y-post.y)>8)moveDragonToward(d,post,dt);
+          else d.returningToKey=false;
           continue;
         }
-      }
+      }else if(d.name==='Vesper'){d.keyPursuitTime=0;d.returningToKey=false;}
       // The vault doorway is reserved for the player and elf helpers.
       if(d.follow.some(door=>door.to===DARK_ROOM))d.follow=[];
       if(d.escape?.to===DARK_ROOM)d.escape=null;
@@ -2340,7 +2349,7 @@
       if(d.biting){if(dist>55){d.biting=false;}else{d.biteTimer-=dt*DRAGON_DIFFICULTIES[dragonDifficulty].bite;if(d.biteTimer<=0){die(d);return;}continue;}}
       if(dist<38){d.biting=true;d.biteTimer=.65;playChomp();say(d.name+' lunges! Move away!');continue;}
       if(swordHeld){
-        if(!d.escape&&!guardingKey)d.escape=dragonEscapeDoor(d,p);
+        if(!d.escape)d.escape=dragonEscapeDoor(d,p);
         if(d.escape){const door=d.escape;moveDragonToward(d,door.exit,dt);if(d.dead)continue;if(Math.hypot(d.x-door.exit.x,d.y-door.exit.y)<24){d.room=door.to;d.x=door.entry.x;d.y=door.entry.y;d.escape=null;d.follow=[];d.path=[];d.pathTimer=0;}continue;}
       }else d.escape=null;
       moveDragonToward(d,p,dt,swordHeld);
