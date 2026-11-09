@@ -23,8 +23,6 @@
       this.light=this.add.graphics().setDepth(10).setVisible(false);
       this.effects=this.add.graphics().setDepth(170);
       this.darkness=this.add.graphics().setDepth(175);
-      this.pauseShade=this.add.rectangle(480,320,960,640,0x0b1418,.65).setDepth(190).setVisible(false);
-      this.pauseText=this.add.text(480,320,'PAUSED',{fontFamily:'monospace',fontSize:'52px',color:'#f5d691'}).setOrigin(.5).setDepth(191).setVisible(false);
       this.playerBody=this.add.zone(480,530,30,30);
       this.physics.add.existing(this.playerBody);
       this.playerBody.body.setAllowGravity(false).setBounce(0).setCollideWorldBounds(false);
@@ -168,7 +166,6 @@
         text.style.top=Math.round(Math.max(3,Math.min(canvasBounds.height-text.offsetHeight-3,y)))+'px';
       }
       for(const [id,text] of this.labelPool)if(!labels.has(id))text.hidden=true;
-      this.pauseShade.setVisible(frame.mode==='paused');this.pauseText.setVisible(frame.mode==='paused');
     }
 
     shutdown(){

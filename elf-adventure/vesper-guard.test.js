@@ -10,8 +10,8 @@ function setup(){
   const d=s.dragons.find(d=>d.name==='Vesper');s.dragons=[d];
   return {api,s,d,key:s.items.whiteKey};
 }
-test('Vesper chases out of the Hollow, then returns to the white key while the player stays away',()=>{
-  const {api,s,d,key}=setup();s.room='stone';
+test('Vesper chases out of the Hollow, then returns beside its tree while the player stays away',()=>{
+  const {api,s,d}=setup();s.room='stone';
   Object.assign(s.player,{x:480,y:320});
   Object.assign(d,{x:794.4,y:55,follow:[{to:'stone',exit:{x:794.4,y:55},entry:{x:794.4,y:585}}]});
   api.updateDragons(.02);assert.equal(d.room,'stone','follows the player out');
@@ -19,7 +19,7 @@ test('Vesper chases out of the Hollow, then returns to the white key while the p
   assert(d.returningToKey,'returns after a brief pursuit');
   for(let n=0;n<6000&&!(d.room==='mosswoodHollow'&&!d.returningToKey);n++)api.updateDragons(.02);
   assert.equal(d.room,'mosswoodHollow');assert.equal(d.follow.length,0);
-  assert(Math.hypot(d.x-(key.x+24),d.y-(key.y-26))<=8,'returns to the guard post');
+  assert(Math.hypot(d.x-350,d.y-550)<=8,'returns beside the tree');
 });
 test('Vesper attacks nearby and chases a distant player within the Hollow',()=>{
   const {api,s,d}=setup();s.room=d.room;

@@ -14,9 +14,9 @@ test('Mosswood reference walls leave two aligned, reversible doors to the lower 
   assert(!api.blocked('stone',480,20,true));
   assert.equal(api.neighbor('stone',api.dir.down),'mosswoodHollow');
   assert.equal(api.neighbor('mosswoodHollow',api.dir.up),'stone');
-  assert.equal(api.neighbor('mosswoodHollow',api.dir.down),'mosswoodHollow');
+  assert.equal(api.neighbor('mosswoodHollow',api.dir.down),'mosswoodDepths');
   assert(api.blocked('mosswoodHollow',480,620,true));
-  assert.equal(api.visibleExits('mosswoodHollow').down,false);
+  assert.equal(api.visibleExits('mosswoodHollow').down,true);
   for(const [x,y] of [[300,20],[480,400],[20,200],[940,200],[480,620]])assert(api.blocked('stone',x,y,true));
   for(const [x,y] of [[20,320],[940,320],[169.2,620],[794.4,620],[480,220]])assert(!api.blocked('stone',x,y,true));
   for(const x of [20,940])assert(api.blocked('stone',x,470,true));
@@ -47,11 +47,9 @@ test('Mosswood reference walls leave two aligned, reversible doors to the lower 
   assert.equal(s.room,'stone','maze doorway returns to Mosswood Forest');
 });
 
-test('both Hollow entrances reach the white key at the reference marker',()=>{
+test('both Hollow entrances reach the south passage to the key chamber',()=>{
   const {api}=scope.load();api.initial('gold');const s=api.state();s.elves=[];
-  const key=s.items.whiteKey;
-  assert.equal(key.room,'mosswoodHollow');
-  assert(Math.abs(key.x-541.2)<.01);assert(Math.abs(key.y-545.9583)<.01);
+  const key={room:'mosswoodHollow',x:552,y:620};
   assert(!api.blocked(key.room,key.x,key.y,true));
   // Flood walkable floor, checking each step so narrow walls cannot be skipped.
   for(const startX of [170,790]){
@@ -66,5 +64,35 @@ test('both Hollow entrances reach the white key at the reference marker',()=>{
       }
     }
     assert(reached,'white key is reachable from entrance '+startX);
+  }
+});
+
+test('Mosswood Depths matches the narrow passage and bottom key chamber in every quest mode',()=>{
+  for(const mode of ['gold','easy','random']){
+    const {api,window}=scope.load();api.initial(mode);const s=api.state();
+    s.mode='playing';s.elves=[];s.dragons=[];s.bat.room='absent';
+    const key=s.items.whiteKey;
+    assert.equal(key.room,'mosswoodDepths');
+    assert.equal(key.x,504);assert.equal(key.y,578);
+    assert.equal(api.wallColor(key.room),'#3D8C45');
+    assert.equal(api.neighbor(key.room,api.dir.up),'mosswoodHollow');
+    for(const edge of ['down','left','right'])assert.equal(api.neighbor(key.room,api.dir[edge]),key.room);
+    for(let y=20;y<=575;y+=5)assert(!api.blocked(key.room,552,y,true),'continuous narrow passage');
+    for(const [x,y] of [[470,300],[640,300],[510,300],[594,300],[552,620],[440,575],[700,575]])assert(api.blocked(key.room,x,y,true),'solid green walls and half-width passage');
+    for(const x of [537,567])assert(!api.blocked(key.room,x,300,true),'60-pixel-wide passage fits the player');
+    for(const y of [515,530,578,585])for(const x of [480,504,552,660])assert(!api.blocked(key.room,x,y,true),'100-pixel-tall chamber floor');
+    for(const x of [480,504,552,660])assert(!api.blocked(key.room,x,578,true),'wider chamber floor');
+    s.room='mosswoodHollow';Object.assign(s.player,{x:552,y:570});window.joystickInput={x:0,y:1};
+    for(let n=0;n<100&&s.room==='mosswoodHollow';n++)api.update(.02);
+    assert.equal(s.room,key.room,'south exit enters the new room');
+    assert.equal(s.player.x,552,'aligned passage');
+    for(let n=0;n<100&&s.player.y<570;n++)api.update(.02);
+    window.joystickInput={x:-1,y:0};
+    for(let n=0;n<20&&s.held!=='whiteKey';n++){api.update(.02);api.pickup();}
+    assert.equal(s.held,'whiteKey','key can be collected in the bottom chamber');
+    Object.assign(s.player,{x:552,y:60});window.joystickInput={x:0,y:-1};
+    for(let n=0;n<100&&s.room==='mosswoodDepths';n++)api.update(.02);
+    assert.equal(s.room,'mosswoodHollow','north exit returns to the Hollow');
+    assert.equal(s.held,'whiteKey','key can be brought back');
   }
 });

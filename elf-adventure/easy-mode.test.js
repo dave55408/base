@@ -1259,16 +1259,16 @@ test('players can steal carried items only while an elf is knocked out', () => {
   api.updateElves(29.9);assert.equal(elf.x,480);assert.equal(elf.y,320);assert.equal(state.held,'apple');
 });
 
-test('elf pickup and drop sounds are thirty percent of player volume', () => {
+test('elf pickup and drop sounds are half of player volume', () => {
   const {api,element,sounds}=loadGame();api.initial('gold');const state=api.state();state.mode='playing';state.room='crossroads';
   const elf=state.elves[0];state.elves=[elf];Object.assign(elf,{room:'westInside',x:305,y:320,wait:0,goal:null,path:[]});
   state.items.apple={room:'westInside',x:245,y:320};api.updateElves(.05);
   const pickup=sounds.find(sound=>sound.src==='assets/pick-up.mp3'),drop=sounds.find(sound=>sound.src==='assets/drop.mp3');
-  assert.equal(pickup.volume,.3);
+  assert.equal(pickup.volume,.5);
   Object.assign(state.player,{x:state.items.coin.x,y:state.items.coin.y});api.pickup();assert.equal(state.held,'coin');assert.equal(pickup.volume,1);
   element('dropBtn').onclick();assert.equal(drop.volume,1);
   for(let step=0;step<1000&&elf.giftTask;step++)api.updateElves(.05);
-  assert.equal(elf.giftTask,null);assert.equal(drop.volume,.3);
+  assert.equal(elf.giftTask,null);assert.equal(drop.volume,.5);
 });
 
 test('happy elves pause for one second before sharing their jewel', () => {

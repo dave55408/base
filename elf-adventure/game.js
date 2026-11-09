@@ -55,8 +55,9 @@
   const LAMP_BELL={x:610,y:545},DARK_HELPER_ANCHOR={x:150,y:130};
   const DARK_GUARD_POST={x:720,y:420};
   const NIGHTSTONE_DARK_AREA={x:775.2,y:477.2,w:184.8,h:162.8};
-  const LAMP_HEIGHT=104*.75*.9;
-  const LAMP_WIDTH=52*.75*.9;
+  const LAMP_SCALE=.64;
+  const LAMP_WIDTH=52*LAMP_SCALE;
+  const LAMP_HEIGHT=91*LAMP_SCALE;
   const ELF_TREASURES={jewelRed:'west',jewel:'redTrail',jewelGreen:'blueGate'};
   const AXE_IDS=['axe','axe2','axe3','axe4','axe5','axe6'];
   const ELF_HOME_AXES={axe4:'west',axe5:'blueGate',axe6:'redTrail'};
@@ -103,12 +104,49 @@
     // Use the same room-space thickness in both directions, with square joins.
     return {x:a.x-14.4,y:a.y-14.4,w:b.x-a.x+28.8,h:b.y-a.y+28.8};
   });
-  const MOSSWOOD_WHITE_KEY=hollowPoint(69.5,111);
+  const MOSSWOOD_KEY_ROOM='mosswoodDepths';
+  const MOSSWOOD_WHITE_KEY={x:504,y:578};
+  const MOSSWOOD_DEPTHS_BANDS=[
+    {top:0,bottom:H*.48,color:'#3D8C45'},
+    {top:H*.48,bottom:H*.72,color:'#43964A'},
+    {top:H*.72,bottom:H,color:'#49A04F'}
+  ];
+  // Fixed, independent stepped contours keep the rock layers irregular without flicker.
+  const MOSSWOOD_DEPTHS_COLUMNS=(()=>{
+    let seed=0x4d4f5353;
+    const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+    const columns=[],offsets=[0,0],pixel=16;
+    for(let x=0;x<W;){
+      const width=pixel*(1+Math.floor(random()*4));
+      const edges=[0,...MOSSWOOD_DEPTHS_BANDS.slice(1).map((band,i)=>{
+        offsets[i]=Math.max(-4,Math.min(4,offsets[i]+Math.floor(random()*7)-3));
+        return (Math.round(band.top/pixel)+offsets[i])*pixel;
+      }),H];
+      columns.push({x,w:Math.min(width,W-x),edges});x+=width;
+    }
+    // Flatten narrow peaks and notches into the neighboring steps.
+    for(let i=1;i<columns.length-1;i++){
+      if(columns[i].w>pixel*2)continue;
+      for(let edge=1;edge<3;edge++){
+        const before=columns[i-1].edges[edge],after=columns[i+1].edges[edge];
+        columns[i].edges[edge]=Math.max(Math.min(before,after),Math.min(Math.max(before,after),columns[i].edges[edge]));
+      }
+    }
+    return columns;
+  })();
+  const MOSSWOOD_PASSAGE={center:552,width:60};
+  const MOSSWOOD_PASSAGE_LEFT=MOSSWOOD_PASSAGE.center-MOSSWOOD_PASSAGE.width/2;
+  const MOSSWOOD_PASSAGE_RIGHT=MOSSWOOD_PASSAGE.center+MOSSWOOD_PASSAGE.width/2;
+  const MOSSWOOD_DEPTHS_WALLS=[
+    {x:0,y:0,w:MOSSWOOD_PASSAGE_LEFT,h:500},{x:MOSSWOOD_PASSAGE_RIGHT,y:0,w:W-MOSSWOOD_PASSAGE_RIGHT,h:500},
+    {x:0,y:500,w:456,h:100},{x:684,y:500,w:276,h:100},
+    {x:0,y:600,w:960,h:40}
+  ];
   const MOSSWOOD_HOLLOW_WALLS=[{x:0,y:0,w:96,h:48.85},{x:242.4,y:0,w:482.4,h:48.85},
     {x:864,y:0,w:96,h:48.85},{x:0,y:48.85,w:48.85,h:591.15},{x:911.15,y:48.85,w:48.85,h:591.15},
-    {x:0,y:591.15,w:960,h:48.85},...MOSSWOOD_HOLLOW_MAZE];
+    {x:0,y:591.15,w:MOSSWOOD_PASSAGE_LEFT,h:48.85},{x:MOSSWOOD_PASSAGE_RIGHT,y:591.15,w:W-MOSSWOOD_PASSAGE_RIGHT,h:48.85},...MOSSWOOD_HOLLOW_MAZE];
   const STONE_PASSAGE_TREES=[{x:740,y:160}];
-  function mosswoodRoom(room){return room==='stone'||room==='mosswoodHollow';}
+  function mosswoodRoom(room){return room==='stone'||room==='mosswoodHollow'||room===MOSSWOOD_KEY_ROOM;}
   const LABYRINTH_APPROACH_TREES=[{x:240,y:220},{x:720,y:420}];
   const WINDING_WOOD_TREES=[{x:210,y:165},{x:690,y:470}];
   const WINDING_WOOD_WALLS=[{x:155,y:445,w:160,h:45},{x:635,y:145,w:165,h:45},{x:390,y:115,w:45,h:100},{x:515,y:435,w:45,h:95}];
@@ -150,7 +188,7 @@
     brush.putImageData(pixels,0,0);
     sprites.lamp=original;spriteUrls.lamp=original.toDataURL();assetRevision++;if(state)refresh();
   };
-  lampArtwork.src=assetURL('assets/lamp-simple.png',5);
+  lampArtwork.src=assetURL('assets/lamp-simple_sm.png',1);
   const forestBellArtwork=new Image();
   forestBellArtwork.onload=()=>{
     const original=document.createElement('canvas');original.width=forestBellArtwork.naturalWidth;original.height=forestBellArtwork.naturalHeight;
@@ -345,7 +383,7 @@
     ['west',null,'gold',null,'blueGate',null,null],
     ['homeCrossing','stone','crossroads','blueMaze','blueVault',null,null],
     ['redTrail','mosswoodHollow','south','labyrinthApproach','moonwoodTrail',null,null],
-    ['duskwoodTrail',null,null,null,'blackApproach','moonwoodShrine',null],
+    ['duskwoodTrail','mosswoodDepths',null,null,'blackApproach','moonwoodShrine',null],
     ['lamplightLanding',null,null,'labyrinthGate',null,null,null],
     ['midnightVault',null,null,'labyrinthVault','white',null,null]
   ];
@@ -373,7 +411,7 @@
     labyrinthApproach:{name:'LABYRINTH APPROACH',type:'field'},
     labyrinthGate:{name:'BRIARSTONE GATE',type:'maze'},labyrinthVault:{name:'BRIARSTONE VAULT',type:'maze'},
     white:{name:'WHITE CASTLE',type:'whiteCastle'},whiteInside:{name:'WHITE CASTLE HALL',type:'whiteInside'},
-    black:{name:'BLACK CASTLE',type:'blackCastle'},blackInside:{name:'BLACK CASTLE HALL',type:'blackInside'},
+    black:{name:'BLACK CASTLE RUINS',type:'blackCastle'},blackInside:{name:'BLACK CASTLE HALL',type:'blackInside'},
     blackDungeon:{name:'BLACK DUNGEON',type:'greyDungeon'},nightfallInside:{name:'EMBER VAULT',type:'blackInside'},
     blackApproachSouth:{name:'MISTWOOD THICKET',type:'field'},
     moonwoodShrine:{name:'MOONWOOD SHRINE',type:'field'},
@@ -383,6 +421,7 @@
     west:{name:"RUBY GROVE",type:'field'},gold:{name:'GOLDEN KEEP',type:'goldCastle'},blueGate:{name:"EMERALD GLADE",type:'maze'},
     homeCrossing:{name:'WILLOW CROSSING',type:'field'},
     mosswoodHollow:{name:'MOSSWOOD HOLLOW',type:'field'},
+    mosswoodDepths:{name:'MOSSWOOD DEPTHS',type:'field'},
     stone:{name:'MOSSWOOD FOREST',type:'field'},crossroads:{name:'THE CROSSROADS',type:'field'},blueMaze:{name:'WINDING WOOD',type:'maze'},blueVault:{name:'MOONWELL VAULT',type:'maze'},
     redTrail:{name:"SAPPHIRE SHORE",type:'field'},south:{name:'WYRMWOOD WILDS',type:'field'},blackApproach:{name:"MOONWOOD GROVE",type:'field'},
     westInside:{name:"RUBY COTTAGE",type:'elfInside'},blueGateInside:{name:"EMERALD COTTAGE",type:'elfInside'},
@@ -479,6 +518,7 @@
   const upperMazeSide=mazeY(1.5),middleMazeSide=mazeY(5.5),lowerMazeSide=mazeY(9.5);
   addMazePortal('Z','stone','up',W/2,'mazeML','down',W/2,MAZE_CELL_W*8);
   for(const [i,door] of MOSSWOOD_DOORS.entries())addMazePortal('MOSS'+i,'stone','down',door.x+door.w/2,'mosswoodHollow','up',door.x+door.w/2,door.w);
+  addMazePortal('MOSS-DEPTHS','mosswoodHollow','down',MOSSWOOD_PASSAGE.center,MOSSWOOD_KEY_ROOM,'up',MOSSWOOD_PASSAGE.center,MOSSWOOD_PASSAGE.width);
   addMazePortal('MOSS-W','stone','left',320,'homeCrossing','right',320,140);
   addMazePortal('MOSS-E','stone','right',320,'crossroads','left',320,140);
   addMazePortal('G','mazeTR','up',480,'black','down',480,MAZE_CELL_W*8);
@@ -527,7 +567,8 @@
   itemStarts.flute2=['absent',0,0];
   itemStarts.jewelNight=['absent',0,0];
   for(const id of ['coin5','coin6','coin7'])itemStarts[id]=['absent',0,0];
-  const dragonStarts=[['Yorgle','#e7c859','west',180,320,105],['Grundle','#7ac475','south',480,320,88],['Rhindle','#e97568','whiteInside',480,195,133],['Vesper','#9246C0','mosswoodHollow',565,520,105]];
+  const VESPER_POST={room:'mosswoodHollow',x:350,y:550};
+  const dragonStarts=[['Yorgle','#e7c859','west',180,320,105],['Grundle','#7ac475','south',480,320,88],['Rhindle','#e97568','whiteInside',480,195,133],['Vesper','#9246C0',VESPER_POST.room,VESPER_POST.x,VESPER_POST.y,105]];
   const dir={up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}};
   let state,keys=new Set(),last=0,moveDelay=0,noticeTimer=0,batTimer=0,magnetPulse=0;
   const overlay=$('overlay'),transitionScreen=$('transitionScreen'),hints=$('hints'),hintsToggle=$('hintsToggle');
@@ -661,7 +702,7 @@
     state.items.sword={room:'westInside',x:715,y:265,treasureOwner:'west',elfAssessment:{home:'west',x:715,y:265}};
     state.items.sword2={room:'goldInside',x:310,y:330};
     state.items.axe={room:'goldInside',x:180,y:330};
-    state.items.axe2={room:'mazeML',x:480,y:320};
+    state.items.axe2={room:'absent',x:0,y:0};
     state.items.axe3={room:'absent',x:0,y:0};
     for(const [id,home] of Object.entries(ELF_HOME_AXES)){
       const slot=ELF_TREASURE_SLOTS[3];
@@ -678,7 +719,7 @@
     for(const [id,[room,x,y]] of Object.entries(easy?easyGifts:kingdomGifts))state.items[id]={room,x,y};
     state.items.apple4={room:'mazeBR',x:240,y:530};
     state.items.coin4={room:'mazeML',x:720,y:530};
-    state.items.whiteKey={room:'mosswoodHollow',...MOSSWOOD_WHITE_KEY};
+    state.items.whiteKey={room:MOSSWOOD_KEY_ROOM,...MOSSWOOD_WHITE_KEY};
     state.items.flute2={room:'south',x:780,y:320};
     positionLooseObjectsNearWalls();
     if(state.items.apple.room==='stone')Object.assign(state.items.apple,{x:650,y:220});
@@ -728,8 +769,8 @@
       if(spot){item.x=spot.x;item.y=spot.y;positioned.push({room:item.room,...spot,halfW});}
     }
   }
-  function showOverlay(title,description,button){$('overlayTitle').textContent=title;$('overlayText').textContent=description;$('overlayBtn').textContent=button;overlay.classList.toggle('game-over',state.mode==='lost');overlay.classList.toggle('title',state.mode==='title');overlay.hidden=false;}
-  function hideOverlay(){overlay.hidden=true;overlay.classList.remove('game-over','title','fading','transitioning');}
+  function showOverlay(title,description,button){$('overlayTitle').textContent=title;$('overlayText').textContent=description;$('overlayBtn').textContent=button;overlay.classList.toggle('game-over',state.mode==='lost');overlay.classList.toggle('paused',state.mode==='paused');overlay.classList.toggle('title',state.mode==='title');overlay.hidden=false;}
+  function hideOverlay(){overlay.hidden=true;overlay.classList.remove('game-over','paused','title','fading','transitioning');}
   function sideTouched(p,item){const dx=item.x-p.x,dy=item.y-p.y;if(Math.abs(dx)<1&&Math.abs(dy)<1)return p.face;return Math.abs(dx)>Math.abs(dy)?dx>0?'right':'left':dy>0?'down':'up';}
   function heldPosition(distance=35){const p=state.player,d=dir[state.heldSide];if(state.held==='lamp')distance=Math.max(distance,Math.ceil((d.x?LAMP_WIDTH:LAMP_HEIGHT)/2+PLAYER_HALF_SIZE+4));return {x:p.x+d.x*distance,y:p.y+d.y*distance};}
   function heldBridgePosition(){const offset=state.heldBridgeOffset;return offset?{x:state.player.x+offset.x,y:state.player.y+offset.y}:heldPosition(BRIDGE_HOLD_DISTANCE);}
@@ -852,7 +893,8 @@
   }
   function neighbor(room,d){
     if(room==='stone')return d.x<0?'homeCrossing':d.x>0?'crossroads':d.y<0?'mazeML':d.y>0?'mosswoodHollow':room;
-    if(room==='mosswoodHollow')return d.y<0?'stone':room;
+    if(room==='mosswoodHollow')return d.y<0?'stone':d.y>0?MOSSWOOD_KEY_ROOM:room;
+    if(room===MOSSWOOD_KEY_ROOM)return d.y<0?'mosswoodHollow':room;
     if(room==='moonwoodTrail')return d.y<0?'blueVault':d.y>0?'blackApproach':room;
     if(room==='duskwoodTrail')return d.y<0?'redTrail':d.y>0?LAMP_ROOM:room;
     if(room===LAMP_ROOM)return d.y<0?'duskwoodTrail':d.y>0?DARK_ROOM:room;
@@ -884,7 +926,7 @@
     const pos=currentGrid(room);if(!pos)return room;
     // Keep the original map slots; cross gaps left by removed rooms directly.
     for(let x=pos[0]+d.x,y=pos[1]+d.y;y>=0&&y<grid.length&&x>=0&&x<grid[y].length;x+=d.x,y+=d.y){
-      if(grid[y][x])return grid[y][x]==='mosswoodHollow'||grid[y][x]==='white'||grid[y][x]==='south'||grid[y][x]==='gold'&&d.x||d.x&&['labyrinthApproach','labyrinthGate','labyrinthVault'].includes(grid[y][x])?room:grid[y][x];
+      if(grid[y][x])return grid[y][x]==='mosswoodHollow'||grid[y][x]===MOSSWOOD_KEY_ROOM||grid[y][x]==='white'||grid[y][x]==='south'||grid[y][x]==='gold'&&d.x||d.x&&['labyrinthApproach','labyrinthGate','labyrinthVault'].includes(grid[y][x])?room:grid[y][x];
     }
     return room;
   }
@@ -991,7 +1033,7 @@
       const pos=elfCarriedPosition(elf);
       if(elf.carrying==='bat')Object.assign(state.bat,pos);
       else Object.assign(state.items[elf.carrying],pos);
-      elf.carrying=null;playDrop(.3);
+      elf.carrying=null;playElfDrop();
     }
     if(task&&!task.retrieval){
       const item=task.id==='bat'?state.bat:state.items[task.id];
@@ -1023,7 +1065,7 @@
     const q=state.darkQuest,elf=state.elves.find(e=>e.home===q.helper);
     if(![LAMP_ROOM,DARK_ROOM].includes(state.room))q.requested=false;
     if(q.helper&&((!q.requested&&!q.returning)||!elf||!darkFriend(elf)||elf.stunTimer>0||elf.surpriseTimer>0)){
-      if(elf){if(elf.carrying==='lamp'){const p=itemPosition('lamp');state.items.lamp={...p};elf.carrying=null;playDrop(.3);}elf.darkHolding=false;elf.goal=null;elf.path=[];elf.wait=.5;}
+      if(elf){if(elf.carrying==='lamp'){const p=itemPosition('lamp');state.items.lamp={...p};elf.carrying=null;playElfDrop();}elf.darkHolding=false;elf.goal=null;elf.path=[];elf.wait=.5;}
       q.helper=null;q.returning=false;
     }
     q.retryIn=Math.max(0,q.retryIn-dt);
@@ -1033,14 +1075,14 @@
     elf.darkHolding=false;if(state.darkQuest.helper!==elf.home)return false;
     const returning=!!state.darkQuest.returning;
     if(returning&&elf.room===LAMP_ROOM&&Math.hypot(elf.x-320,elf.y-365)<8){
-      if(elf.carrying==='lamp'){state.items.lamp={...elfCarriedPosition(elf)};elf.carrying=null;playDrop(.3);}
+      if(elf.carrying==='lamp'){state.items.lamp={...elfCarriedPosition(elf)};elf.carrying=null;playElfDrop();}
       state.darkQuest.helper=null;state.darkQuest.returning=false;state.darkQuest.requested=false;
       elf.goal=null;elf.path=[];elf.wait=1;return false;
     }
     if(!returning&&elf.carrying!=='lamp'){
       if(state.held==='lamp'||state.bat.carrying==='lamp'||!rooms[state.items.lamp.room]){elf.goal=null;elf.path=[];elf.wait=.5;return true;}
       const lamp=itemPosition('lamp');
-      if(elf.room===lamp.room&&Math.hypot(elf.x-lamp.x,elf.y-lamp.y)<78){elf.carrying='lamp';state.items.lamp.room='elf:'+elf.home;elf.goal=null;elf.path=[];elf.wait=0;playPickup(.3);}
+      if(elf.room===lamp.room&&Math.hypot(elf.x-lamp.x,elf.y-lamp.y)<78){elf.carrying='lamp';state.items.lamp.room='elf:'+elf.home;elf.goal=null;elf.path=[];elf.wait=0;playElfPickup();}
     }
     const carrying=elf.carrying==='lamp',target=returning?{room:LAMP_ROOM,x:320,y:365}:carrying?{room:DARK_ROOM,...DARK_HELPER_ANCHOR}:itemPosition('lamp');
     if(!returning&&carrying&&elf.room===DARK_ROOM&&Math.hypot(elf.x-target.x,elf.y-target.y)<8){elf.darkHolding=true;elf.goal=null;elf.path=[];return true;}
@@ -1092,7 +1134,7 @@
     const activeHelper=state.elves.find(elf=>elf.home===quest.helper);
     const helperHolding=activeHelper?.room===FOREST_QUEST_ROOM&&forestFriend(activeHelper)&&!activeHelper.stunTimer&&!activeHelper.surpriseTimer&&Math.hypot(activeHelper.x-FOREST_HELPER_SPOT.x,activeHelper.y-FOREST_HELPER_SPOT.y)<12;
     const holding=helperHolding||quest.playerHolding;
-    if(helperHolding&&!quest.switchDown)playPickup(.3);
+    if(helperHolding&&!quest.switchDown)playElfPickup();
     quest.switchDown=!!holding;
     quest.lift=Math.max(0,Math.min(1,(quest.lift||0)+(holding?1:-1)*dt/.8));
     const open=!!holding&&quest.lift>=1;
@@ -1116,6 +1158,7 @@
   function roomWalls(room){const type=rooms[room].type;
     if(room==='stone')return MOSSWOOD_WALLS;
     if(room==='mosswoodHollow')return MOSSWOOD_HOLLOW_WALLS;
+    if(room===MOSSWOOD_KEY_ROOM)return MOSSWOOD_DEPTHS_WALLS;
     if(room==='blackDungeon'||room==='nightfallInside')return [];
     if(room==='labyrinthApproach')return [{x:0,y:DUNGEON_WALL_Y,w:W,h:DUNGEON_WALL_HEIGHT}];
     if(room==='labyrinthGate'||room==='labyrinthVault'){
@@ -1685,6 +1728,7 @@
   function playDragonDeath(){dragonDeathSound.currentTime=0;dragonDeathSound.play().catch(()=>{});}
   function playPlayerDeath(){playerDeathSound.currentTime=0;playerDeathSound.play().catch(()=>{});}
   function playPickup(volume=1){pickupSound.volume=volume;pickupSound.currentTime=0;pickupSound.play().catch(()=>{});}
+  function playElfPickup(){playPickup(.5);}
   function stopFluteSound(){
     if(flutePlayback!=='idle'){fluteSound.pause();fluteSound.currentTime=0;}
     fluteSound.loop=false;flutePlayback='idle';
@@ -1708,6 +1752,7 @@
     }
   }
   function playDrop(volume=1){dropSound.volume=volume;dropSound.currentTime=0;dropSound.play().catch(()=>{});}
+  function playElfDrop(){playDrop(.5);}
   function moveDragonToward(d,target,dt,fear=false,ignoreElf=true){
     d.navigationTimer=Math.max(0,(d.navigationTimer||0)-dt);
     d.pathTimer=Math.max(0,d.pathTimer-dt);
@@ -1792,7 +1837,7 @@
     const id=Object.keys(ELF_TREASURES).find(id=>ELF_TREASURES[id]===elf.home),item=state.items[id];
     if(item.room!==elf.home+'Inside'||treasureAreaOwner(item)!==elf.home)return;
     if(elf.trusted&&isAxe(elf.carrying)){
-      state.items[elf.carrying]={room:elf.room,x:elf.x,y:elf.y+60};elf.carrying=null;playDrop(.3);
+      state.items[elf.carrying]={room:elf.room,x:elf.x,y:elf.y+60};elf.carrying=null;playElfDrop();
     }
     if(elf.carrying)return;
     if(item.room===elf.home+'Inside'&&treasureAreaOwner(item)===elf.home){
@@ -1912,7 +1957,7 @@
       if(task.theft)say(ELF_NAMES[elf.home]+' stole your '+itemInfo[task.id][0].toLowerCase()+'!');
       if(task.feeling==='hates')finishElfGiftReaction(elf,task,false);
       if(task.offering){delete item.treasureOwner;if(state.treasureWatch)delete state.treasureWatch[task.id];}
-      playPickup(.3);
+      playElfPickup();
       targetRoom=elfGiftTargetRoom(elf,task);
     }
     if(elf.goal)return;
@@ -1932,7 +1977,7 @@
       const {x,y}=task.delivery;
       if(task.id==='bat')Object.assign(state.bat,{room:targetRoom,x,y,pickupCooldown:1.5});
       else state.items[task.id]={room:targetRoom,x,y,elfAssessment:{home:elf.home,x,y},treasureOwner:task.feeling==='likes'&&!task.offering&&!task.excess?elf.home:null};
-      playDrop(.3);
+      playElfDrop();
       finishElfGiftReaction(elf,task);
       if(task.reclaim)elf.reclaimJewel=false;
       elf.carrying=null;elf.giftTask=null;elf.wait=.5;return;
@@ -1969,14 +2014,14 @@
   function updateFriendlyRetrieval(elf){
     const task=elf.giftTask,item=state.items[task.id];
     const cancel=()=>{
-      if(elf.carrying===task.id){state.items[task.id]={room:elf.room,x:elf.x,y:elf.y+60};if(task.id==='lamp')playDrop(.3);elf.carrying=null;}
+      if(elf.carrying===task.id){state.items[task.id]={room:elf.room,x:elf.x,y:elf.y+60};if(task.id==='lamp')playElfDrop();elf.carrying=null;}
       elf.giftTask=null;elf.goal=null;elf.path=[];elf.wait=.5;
     };
     if(elf.room!==state.room||elf.emotionalState.sentiment!==3||elf.emotionalState.passion!==1||Object.keys(elf.stolenItems||{}).length){cancel();return;}
     if(!elf.carrying){
       if(!item||item.room!==task.request.room||item.x!==task.request.x||item.y!==task.request.y){cancel();return;}
       if(Math.hypot(item.x-elf.x,item.y-elf.y)<=85){
-        elf.carrying=task.id;item.room='elf:'+elf.home;elf.goal=null;elf.path=[];elf.wait=0;playPickup(.3);
+        elf.carrying=task.id;item.room='elf:'+elf.home;elf.goal=null;elf.path=[];elf.wait=0;playElfPickup();
       }
     }
     const target=elf.carrying?state.player:item;
@@ -1985,7 +2030,7 @@
       const pos={room:elf.room,x:elf.x+dx/length*35,y:elf.y+dy/length*35};
       if(blocked(elf.room,pos.x,pos.y,elf.home))return;
       state.items[task.id]=pos;elf.carrying=null;elf.giftTask=null;elf.goal=null;elf.path=[];elf.wait=1;
-      playDrop(.3);say(ELF_NAMES[elf.home]+' brought back your '+itemInfo[task.id][0].toLowerCase()+'.');return;
+      playElfDrop();say(ELF_NAMES[elf.home]+' brought back your '+itemInfo[task.id][0].toLowerCase()+'.');return;
     }
     if(elf.goal&&(!elf.carrying||Math.hypot(elf.goal.x-target.x,elf.goal.y-target.y)<130))return;
     const goal=friendlyRetrievalGoal(elf,target);
@@ -2037,7 +2082,7 @@
     if(elf.carrying&&!isAxe(elf.carrying)){
       const pos=elfCarriedPosition(elf);
       if(elf.carrying==='bat')Object.assign(state.bat,pos);else state.items[elf.carrying]={...pos};
-      if(elf.carrying==='lamp')playDrop(.3);
+      if(elf.carrying==='lamp')playElfDrop();
       elf.carrying=null;
     }
     elf.attackTimer=Math.max(0,(elf.attackTimer||0)-dt);
@@ -2050,7 +2095,7 @@
         const id=elf.carrying,start=elfCarriedPosition(elf),dx=state.player.x-start.x,dy=state.player.y-start.y,length=Math.hypot(dx,dy)||1;
         state.items[id]={...start};state.axeFlights[id]={room:elf.room,vx:dx/length*650,vy:dy/length*650,travelled:0,age:0,thrower:elf.home};
         state.axePickupDirections[id]=null;state.axeRecoveries[id]=null;
-        elf.carrying=null;elf.goal=null;elf.path=[];elf.wait=.7;elf.attackTimer=.7;playDrop(.3);return;
+        elf.carrying=null;elf.goal=null;elf.path=[];elf.wait=.7;elf.attackTimer=.7;playElfDrop();return;
       }
       if(elf.room===targetRoom){
         const angle=(elf.attackAngle||0)*Math.PI/2;elf.attackAngle=(elf.attackAngle||0)+1;
@@ -2064,7 +2109,7 @@
       const axe=state.items[id];targetRoom=axe.room;
       if(elf.room===targetRoom&&Math.hypot(elf.x-axe.x,elf.y-axe.y)<=75){
         elf.carrying=id;elf.axeSide=state.player.x<elf.x?'left':'right';axe.room='elf:'+elf.home;
-        elf.goal=null;elf.path=[];elf.wait=0;elf.attackTimer=0;playPickup(.3);return;
+        elf.goal=null;elf.path=[];elf.wait=0;elf.attackTimer=0;playElfPickup();return;
       }
       goal=[[-65,0],[65,0],[0,-65],[0,65]].map(([dx,dy])=>({x:axe.x+dx,y:axe.y+dy})).sort((a,b)=>Math.hypot(a.x-elf.x,a.y-elf.y)-Math.hypot(b.x-elf.x,b.y-elf.y)).find(point=>!blocked(targetRoom,point.x,point.y,elf.home));
     }
@@ -2119,7 +2164,7 @@
         if(elf.carrying){
           const pos=elfCarriedPosition(elf);
           if(elf.carrying==='bat')Object.assign(state.bat,pos);else state.items[elf.carrying]={...pos};
-          if(elf.carrying==='lamp')playDrop(.3);
+          if(elf.carrying==='lamp')playElfDrop();
           elf.carrying=null;
         }
         elf.giftTask=null;elf.goal=null;elf.path=[];elf.wait=0;
@@ -2310,17 +2355,17 @@
       }
       if(d.name===state.bat.carryingDragon){d.biting=false;d.follow=[];d.escape=null;continue;}
       const guardedKey=state.items.whiteKey;
-      const guardingKey=d.name==='Vesper'&&guardedKey.room==='mosswoodHollow';
+      const guardingKey=d.name==='Vesper'&&guardedKey.room===MOSSWOOD_KEY_ROOM;
       if(guardingKey){
-        d.keyPursuitTime=d.room==='mosswoodHollow'?0:(d.keyPursuitTime||0)+dt;
+        d.keyPursuitTime=d.room===VESPER_POST.room?0:(d.keyPursuitTime||0)+dt;
         if(d.keyPursuitTime>=6)d.returningToKey=true;
-        const post={x:guardedKey.x+24,y:guardedKey.y-26};
-        // Give chase, then return to the key even if the player stays outside.
-        if(d.returningToKey||d.room==='mosswoodHollow'&&state.room!==d.room&&!d.follow.length&&!d.escape){
+        const post=VESPER_POST;
+        // Give chase, then return beside the Hollow tree while the key is untouched.
+        if(d.returningToKey||d.room===post.room&&state.room!==d.room&&!d.follow.length&&!d.escape){
           d.biting=false;d.biteTimer=0;
           d.follow=[];d.escape=null;
-          if(d.room!=='mosswoodHollow'){
-            const door=stalkerDoor(d,'mosswoodHollow');
+          if(d.room!==post.room){
+            const door=stalkerDoor(d,post.room);
             if(door){
               moveDragonToward(d,door.exit,dt);
               if(!d.dead&&Math.hypot(d.x-door.exit.x,d.y-door.exit.y)<24){d.room=door.to;d.x=door.entry.x;d.y=door.entry.y;d.path=[];d.pathTimer=0;d.navigationTimer=0;}
@@ -2408,6 +2453,29 @@
     const side=state.held==='bat'?dir[state.heldSide]:null;
     d.room=b.room;d.x=b.x+(side?side.x*65:0);d.y=b.y+(side?side.y*65:65);
   }
+  function releaseCarriedDragon(){
+    const b=state.bat,d=state.dragons.find(dragon=>dragon.name===b.carryingDragon);
+    if(!d){b.carryingDragon=null;return true;}
+    if(b.room===DARK_ROOM)return false;
+    // The bat flies through terrain; its passenger must land with its whole
+    // 40-by-100 sprite clear of walls and a walkable route back to a doorway.
+    const clear=(x,y)=>x>=35&&x<=W-35&&y>=65&&y<=H-65&&
+      [[0,0],[-5,-35],[5,-35],[-5,35],[5,35]].every(([dx,dy])=>!blocked(b.room,x+dx,y+dy,true));
+    const destinations=connectedRooms(b.room);
+    if(b.room.endsWith('Inside')&&rooms[b.room.slice(0,-6)])destinations.push(b.room.slice(0,-6));
+    const exits=[...new Set(destinations)].filter(room=>room!==DARK_ROOM).flatMap(room=>dragonDoors(b.room,room))
+      .map(door=>door.exit).filter(point=>!blocked(b.room,point.x,point.y,true));
+    const candidates=[{x:d.x,y:d.y}];
+    for(let y=65;y<=H-65;y+=15)for(let x=35;x<=W-35;x+=15)candidates.push({x,y});
+    candidates.sort((a,c)=>Math.hypot(a.x-d.x,a.y-d.y)-Math.hypot(c.x-d.x,c.y-d.y));
+    const landing=candidates.find(point=>clear(point.x,point.y)&&
+      [[15,0],[-15,0],[0,15],[0,-15]].some(([dx,dy])=>clear(point.x+dx,point.y+dy))&&
+      exits.some(exit=>clearDragonRoute(b.room,point.x,point.y,exit.x,exit.y,true)||findDragonRoute({room:b.room,...point},exit).length));
+    if(!landing)return false;
+    Object.assign(d,{room:b.room,...landing,biting:false,biteTimer:0,follow:[],escape:null,path:[],pathTimer:0,
+      navigationTimer:0,navigationGoal:null,navigationWaypoint:null,navigationDirect:false,pathTarget:null,enteringFromBelow:false});
+    b.carryingDragon=null;return true;
+  }
   function updateBat(dt){
     const b=state.bat,p=state.player,playerActive=state.mode==='playing'&&!(p.stunTimer>0);
     const elfCarrier=state.elves.find(elf=>elf.carrying==='bat');
@@ -2444,8 +2512,8 @@
       state.heldSide=sideTouched(p,b);state.held='bat';state.heldBridgeOffset=null;b.chaseTimer=0;batTimer=.8;syncHeldBat();syncCarriedDragon();playPickup();say('Picked up the bat.');return;
     }
     if(playerActive&&b.room===state.room&&state.held&&batTimer<=0&&Math.hypot(p.x-b.x,p.y-b.y)<36){
+      if(!releaseCarriedDragon()){batTimer=.25;return;}
       const offered=state.held,received=b.carrying,receivedPosition=received&&isBridge(received)?batCarriedPosition(received):null;state.heldSide=sideTouched(p,b);
-      b.carryingDragon=null;
       state.items[offered].room='bat';b.carrying=offered;state.held=received;state.heldBridgeOffset=receivedPosition?{x:receivedPosition.x-p.x,y:receivedPosition.y-p.y}:null;
       if(received){state.items[received].room='held';say('The bat swapped your '+itemInfo[offered][0]+' for '+itemInfo[received][0]+'.');}
       else say('The bat stole your '+itemInfo[offered][0]+'!');
@@ -2741,7 +2809,7 @@
     ctx.restore();
     if(celebrating)for(let i=0;i<16;i++){const x=305+(i*79)%355,y=75+(i*137)%310,size=5+(i%3)*3;rect(x,y,size,size,`hsl(${(hue+i*35)%360} 100% 75%)`);}
   }
-  function wallColor(roomId){if(roomId==='blueMaze')return '#4F6B3C';if(roomId==='mosswoodHollow')return '#3D8C45';if(roomId==='duskwoodTrail'||roomId==='moonwoodTrail')return '#1E3221';if(roomId==='blackDungeon')return '#000000';if(roomId===DARK_ROOM)return '#333333';if(roomId===LAMP_ROOM)return '#333333';if(roomId==='blackApproach'||roomId===FOREST_QUEST_ROOM)return '#1E3221';if(mosswoodRoom(roomId))return '#535bd4';if(ELF_HOME_COLORS[roomId])return ELF_HOME_COLORS[roomId];if(roomId==='blueVault')return '#71658C';if(ELF_INTERIORS[roomId])return ELF_HOME_COLORS[ELF_INTERIORS[roomId]];if(roomId==='west')return '#84B468';if(state.questMode==='easy'&&roomId==='greyDungeon')return '#8C58B8';if(wideSideDoors(roomId))return '#74B474';if(state.questMode==='easy'&&roomId==='blackApproach')return '#9CA864';if(state.questMode==='easy'&&roomId==='blackApproachSouth')return '#C06848';const type=rooms[roomId].type;const castleColor={whiteCastle:'#ffffff',whiteInside:'#ffffff',blackCastle:'#000000',blackInside:'#000000',goldCastle:'#d2d240',goldInside:'#d2d240'}[type];return roomId==='entry'?'#FD41FF':usesBlueGateStyle(roomId)?'#8f8b8f':castleColor||(type==='newMaze'?'#505cc0':type==='redDungeon'?'#ad596f':type==='maze'?'#718b95':type==='dark'||type==='greyDungeon'?'#777386':'#ad596f');}
+  function wallColor(roomId){if(roomId==='blueMaze')return '#4F6B3C';if(roomId==='mosswoodHollow'||roomId===MOSSWOOD_KEY_ROOM)return '#3D8C45';if(roomId==='duskwoodTrail'||roomId==='moonwoodTrail')return '#1E3221';if(roomId==='blackDungeon')return '#000000';if(roomId===DARK_ROOM)return '#333333';if(roomId===LAMP_ROOM)return '#333333';if(roomId==='blackApproach'||roomId===FOREST_QUEST_ROOM)return '#1E3221';if(mosswoodRoom(roomId))return '#535bd4';if(ELF_HOME_COLORS[roomId])return ELF_HOME_COLORS[roomId];if(roomId==='blueVault')return '#71658C';if(ELF_INTERIORS[roomId])return ELF_HOME_COLORS[ELF_INTERIORS[roomId]];if(roomId==='west')return '#84B468';if(state.questMode==='easy'&&roomId==='greyDungeon')return '#8C58B8';if(wideSideDoors(roomId))return '#74B474';if(state.questMode==='easy'&&roomId==='blackApproach')return '#9CA864';if(state.questMode==='easy'&&roomId==='blackApproachSouth')return '#C06848';const type=rooms[roomId].type;const castleColor={whiteCastle:'#ffffff',whiteInside:'#ffffff',blackCastle:'#000000',blackInside:'#000000',goldCastle:'#d2d240',goldInside:'#d2d240'}[type];return roomId==='entry'?'#FD41FF':usesBlueGateStyle(roomId)?'#8f8b8f':castleColor||(type==='newMaze'?'#505cc0':type==='redDungeon'?'#ad596f':type==='maze'?'#718b95':type==='dark'||type==='greyDungeon'?'#777386':'#ad596f');}
   function usesBlueGateStyle(roomId){return ['blueGate','blueVault','labyrinthGate','labyrinthVault'].includes(roomId);}
   function drawTree(x,y){
     // Snap shared edges after scaling so chunky blocks meet without seams.
@@ -2908,6 +2976,17 @@
     const exits=visibleExits();
     if(type==='newMaze')drawNewMaze(state.room);
     else for(const w of roomWalls(state.room)){
+      if(state.room===MOSSWOOD_KEY_ROOM){
+        for(const column of MOSSWOOD_DEPTHS_COLUMNS){
+          const left=Math.max(w.x,column.x),right=Math.min(w.x+w.w,column.x+column.w);
+          if(right<=left)continue;
+          for(const [i,band] of MOSSWOOD_DEPTHS_BANDS.entries()){
+            const top=Math.max(w.y,column.edges[i]),bottom=Math.min(w.y+w.h,column.edges[i+1]);
+            if(bottom>top)rect(left,top,right-left,bottom-top,band.color);
+          }
+        }
+        continue;
+      }
       if(mosswoodRoom(state.room)){rect(w.x,w.y,w.w,w.h,wallColor(state.room));continue;}
       if(['blueGate','labyrinthGate','labyrinthVault'].includes(state.room)){rect(w.x,w.y,w.w,w.h,wallColor(state.room));continue;}
       const elfColor=ELF_HOME_COLORS[ELF_INTERIORS[state.room]];
@@ -2992,7 +3071,6 @@
     const p=state.player,playerSize=21.06,{x:px,y:py}=playerDrawPosition();ctx.save();if(state.mode==='winning'&&(state.room==='gold'||state.room==='goldInside'))ctx.filter=`hue-rotate(${(state.winTimer*300)%360}deg) saturate(2) brightness(1.25)`;ctx.fillStyle=wallColor(state.room);ctx.fillRect(px-playerSize/2,py-playerSize/2,playerSize,playerSize);ctx.restore();if(state.held&&state.held!=='bat'){const pos=isBridge(state.held)?heldBridgePosition():heldPosition();drawItem(state.held,pos.x+px-p.x,pos.y+py-p.y);}
     for(const elf of state.elves.filter(elf=>elf.room===state.room))drawElfEmotions(elf);
     updateObjectTooltip();
-    if(state.mode==='paused'){rect(0,0,W,H,'#0b1418aa');label('PAUSED',480,330,52,'#f5d691','center');}
   }
   function mapItemRoom(id,item){
     if(state.usedAxes.has(id))return 'absent';
@@ -3131,7 +3209,7 @@
   function togglePanels(){document.body.classList.toggle('playfield-only');}
   const keyDir={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',s:'down',a:'left',d:'right'};
   document.addEventListener('contextmenu',event=>event.preventDefault());
-  function handleKeyDown(e){if(behaviorDialog.open)return;const k=e.key.length===1?e.key.toLowerCase():e.key;if(k==='Tab'){e.preventDefault();togglePanels();}else if(k==='Enter'&&state.mode==='lost'){e.preventDefault();newQuest();}else if(keyDir[k]){keys.add(keyDir[k]);e.preventDefault();}else if(k===' '&&state.mode!=='title'){useAction();e.preventDefault();}else if(k==='m'){magnet();}else if(k==='p'){pause();}else if(k==='r'&&state.mode!=='title'){newQuest();}}
+  function handleKeyDown(e){if(behaviorDialog.open)return;const k=e.key.length===1?e.key.toLowerCase():e.key;if(k==='Tab'){e.preventDefault();togglePanels();}else if(k==='Enter'&&state.mode==='paused'){e.preventDefault();pause();}else if(k==='Enter'&&state.mode==='lost'){e.preventDefault();newQuest();}else if(keyDir[k]){keys.add(keyDir[k]);e.preventDefault();}else if(k===' '&&state.mode!=='title'){useAction();e.preventDefault();}else if(k==='m'){magnet();}else if(k==='p'){pause();}else if(k==='r'&&state.mode!=='title'){newQuest();}}
   function handleKeyUp(e){const k=e.key.length===1?e.key.toLowerCase():e.key;if(keyDir[k])keys.delete(keyDir[k]);}
   if(!window.ELF_USE_PHASER){window.addEventListener('keydown',handleKeyDown);window.addEventListener('keyup',handleKeyUp);}
   window.addEventListener('blur',()=>keys.clear());

@@ -370,11 +370,11 @@ test('lamp-bound Umbra snaps at his mouth, lets the player escape, and stays dis
 });
 
 test('the lamp picks up at its edges and stays clear of the player on every carrying side',()=>{
-  for(const [side,dx,dy] of [['up',0,45],['down',0,-45],['left',27,0],['right',-27,0]]){
+  for(const [side,dx,dy] of [['up',0,39],['down',0,-39],['left',27,0],['right',-27,0]]){
     const {api,s,window}=setup();s.items.lamp={room:s.room,x:480,y:320};
     Object.assign(s.player,{x:480+dx,y:320+dy});api.pickup();
     assert.equal(s.held,'lamp');assert.equal(s.heldSide,side);
-    const lamp=api.itemPosition('lamp'),half=side==='up'||side==='down'?35.1:17.55;
+    const lamp=api.itemPosition('lamp'),half=side==='up'||side==='down'?29.12:16.64;
     assert(Math.hypot(lamp.x-s.player.x,lamp.y-s.player.y)>=half+10.53+4,'held lamp must not overlap the cursor');
     window.ElfAdventure.action();assert.equal(s.held,null);
     assert(Math.hypot(s.items.lamp.x-s.player.x,s.items.lamp.y-s.player.y)>=half+10.53+4,'drop keeps the lamp clear too');

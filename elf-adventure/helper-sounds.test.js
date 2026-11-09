@@ -17,6 +17,7 @@ test('an elf dropping the lamp plays the let-go sound once on return or cancella
     const update=()=>reason==='return'?api.prepareDarkHelper(elf):api.updateDarkQuest(.1);
     update();assert.equal(elf.carrying,null);assert.equal(s.items.lamp.room,elf.room);
     assert.equal(drop.plays,before+1);
+    assert.equal(drop.volume,.5,'the elf lamp drop is half as loud as the player drop');
     update();assert.equal(drop.plays,before+1,'the sound does not repeat after the drop');
   }
 });
@@ -28,6 +29,7 @@ test('a helper picking up the lamp plays the pickup sound once',()=>{
   s.items.lamp={room:s.room,x:320,y:365};s.darkQuest.helper=elf.home;
   const pickup=sounds.find(sound=>sound.src==='assets/pick-up.mp3'),before=pickup.plays;
   api.prepareDarkHelper(elf);assert.equal(elf.carrying,'lamp');assert.equal(pickup.plays,before+1);
+  assert.equal(pickup.volume,.5,'the elf lamp pickup is half as loud as the player pickup');
   api.prepareDarkHelper(elf);assert.equal(pickup.plays,before+1,'carrying the lamp does not repeat the sound');
 });
 
