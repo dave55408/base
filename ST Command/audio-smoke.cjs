@@ -1,0 +1,55 @@
+const assert=require('node:assert/strict'),path=require('node:path');
+const {chromium}=require(require.resolve('playwright',{paths:[__dirname,path.resolve(__dirname,'../elf-adventure')]}));
+const {createServer}=require('./server.cjs');
+(async()=>{
+  const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
+  const origin='http://127.0.0.1:'+server.address().port;
+  try{
+    const partial=await fetch(origin+'/assets/audio/bridge-ambience.m4a',{headers:{Range:'bytes=0-31'}});
+    assert.equal(partial.status,206);assert.equal(partial.headers.get('content-type'),'audio/mp4');assert.equal((await partial.arrayBuffer()).byteLength,32);
+    const invalid=await fetch(origin+'/assets/audio/bridge-ambience.m4a',{headers:{Range:'bytes=999999999-'}});assert.equal(invalid.status,416);
+    browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,args:['--no-sandbox']});
+    const page=await browser.newPage({viewport:{width:2560,height:1440}}),external=[],errors=[];
+    page.on('pageerror',e=>errors.push(e.message));
+    await page.route('**/*',route=>{if(route.request().url().startsWith(origin+'/'))return route.continue();external.push(route.request().url());return route.abort();});
+    await page.goto(origin);
+    assert.equal(await page.locator('iframe').count(),0,'no external player');
+    await page.waitForFunction(()=>window.STCommandAudio&&(STCommandAudio.playing||STCommandAudio.awaitingGesture));
+    assert(await page.evaluate(()=>STCommandAudio.wanted),'bridge loop is enabled automatically on load');
+    if(await page.evaluate(()=>STCommandAudio.awaitingGesture))await page.mouse.click(10,10);
+    await page.waitForFunction(()=>STCommandAudio.playing);assert(await page.locator('#audio-panel').isHidden(),'automatic background loop keeps the audio panel closed');
+    await page.keyboard.press('b');assert.equal(await page.evaluate(()=>STCommandAudio.playing),false,'B stops the automatic loop');await page.keyboard.press('b');await page.waitForFunction(()=>STCommandAudio.playing);
+    const initial=await page.locator('#bridge-ambience').evaluate(a=>({duration:a.duration,loop:a.loop,src:a.currentSrc,volume:a.volume,time:a.currentTime}));
+    assert(initial.duration>120&&initial.duration<130,'the actual recording is about 2:05');assert(initial.loop);assert(initial.src.startsWith(origin+'/assets/audio/'));assert.equal(initial.volume,.3);
+    await page.waitForFunction(t=>document.getElementById('bridge-ambience').currentTime>t+.2,initial.time);
+    const initialPanel=await page.locator('#audio-panel').boundingBox(),title=await page.locator('.audio-title').boundingBox();
+    await page.mouse.move(title.x+80,title.y+15);await page.mouse.down();await page.mouse.move(title.x-620,title.y+765,{steps:12});await page.mouse.up();
+    const movedPanel=await page.locator('#audio-panel').boundingBox();assert(movedPanel.x<initialPanel.x-500&&movedPanel.y>initialPanel.y+600,'title bar drags the audio window away from the viewscreen');
+    assert(await page.evaluate(()=>STCommandAudio.playing),'dragging leaves the audio playing');
+    const headingBefore=await page.evaluate(()=>STCommand.state.heading);await page.keyboard.press('ArrowLeft');
+    assert(Math.abs((await page.locator('#audio-panel').boundingBox()).x-(movedPanel.x-10))<1,'arrow keys reposition the focused window');
+    assert.equal(await page.evaluate(()=>STCommand.state.heading),headingBefore,'moving the window does not steer the ship');
+    await page.keyboard.press('p');assert.equal(await page.evaluate(()=>STCommand.state.paused),true);assert.equal(await page.evaluate(()=>STCommandAudio.playing),false,'simulation pause also pauses audio');
+    const pausedTime=await page.locator('#bridge-ambience').evaluate(a=>a.currentTime);await page.waitForTimeout(150);
+    assert(Math.abs((await page.locator('#bridge-ambience').evaluate(a=>a.currentTime))-pausedTime)<.01,'audio playback position freezes while paused');
+    await page.keyboard.press('Enter');await page.waitForFunction(()=>STCommandAudio.playing);assert.equal(await page.evaluate(()=>STCommand.state.paused),false,'resuming simulation resumes audio');
+    await page.locator('#bridge-ambience').evaluate(a=>a.pause());await page.keyboard.press('p');await page.keyboard.press('p');
+    assert.equal(await page.evaluate(()=>STCommandAudio.playing),false,'manually paused audio stays paused');
+    await page.locator('#bridge-ambience').evaluate(a=>a.play());await page.waitForFunction(()=>STCommandAudio.playing);
+    await page.locator('#audio-volume').fill('45');assert.equal(await page.locator('#bridge-ambience').evaluate(a=>a.volume),.45);
+    await page.locator('#bridge-ambience').evaluate(a=>{a.currentTime=a.duration-.25;});
+    await page.waitForFunction(()=>{const a=document.getElementById('bridge-ambience');return a.currentTime<2&&!a.paused;},null,{timeout:10000});
+    await page.locator('#audio-close').click();assert.equal(await page.evaluate(()=>STCommandAudio.playing),false);assert(await page.locator('#audio-panel').isHidden());
+    await page.keyboard.press('b');await page.waitForFunction(()=>STCommandAudio.playing);assert.equal(await page.locator('#bridge-ambience').evaluate(a=>a.volume),.45);
+    const reopened=await page.locator('#audio-panel').boundingBox();assert(Math.abs(reopened.x-(movedPanel.x-10))<1&&Math.abs(reopened.y-movedPanel.y)<1,'reopening preserves the window position');
+    await page.setViewportSize({width:390,height:844});await page.waitForTimeout(100);
+    const resized=await page.locator('#audio-panel').boundingBox();assert(resized.x>=0&&resized.y>=0&&resized.x+resized.width<=390&&resized.y+resized.height<=844,'resizing keeps the audio window within reach');
+    await page.keyboard.press('b');assert.equal(await page.evaluate(()=>STCommandAudio.playing),false);
+    await page.setViewportSize({width:2560,height:1440});
+    assert.deepEqual(external,[],'audio works without external network requests');assert.deepEqual(errors,[]);
+    assert(await page.evaluate(()=>document.documentElement.scrollHeight<=innerHeight),'1440p layout preserved');
+    const autoplayBrowser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,args:['--no-sandbox','--autoplay-policy=no-user-gesture-required']});
+    try{const autoplayPage=await autoplayBrowser.newPage();await autoplayPage.goto(origin);await autoplayPage.waitForFunction(()=>window.STCommandAudio?.playing&&document.getElementById('bridge-ambience').currentTime>.1);assert(await autoplayPage.locator('#audio-panel').isHidden(),'allowed autoplay starts without an interaction or audio popup');}finally{await autoplayBrowser.close();}
+    console.log('Passed actual local audio: '+initial.duration.toFixed(1)+' seconds, playback advances, volume, repeat across end, B toggle, close, byte-range serving, and no external network requests.');
+  }finally{await browser?.close();await new Promise(r=>server.close(r));}
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,0 +1,10 @@
+Bridge ambience
+
+Source: Enterprise Bridge Sound FX Star Trek (2009-2013)
+https://www.youtube.com/watch?v=MwBMf0mg_q0
+Video ID: MwBMf0mg_q0
+Duration: approximately 2 minutes, 5 seconds
+Local file: bridge-ambience.m4a
+
+Audio-only M4A stream saved from the user-provided video for ST Command.
+The player loops this local file; no YouTube embed is used during playback.

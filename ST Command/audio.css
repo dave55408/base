@@ -1,0 +1,7 @@
+.audio-panel{position:fixed;z-index:20;right:28px;top:30px;width:330px;max-width:calc(100vw - 24px);border:1px solid #93602d;border-top:2px solid #dc9b45;border-radius:6px;background:#100a05;color:#e7bc7c;box-shadow:0 12px 36px #000d,inset 0 1px #ffcb6b22;padding-bottom:12px}
+.audio-panel[hidden]{display:none}.audio-title{height:35px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:9px;letter-spacing:1px;background:linear-gradient(#34200d,#170e06)}
+.audio-title button{background:transparent;border:0;box-shadow:none;color:#f3c382;font-size:23px;padding:0 3px}
+.audio-title{cursor:grab;touch-action:none;user-select:none}.audio-title:focus-visible{outline:1px solid #ffc267;outline-offset:-3px}.audio-title button{cursor:pointer}.audio-panel.dragging .audio-title{cursor:grabbing}
+#bridge-ambience{display:block;width:calc(100% - 24px);height:42px;margin:12px;color-scheme:dark}
+#audio-status{font-size:10px;line-height:1.5;margin:10px 12px;color:#ca9c60}.audio-settings{margin:0 12px}.audio-settings label{font-size:9px;letter-spacing:1px}.audio-settings input{margin:12px 0}.audio-source{display:inline-block;margin:3px 12px 0;color:#dba55d;font-size:9px;text-decoration:none}.audio-source:hover{text-decoration:underline}
+@media(max-width:650px){.audio-panel{right:12px;top:20px}}

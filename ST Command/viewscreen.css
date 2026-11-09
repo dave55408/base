@@ -1,0 +1,12 @@
+body.viewscreen-mode{overflow:hidden}
+body.viewscreen-mode main{width:100%;max-width:none;height:100dvh;padding:0;display:block}
+body.viewscreen-mode .console{display:block;height:100%}
+body.viewscreen-mode .helm,body.viewscreen-mode .tactical,body.viewscreen-mode .galaxy,body.viewscreen-mode footer,body.viewscreen-mode .simulation-note{display:none}
+body.viewscreen-mode .forward{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;width:100vw;height:100dvh;min-height:0;margin:0;border:0;border-radius:0;background:#070907;box-shadow:none}
+body.viewscreen-mode .forward>.display-title{display:none}
+body.viewscreen-mode .viewscreen-shell{flex:1;min-height:0;border-radius:0;padding:22px 34px 29px}
+body.viewscreen-mode .screen-glass{height:100%}
+body.viewscreen-mode #main-view{height:100%;min-height:0}
+body.viewscreen-mode .view-overlay{pointer-events:none}
+.forward:fullscreen{width:100vw;height:100dvh}
+@media(max-width:650px){body.viewscreen-mode .viewscreen-shell{padding:15px 14px 20px}}

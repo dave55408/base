@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ST Command · Enterprise Navigation</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="console3d.css">
+  <link rel="stylesheet" href="bridge.css">
+  <link rel="stylesheet" href="screen-fit.css">
+  <link rel="stylesheet" href="audio.css">
+  <link rel="stylesheet" href="viewscreen.css">
+  <link rel="stylesheet" href="mission.css">
+  <link rel="stylesheet" href="help.css">
+</head>
+<body>
+  <main>
+    <div class="console">
+      <section class="display forward">
+        <div class="display-title"><h2><span>01</span> MAIN VIEWSCREEN</h2><span>FORWARD OPTICAL ARRAY</span></div>
+        <div class="viewscreen-shell">
+          <div class="screen-light top" aria-hidden="true"></div>
+          <div class="screen-glass">
+            <div id="main-view" class="canvas-host" role="img" aria-label="Live panoramic forward starfield and destination bearing"></div>
+            <div class="view-overlay"><span id="view-label">SOL SYSTEM</span><span id="drive-label">IMPULSE DRIVE</span></div>
+          </div>
+          <div class="screen-light bottom" aria-hidden="true"></div>
+          <div class="bridge-rail" aria-hidden="true"></div>
+        </div>
+      </section>
+      <aside class="helm">
+        <div class="display-title"><h2><span>04</span> HELM CONTROL</h2><a id="help-link" href="#controls-help" aria-haspopup="dialog">HELP / CONTROLS</a></div>
+        <div class="helm-body">
+          <div class="flight-controls">
+          <div class="section-label">3D FLIGHT VECTOR <span>YAW / PITCH</span></div>
+          <div class="heading-control"><button id="port" aria-label="Turn 15 degrees to port">↶<small>PORT</small></button><div class="compass" id="attitude-ball" title="Drag to steer heading and pitch"><span class="north">N</span><div class="attitude-window"><div id="attitude-horizon"></div></div><div id="compass-needle"></div><span class="compass-center"></span></div><button id="starboard" aria-label="Turn 15 degrees to starboard">↷<small>STBD</small></button></div>
+          <p class="control-hint">DRAG THE SPHERE TO STEER IN 3D</p>
+          <label for="heading">SET HEADING <output id="heading-output">090°</output></label><input id="heading" type="range" min="0" max="359" value="90" aria-label="Set heading in degrees">
+          <label for="pitch" class="pitch-label">PITCH / ELEVATION <output id="pitch-output">+00°</output></label><input id="pitch" type="range" min="-85" max="85" value="0" aria-label="Set pitch in degrees">
+          <div class="pitch-actions"><button id="climb">CLIMB +10°</button><button id="level">LEVEL</button><button id="dive">DIVE −10°</button></div>
+          <div class="divider"></div>
+          <label for="throttle">ENGINE POWER <output id="throttle-output">25%</output></label><input id="throttle" type="range" min="0" max="100" value="25">
+          <div class="drive-switch" role="group" aria-label="Drive mode"><button id="impulse" class="selected" aria-pressed="true">IMPULSE</button><button id="warp" aria-pressed="false">WARP</button></div>
+          <div class="warp-readout"><span id="engine-name">SUBLIGHT MANEUVERING</span><strong id="factor">0.25 c</strong></div>
+          <button id="stop" class="stop">ALL STOP <span>SPACE</span></button>
+          <div class="divider"></div>
+          </div>
+          <div class="navigation-controls">
+<div class="mission-console"><p id="mission-status" role="status">APPROACH WITHIN 1 LY TO ENTER ORBIT</p><div class="orbit-actions"><button id="launch-craft" hidden>LAUNCH LANDING CRAFT</button><button id="leave-orbit" hidden>LEAVE ORBIT</button></div><div id="mission-actions" hidden><button id="retrieve-beacon">RETRIEVE BEACON</button><button id="land-bay" hidden>LAND IN BAY</button><button id="power-down" hidden>POWER DOWN CRAFT</button><p id="mission-hint"></p></div></div>
+          <div class="section-label">NAVIGATION COMPUTER <span id="nav-state">STANDBY</span></div>
+          <div class="power-dial" id="power-dial" title="Drag up or down to adjust engine power"><div class="dial-ring"></div><div class="dial-core"><span>ENGINE POWER</span><strong id="power-dial-value">25%</strong><small id="power-dial-mode">IMPULSE</small></div></div>
+          <p class="control-hint">DRAG THE DIAL TO SET ENGINE POWER</p>
+          <label class="select-label" for="destination">DESTINATION</label><select id="destination"></select>
+          <div class="destination-data"><div><span>DISTANCE</span><strong id="distance">—</strong></div><div><span>ARRIVAL</span><strong id="eta">—</strong></div></div>
+          <div class="course-solution"><div><span>TARGET BEARING</span><strong id="target-bearing">000°</strong></div><div><span>TARGET PITCH</span><strong id="target-pitch">+00°</strong></div><div><span>ELEVATION</span><strong id="target-elevation">+0 LY</strong></div><div><span>CONTROL</span><strong id="flight-mode">MANUAL</strong></div></div>
+          <button id="engage" class="engage">ENGAGE COURSE <span>↗</span></button>
+          <button id="manual" class="quiet manual">MANUAL OVERRIDE</button>
+          </div>
+        </div>
+      </aside>
+      <section class="display tactical"><div class="display-title"><h2><span>02</span> TACTICAL DISPLAY</h2><span>LOCAL SPACE · 120 LY</span></div><div id="tactical-view" class="canvas-host" role="img" aria-label="Live tactical radar centered on the Enterprise"></div><div class="display-footer"><span><i class="dot cyan"></i> ENTERPRISE</span><span><i class="dot gold"></i> NAV TARGET</span><span id="contact-count">0 CONTACTS</span></div></section>
+      <section class="display galaxy"><div class="display-title"><h2><span>03</span> 3D GALAXY NAVIGATION</h2><span>SPATIAL HOLOGRAM</span></div><div class="galaxy-stage"><div id="map-view" class="canvas-host" role="img" aria-label="3D galaxy: drag to orbit, scroll to zoom, click a system to plot a course"></div><div class="map-tools" role="group" aria-label="Galaxy camera controls"><button id="map-zoom-in" aria-label="Zoom in">+</button><button id="map-zoom-out" aria-label="Zoom out">−</button><button id="map-home" aria-label="Reset galaxy camera">⌂</button></div></div><div class="display-footer"><span>DRAG ORBIT · CLICK PLOT · SCROLL ZOOM</span><span>GRID 100 LY</span></div></section>
+    </div>
+    <footer><span class="message" id="message" role="status">Conn ready. Select a destination and engage, or take manual control.</span><span id="control-hints">← → YAW &nbsp; ↑ ↓ PITCH &nbsp; W / S POWER &nbsp; SPACE STOP &nbsp; P PAUSE &nbsp; R RESET &nbsp; B AUDIO</span></footer>
+    <p class="simulation-note">Fictional navigation simulation · distances and travel speeds compressed for exploration.</p>
+  </main>
+  <aside id="audio-panel" class="audio-panel" aria-label="Bridge background audio" hidden>
+    <div class="audio-title"><span>BRIDGE AUDIO · LOOP</span><button id="audio-close" type="button" aria-label="Stop bridge audio and close player">×</button></div>
+    <audio id="bridge-ambience" src="assets/audio/bridge-ambience.m4a" controls loop preload="auto" aria-label="Local bridge ambience"></audio>
+    <p id="audio-status" role="status">Local bridge ambience · ready to play.</p>
+    <div class="audio-settings"><label for="audio-volume">VOLUME <output id="audio-volume-value">30%</output></label><input id="audio-volume" type="range" min="0" max="100" value="30"></div>
+    <a class="audio-source" href="https://www.youtube.com/watch?v=MwBMf0mg_q0" target="_blank" rel="noopener noreferrer">Source recording ↗</a>
+  </aside>
+  <dialog id="controls-help" aria-labelledby="help-title">
+    <div class="help-heading"><h2 id="help-title">ST Command controls</h2><button id="help-close" type="button" autofocus>Close</button></div>
+    <p class="help-intro">The simulation pauses while this window is open. Close it or press Escape to return.</p>
+    <div class="help-grid">
+      <section><h3>Flight &amp; helm</h3><dl>
+        <dt>Left / Right or A / D</dt><dd>Turn the ship or landing craft.</dd>
+        <dt>Up / Down</dt><dd>Ship: climb / dive. Landing craft: dive / climb.</dd>
+        <dt>Q / E</dt><dd>Climb / dive in either craft.</dd>
+        <dt>W / S</dt><dd>Increase / decrease engine power.</dd>
+        <dt>Space</dt><dd>All stop.</dd>
+        <dt>Mouse controls</dt><dd>Drag the attitude sphere to steer; drag the power dial up or down to set power. Sliders and helm buttons offer the same controls.</dd>
+      </dl></section>
+      <section><h3>Galaxy navigation</h3><dl>
+        <dt>Plot &amp; engage</dt><dd>Select a destination or click a star, choose impulse or warp, set power, then press Engage Course. Manual Override releases autopilot.</dd>
+        <dt>Drag the galaxy</dt><dd>Orbit the camera above or below the galactic plane.</dd>
+        <dt>Scroll or + / minus</dt><dd>Zoom the map. The home icon resets the camera.</dd>
+        <dt>Click empty space</dt><dd>Plot a waypoint at the ship's current elevation.</dd>
+      </dl></section>
+      <section><h3>Orbit &amp; landing craft</h3><dl>
+        <dt>Enter / leave orbit</dt><dd>Approach within 1 LY of a planet to enter orbit. Leave Orbit returns to galaxy flight; Launch Landing Craft begins a sortie.</dd>
+        <dt>Recover the beacon</dt><dd>Select Abandoned beacon and engage for guided descent, or fly manually. Retrieve within 450 m, below 450 m AGL, at 150 m/s or slower.</dd>
+        <dt>Return to Enterprise</dt><dd>After retrieval, engage to approach the aft bay. Land within 650 m, aligned from aft at heading 000° ±15°, pitch ±12°, and 120 m/s or slower. Power Down Craft returns to the bridge.</dd>
+        <dt>Local flight</dt><dd>Warp is unavailable aboard the landing craft. The right map shows terrain or aft bay guidance.</dd>
+      </dl></section>
+      <section><h3>View &amp; simulation</h3><dl>
+        <dt>Double-click viewscreen</dt><dd>Expand to full screen; double-click again or press Escape to return.</dd>
+        <dt>P</dt><dd>Pause / resume.</dd>
+        <dt>Enter</dt><dd>Engage a course, or resume when paused.</dd>
+        <dt>R</dt><dd>Reset the simulation and mission.</dd>
+        <dt>B</dt><dd>Toggle bridge audio. Its audio window provides volume controls.</dd>
+      </dl></section>
+    </div>
+  </dialog>
+  <script src="vendor/phaser.min.js"></script>
+  <script src="space-math.js"></script>
+  <script src="galaxy3d.js"></script>
+  <script src="planet-renderer.js"></script>
+  <script src="vendor/alpine-three.js"></script>
+  <script src="surface-world.js"></script>
+  <script src="shuttle-map.js"></script>
+  <script src="away-mission.js"></script>
+  <script src="simulation.js"></script>
+  <script src="audio.js"></script>
+  <script src="viewscreen.js"></script>
+  <script src="help.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "name": "st-command",
+  "version": "1.0.0",
+  "private": true,
+  "description": "An interactive Phaser starship navigation simulator",
+  "scripts": { "start": "node server.cjs", "test": "node --test space-math.test.cjs && node smoke-test.cjs && node zoom-fit-check.cjs && node audio-smoke.cjs && node mission-smoke.cjs" },
+  "devDependencies": { "playwright": "1.56.1" }
+}
