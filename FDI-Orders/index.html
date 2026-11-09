@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FDI Orders · Solution order form</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main>
+    <div class="intro"><p class="eyebrow">FUSION DATA INTELLIGENCE</p><h1>Build your FDI analytics solution</h1><p>An illustrative example - Choose your solutions, identify business priorities, and prepare an order request for your team.<br><strong>Hover over a Business Outcome or Capability for its description.</strong></p></div>
+    <form id="order-form">
+      <div class="form-column">
+        <section class="panel"><div class="section-heading"><span class="step">1</span><div><h2>FDI Cross-Functional Solutions</h2><p>Select a solution to include and highlight its FDI components below. Related components include AIDP Deep Insight Agents; EPM + FDI also includes the Fusion EPM/PBCS Connector.</p></div></div><div id="cross-functional" class="solution-grid"></div></section>
+        <section class="panel"><div class="section-heading"><span class="step">2</span><div><h2>FDI Pillar-Based Solutions</h2><p>Select an analytics solution, then choose relevant capabilities and outcomes.</p></div></div><div id="solutions" class="solution-grid"></div></section>
+        <section class="panel"><div class="section-heading"><span class="step">3</span><div><h2>Customer information</h2><p>Optional. Blank fields will appear as “Not specified” in your order request.</p></div></div>
+          <div class="fields">
+            <label>Company <span class="optional">Optional</span><input name="company" autocomplete="organization" placeholder="Company name"></label>
+            <label>Contact name <span class="optional">Optional</span><input name="contact" autocomplete="name" placeholder="Full name"></label>
+            <label>Work email <span class="optional">Optional</span><input name="email" type="email" autocomplete="email" placeholder="name@company.com"></label>
+            <label>Phone <span class="optional">Optional</span><input name="phone" type="tel" autocomplete="tel" placeholder="Phone number"></label>
+            <label>Target start date <span class="optional">Optional</span><input name="start" type="date"></label>
+            <label>Request reference <span class="optional">Optional</span><input name="reference" placeholder="Internal reference or project name"></label>
+          </div>
+        </section>
+        <section class="panel"><div class="section-heading"><span class="step">4</span><div><h2>Additional requirements</h2><p>Tell us about scope, timing, or implementation needs.</p></div></div><label>Project notes <span class="optional">Optional</span><textarea name="notes" rows="4" placeholder="Data sources, business units, success criteria, or other requirements…"></textarea></label></section>
+      </div>
+      <aside class="summary"><div class="summary-top"><p class="eyebrow">YOUR REQUEST</p><h2>Order summary</h2><p id="request-date" class="summary-date"></p><div class="count-row"><strong id="selection-count">0</strong><span>solutions selected</span></div></div><div id="summary-items" aria-live="polite"></div><p class="commercial-note">Pricing, licensing, and commercial terms will be confirmed separately. This form prepares a request; it does not place an order.</p><p id="form-status" role="status"></p><button class="primary" type="submit">Download order request <span aria-hidden="true">↓</span></button><button class="secondary" type="button" id="print">Print / save PDF</button><button class="text-button" type="reset">Clear form</button></aside>
+    </form>
+    <footer>FDI Orders <span>Solution planning &amp; order requests</span></footer>
+  </main>
+  <div id="print-order"></div>
+</body>
+</html>
