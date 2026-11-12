@@ -13,11 +13,11 @@ const {createServer}=require('./server.cjs');
       const fit=await page.evaluate(()=>({width:document.documentElement.scrollWidth,height:document.documentElement.scrollHeight}));
       assert(fit.width<=2048&&fit.height<=1152,phase+' fits the viewport');
       const helm=await page.locator('.helm').boundingBox();
-      for(const selector of ['#stop','#engage','#manual','#throttle','#pitch','#destination','#launch-craft','#leave-orbit','#retrieve-beacon','#land-bay','#power-down']){
+      for(const selector of ['#stop','#engage','#manual','#throttle','#pitch','#destination','#launch-craft','#leave-orbit','#retrieve-beacon','#land-bay','#hangar-door','#garage-door','#power-down']){
         const el=page.locator(selector);if(!await el.isVisible())continue;
         const box=await el.boundingBox();assert(box.y>=helm.y&&box.y+box.height<=helm.y+helm.height-2,phase+' '+selector+' fits inside helm');
       }
-      const screen=await page.locator('.forward').boundingBox();assert(Math.abs(screen.height-1152*.575)<2,'retains the taller viewscreen');
+      const screen=await page.locator('.forward').boundingBox();assert(Math.abs(screen.height-(1152*.575+14))<2,'viewscreen uses fourteen pixels of the gap above the controls');
     }
     await check('bridge');
     await page.locator('#warp').click();await page.locator('#throttle').fill('100');await page.locator('#engage').click();

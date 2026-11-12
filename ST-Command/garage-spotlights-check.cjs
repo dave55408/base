@@ -1,0 +1,22 @@
+const assert=require('node:assert/strict'),path=require('node:path');
+const {chromium}=require(require.resolve('playwright',{paths:[__dirname,path.resolve(__dirname,'../elf-adventure')]}));const {createServer}=require('./server.cjs');
+(async()=>{const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;try{
+ browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&/shader|WebGLProgram|compile/i.test(m.text()))errors.push(m.text());});await page.goto('http://127.0.0.1:'+server.address().port);
+ const result=await page.evaluate(async()=>{
+  const T=AlpineThree,sheet=document.createElement('canvas');sheet.width=1600;sheet.height=1100;const out=sheet.getContext('2d'),checks=[];
+  for(const [row,factory] of [createMovieEnterpriseRenderer,createEnterpriseRenderer].entries()){
+   const ship=factory();await ship.ready;const room=ship.model.getObjectByName('reference-bay-interior'),garage=room.getObjectByName('bay-forward-arched-lift');garage.setOpen(1);ship.model.updateWorldMatrix(true,true);ship.renderer.shadowMap.enabled=true;ship.renderer.shadowMap.type=T.PCFSoftShadowMap;
+   const lamps=[];garage.traverse(o=>{if(o.isSpotLight)lamps.push(o);});const powers=lamps.map(o=>o.intensity),camera=new T.PerspectiveCamera(65,800/550,.005,10);camera.position.copy(room.localToWorld(new T.Vector3(0,.009,-.17)));camera.lookAt(room.localToWorld(new T.Vector3(0,.009,-.31)));camera.updateWorldMatrix(true,false);ship.renderer.setSize(800,550,false);
+   function frame(){ship.renderer.render(ship.scene,camera);const c=document.createElement('canvas');c.width=800;c.height=550;const ctx=c.getContext('2d');ctx.drawImage(ship.renderer.domElement,0,0);return {canvas:c,pixels:ctx.getImageData(0,0,800,550).data};}
+   const on=frame();lamps.forEach(o=>o.intensity=0);const off=frame();lamps.forEach((o,i)=>o.intensity=powers[i]);
+   for(const [col,f] of [on,off].entries()){out.fillStyle='#03070c';out.fillRect(col*800,row*550,800,550);out.drawImage(f.canvas,col*800,row*550);out.fillStyle='#ffe16b';out.font='14px monospace';out.fillText((row?'ORIGINAL':'SECOND MODEL')+' / SPOTLIGHTS '+(col?'OFF':'ON'),col*800+15,row*550+24);}
+   const visibility=new Map();ship.model.traverse(o=>{if(!o.isMesh)return;visibility.set(o,o.visible);let craft=false;for(let p=o;p;p=p.parent)if(p.name.startsWith('stored-type-f-shuttle-'))craft=true;o.visible=o.visible&&craft;});
+   const lit=frame().pixels,contributions=[];
+   for(const [i,lamp] of lamps.entries()){lamp.intensity=0;const dark=frame().pixels;lamp.intensity=powers[i];let changed=0;for(let p=0;p<lit.length;p+=4)if(lit[p]+lit[p+1]+lit[p+2]-dark[p]-dark[p+1]-dark[p+2]>9)changed++;contributions.push(changed);}
+   for(const [mesh,visible] of visibility)mesh.visible=visible;
+   const shadows=lamps.every(o=>o.castShadow&&o.shadow.map&&o.shadow.camera.near===.0025),fixtures=Array.from(visibility.keys()).filter(o=>o.name.startsWith('garage-spotlight-housing-')).length;garage.setOpen(1);const cachedShadows=lamps.every(o=>!o.shadow.autoUpdate&&!o.shadow.needsUpdate);garage.setOpen(.5);const refreshOnMovement=lamps.every(o=>o.shadow.needsUpdate);garage.setOpen(0);const offWhenClosed=lamps.every(o=>!o.visible&&o.intensity===0);garage.setOpen(1);const onWhenOpen=lamps.every(o=>o.visible&&o.intensity>0);
+   checks.push({lamps:lamps.length,fixtures,shadows,contributions,cachedShadows,refreshOnMovement,offWhenClosed,onWhenOpen,glError:ship.renderer.getContext().getError()});
+  }return {checks,image:sheet.toDataURL('image/jpeg',.88)};
+ });
+ if(process.argv.includes('--image'))console.log(JSON.stringify(result));for(const check of result.checks){assert.equal(check.lamps,3);assert.equal(check.fixtures,3);assert(check.shadows&&check.cachedShadows&&check.refreshOnMovement);assert(check.contributions.every(n=>n>40),'each spotlight visibly illuminates shuttle surfaces: '+JSON.stringify(check));assert(check.offWhenClosed&&check.onWhenOpen);assert.equal(check.glError,0);}assert.deepEqual(errors,[]);if(!process.argv.includes('--image'))console.log('Passed: three real shadow-casting spotlights each brighten shuttle surfaces, cache stationary shadows, and follow garage opening on both models.');
+}finally{await browser?.close();await new Promise(r=>server.close(r));}})().catch(e=>{console.error(e);process.exitCode=1;});

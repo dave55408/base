@@ -1,0 +1,31 @@
+{
+  "source": "C:/Users/David Granholm/.codex/.Project Research/Star Trek/Image 1444.png",
+  "dimensions": [
+    2560,
+    1440
+  ],
+  "normalizedCoordinates": [
+    2048,
+    1152
+  ],
+  "shipName": "U.S.S. ENTERPRISE",
+  "registry": "NCC-1701",
+  "lettering": "Source-traced contours; replaces all earlier name and registry artwork",
+  "cornerRoundingSourcePixels": 0.2,
+  "buildCommand": "node build-movie-stencils.cjs",
+  "preserved": [
+    "movie geometry",
+    "aft cutout and enclosed bay",
+    "nacelle dome geometry and materials",
+    "dark bronze deflector",
+    "Original Model"
+  ],
+  "contourGaussianSigmaSourcePixels": 0.65,
+  "simplificationToleranceSourcePixels": {
+    "saucerRegistry": 1.05,
+    "shipName": 0.55,
+    "sideRegistry": 0.75,
+    "redPennants": 1.2,
+    "goldPennants": 0.65
+  }
+}

@@ -1,8 +1,13 @@
 :root{--bg:#150b04;--panel:#251508;--line:#704b23;--text:#fae7c6;--muted:#bd9d71;--cyan:#ffca65;--gold:#ffc769}
 .orbit-actions{display:flex;gap:6px}
+.bay-actions{display:flex;gap:6px}
+.bay-actions button{flex:1;min-width:0;width:auto}
+.bay-actions:has(#land-bay[hidden]):has(#hangar-door[hidden]):has(#garage-door[hidden]){display:none}
 .orbit-actions button{flex:1;min-width:0}
 .orbit-actions:has(#launch-craft[hidden]){display:none}
 body{background:radial-gradient(ellipse at 50% 0,#4d3115,transparent 65%),#0d0703}
 .screen-glass{border-color:#ffc985;box-shadow:0 0 5px #ffc77b,0 0 16px #ff9b4655,0 0 0 6px #180e07,0 0 0 8px #5c4833}
 .view-overlay,.view-overlay span:last-child{color:#ffdcb2}.mission-console{margin:0 0 12px;border-bottom:1px solid #775524;padding-bottom:10px}.mission-console p{font-size:8px;line-height:1.6;color:#f1cc93;margin:0 0 8px}.mission-console button{width:100%;padding:10px 4px;background:linear-gradient(#a06d28,#513810);border:1px solid #ffc768;color:#fff1d6;font:inherit;font-size:9px;cursor:pointer}.mission-console button:disabled{opacity:.4;cursor:default}.mission-console [hidden]{display:none!important}.mission-console:has(#launch-craft[hidden]):has(#mission-actions[hidden]){padding-bottom:4px;margin-bottom:6px}.shuttle-mode .helm{box-shadow:0 0 18px #e58d182b}.shuttle-mode #warp{opacity:.3}.shuttle-mode .helm-schematic{opacity:.1}
 @media(min-width:1600px) and (min-height:1100px){.mission-console{margin-bottom:5px;padding-bottom:5px}.mission-console p{font-size:7px;line-height:1.4;margin-bottom:4px}.mission-console button{padding:7px 3px}.navigation-controls .power-dial{margin-top:5px;margin-bottom:6px}.navigation-controls .control-hint{margin:4px 0 6px}.navigation-controls .select-label{margin-top:8px}.navigation-controls .destination-data{margin:6px 0}.navigation-controls .course-solution{padding:5px 0;gap:8px}}
+
+.enterprise-model-picker{display:flex;align-items:center;gap:8px;margin-left:auto;white-space:nowrap}.enterprise-model-picker span{font-size:8px;letter-spacing:1px}.enterprise-model-picker select{width:146px;padding:2px 5px;border:1px solid #775524;background:#1e140d;color:#ffe0ac;font-size:9px;font-family:inherit;letter-spacing:.4px;border-radius:2px}.enterprise-model-picker select:focus-visible{outline:2px solid #ffd47c;outline-offset:2px}@media(max-width:700px){.enterprise-model-picker span{display:none}.enterprise-model-picker{gap:3px}.enterprise-model-picker select{width:120px;font-size:8px}}

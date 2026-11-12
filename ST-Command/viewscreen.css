@@ -1,4 +1,11 @@
 body.viewscreen-mode{overflow:hidden}
+.camera-controls{position:absolute;right:18px;bottom:38px;z-index:4;display:flex;align-items:center;gap:10px;color:#b9c7cf;font-size:8px;letter-spacing:.6px}
+.camera-controls[hidden]{display:none}
+.camera-controls button{background:#12202ccc;border:1px solid #778d9e;color:#e6d3ad;padding:6px 9px;font-size:8px}
+#main-view.space-look{cursor:grab;touch-action:none}
+#main-view.space-look.looking{cursor:grabbing}
+#main-view.space-look.mouse-look-active{cursor:none}
+@media(max-width:650px){.camera-controls{right:12px;bottom:28px;gap:6px;font-size:6px}.camera-controls span{display:none}.camera-controls button{font-size:7px;padding:6px}}
 body.viewscreen-mode main{width:100%;max-width:none;height:100dvh;padding:0;display:block}
 body.viewscreen-mode .console{display:block;height:100%}
 body.viewscreen-mode .helm,body.viewscreen-mode .tactical,body.viewscreen-mode .galaxy,body.viewscreen-mode footer,body.viewscreen-mode .simulation-note{display:none}

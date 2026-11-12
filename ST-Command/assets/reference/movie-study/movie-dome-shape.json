@@ -1,0 +1,28 @@
+[
+  {
+    "positions": "c9cfc54e375976402e48691f2152a5828046a7c20ef554e90b5a19b6816a8c94",
+    "scale": [
+      0.84,
+      0.84,
+      1.1
+    ],
+    "color": 11750450,
+    "emissive": 15956024,
+    "intensity": 0.85,
+    "lineColor": 10437677,
+    "lineOpacity": 0.5
+  },
+  {
+    "positions": "c9cfc54e375976402e48691f2152a5828046a7c20ef554e90b5a19b6816a8c94",
+    "scale": [
+      0.84,
+      0.84,
+      1.1
+    ],
+    "color": 11750450,
+    "emissive": 15956024,
+    "intensity": 0.85,
+    "lineColor": 10437677,
+    "lineOpacity": 0.5
+  }
+]

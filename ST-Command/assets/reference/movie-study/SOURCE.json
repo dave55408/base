@@ -1,0 +1,16 @@
+{
+  "source": "C:/Users/David Granholm/.codex/.Project Research/Star Trek/enterprise movie.mp4",
+  "durationSeconds": 70.733333,
+  "resolution": [
+    1920,
+    1080
+  ],
+  "contactSheetIntervalSeconds": 5,
+  "detailViewSeconds": [
+    4,
+    22,
+    42,
+    65
+  ],
+  "model": "Classic Enterprise reconstructed by visual comparison across the supplied movie; original model preserved as a separate selectable variant."
+}

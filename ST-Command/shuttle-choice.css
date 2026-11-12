@@ -1,0 +1,9 @@
+#shuttle-choice{box-sizing:border-box;width:min(390px,calc(100vw - 32px));padding:22px;border:1px solid #a77a44;border-radius:10px;background:linear-gradient(120deg,#302015,#100c09);color:#fae7c6;box-shadow:0 16px 60px #0008;font:13px/1.5 Consolas,monospace}
+#shuttle-choice::backdrop{background:#0002}
+#shuttle-choice h2{margin:0 0 8px;color:#ffd08a;font-size:18px;font-weight:500}
+#shuttle-choice p{margin:0 0 20px;color:#c7b395}
+.shuttle-choice-actions{display:flex;gap:12px}
+#shuttle-choice button{flex:1;padding:11px;border:1px solid #a77a44;border-radius:4px;background:#50331b;color:#ffdfad;font:12px Consolas,monospace}
+#shuttle-choice-launch{background:#725026!important}
+#shuttle-choice button:hover{filter:brightness(1.2)}
+#shuttle-choice button:focus-visible{outline:2px solid #ffd47c;outline-offset:3px}

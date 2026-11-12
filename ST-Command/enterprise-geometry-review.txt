@@ -1,0 +1,143 @@
+ENTERPRISE GEOMETRY REVIEW
+Date: November 11, 2026
+Model reviewed: SECOND MODEL / movie-reference Enterprise
+Reference: supplied top, bottom, starboard, front and back orthographic sheet.
+The supplied sheet matches assets/reference/image-1444/enterprise-orthos.png.
+
+Scope and method
+----------------
+Compared fresh orthographic renders of the current model with all five supplied
+views, and inspected world-space mesh bounds and the geometry-building code.
+High-detail textures were used for inspection, with the shuttle-bay doors closed.
+This is an assessment only. No simulation code, geometry or assets were changed.
+
+Reference limitations: the drawn projections are not perfectly identical in
+scale. The saucer spans roughly 419 pixels in the normalized side view but about
+408-410 pixels in some other views. A single global overlay therefore creates
+an apparent 2-3% size difference. Treat small differences cautiously and compare
+each view's proportions to its own saucer diameter. Numerical model dimensions
+below use the model's 1.36-unit saucer diameter, not real-world ship dimensions.
+
+PRIORITIZED DIFFERENCES TO REVIEW
+-------------------------------
+
+1. Aft engineering-hull outline is too flat in top and bottom views.
+   Priority: high. Confidence: high.
+   The sheet shows a rounded, progressively narrowing stern cap around the bay.
+   The model's aft engineering body ends with a much straighter transverse edge
+   and more abrupt corners. Its side-view belly scoop is present, but it does
+   not reproduce the rounded plan-view stern. Review the aft cross sections and
+   the transition between secondary-hull, aft fairing and bay-door frame.
+
+2. Pylons need the reference's plan-view shaping and attachment transitions.
+   Priority: high. Confidence: high for simplification; medium for exact sweep.
+   The current support is built from a constant-section rectangular beam, with
+   its principal length at one fore/aft station. The reference, especially the
+   bottom view, shows a subtly swept/tapered outline and shaped root/engine
+   junctions. Current top/bottom silhouettes read as straight rectangular bars.
+   Overall placement and the diagonal front/back arrangement are already close;
+   this is a local shape/attachment issue, not a reason to move both engines.
+
+3. Nacelle fins/raised fairings are too long, and the inboard fin alignment drifts.
+   Priority: high. Confidence: high for measured geometry; medium-high visually.
+   Current aft fin length is 0.37837 units, or 27.82% of saucer diameter. The
+   existing reference proportion is about 24.9%, making it roughly 12% longer.
+   The source grows each fin by 15% after its initial station alignment.
+   The inboard fin's forward edge is now at Z=-0.31768, versus pylon midpoint
+   Z=-0.29300: a 0.02468-unit offset, about 7.6 pixels on a 419-pixel saucer.
+   Review the inboard and aft raised fittings individually; do not shorten the
+   whole nacelle to correct this local discrepancy.
+
+4. Neck/dorsal connector is too angular at its hull junctions.
+   Priority: medium-high. Confidence: high.
+   The model uses an extruded four-point wedge with planar sides and abrupt
+   joins. The sheet shows softer shoulders where the neck enters the saucer and
+   engineering hull. The front-view exposed neck also appears more narrow and
+   square-sided than the drawn transition. Preserve the broadly correct slope
+   and joint stations while reviewing bevels, root width and blended shoulders.
+   Exact hidden neck cross sections cannot be recovered from this sheet alone.
+
+5. Saucer upper surface and rim have overly straight/segmented profile changes.
+   Priority: medium. Confidence: high for visual profile difference.
+   The model has long straight radial slopes and distinct slope breaks between
+   its profile rings. The drawing has a smoother crown and more gently blended
+   transitions into the rim and upper deck. The rim also reads as a stronger,
+   darker wedge in current front/back renders. Darkness is a lighting issue;
+   the straight silhouette transitions are the geometry issue to review.
+   Keep the existing overall saucer diameter as the starting point.
+
+6. Bridge/deck tiers look more block-like than the reference.
+   Priority: medium. Confidence: medium-high.
+   Current front and side views show a relatively cylindrical upper tier, a
+   flat lip and a low, flat-topped sensor cap. The reference has more rounded
+   shoulders and a softer stepped crown. The teardrop's plan-view width and
+   length are already close; review vertical curvature, lip thickness and cap
+   shape rather than enlarging the entire teardrop.
+
+7. Underside saucer bowl needs a smoother transition into its bottom tier.
+   Priority: medium. Confidence: medium.
+   The reference side/front silhouette descends in a more continuous rounded
+   curve toward the lower sensor structure. The current model shows a broad
+   flatter bottom and a more abrupt stepped connection to the lower tier.
+   Its overall bowl width is close to the existing reference proportion, so
+   profile curvature and the bottom junction deserve attention before scaling.
+
+8. Main-cylinder forward shoulder is set aft of the unmodified reference.
+   Priority: medium / confirm intended revision. Confidence: high.
+   The model's cylinder begins at world Z=-1.00950, approximately X=1134 on
+   the project's normalized side-view registration. The supplied sheet's
+   original main-cylinder forward landmark is X=1145, a difference of roughly
+   11 pixels, or 2.6% of the saucer diameter. The current verification code
+   explicitly allows this previously revised shoulder position. This is an
+   intentional existing deviation, not evidence of a newly broken mesh.
+
+9. Deflector dish appears small inside its surrounding collar.
+   Priority: medium / verify against a close-up. Confidence: medium.
+   Current dish diameter is 0.17460 units against a 0.26000-unit collar, a ratio
+   of about 67%. The reference front view appears to fill more of the collar
+   with the reflector/ring assembly. Confirm which visible reference rings are
+   raised structure versus material/paint before changing the dish diameter.
+   The dark current reflector should not itself be treated as a geometry error.
+
+10. Aft bay surround and lower sill are more pronounced than the reference.
+    Priority: medium. Confidence: medium-high.
+    The rear render shows a more strongly projecting, segmented canopy/frame
+    and heavier lower threshold. The reference presents a cleaner rounded arch
+    within a smoother outer stern. Review this together with item 1; altering
+    just the doors would leave the surrounding hull discrepancy unresolved.
+    Interior garage layout is not assessable from these exterior drawings.
+
+11. Impulse housing face is close, but its fairing integration is simplified.
+    Priority: low-medium. Confidence: medium.
+    Twin outlets and the central port are present, and their broad arrangement
+    resembles the rear view. The model's capsule face and its junction to the
+    saucer are more mechanically straight and sharply defined. The drawing
+    suggests softer end fairings and a more smoothly integrated center spine.
+    Review junction curvature before changing outlet spacing or total width.
+
+WHAT ALREADY LOOKS CLOSE
+-----------------------
+- Saucer plan form is circular and the overall primary-hull size is reasonable.
+- Nacelle separation: 0.878 / 1.36 = 64.56% of saucer diameter, close to the sheet.
+- Overall nacelle length: about 1.63967 / 1.36 = 120.56%, close to the side view.
+- Main engineering-hull height: about 22.35% of saucer diameter, broadly close.
+- Engine elevation, collector position relative to the saucer, and basic
+  diagonal pylon layout are broadly consistent with the supplied views.
+- Upper teardrop footprint: width 20.33% and length 28.32% of saucer diameter,
+  close to the project's existing reference proportions.
+- Underside bowl width: about 42.65% of saucer diameter; no strong evidence here
+  for a major global width change.
+- The neck's general rake, twin nacelle symmetry, deflector/probe arrangement,
+  twin impulse outlets, underside sensor and clamshell-bay concept are present.
+
+NOT GEOMETRY FINDINGS
+--------------------
+The darker underside, dark deflector, mottled collectors, hull color, window
+visibility, registry placement and panel lines are material, lighting, texture
+or animation matters. They were not counted as geometric defects in this list.
+The supplied sheet cannot establish internal engine construction, garage space,
+hidden intersections, moving-door clearance or exact surface fillet radii.
+
+Suggested order if changes are later authorized: aft engineering hull/bay
+surround, pylons and fins, neck transitions, saucer/deck/bowl curvature, then
+deflector and impulse details. Recheck all five views after each major group.

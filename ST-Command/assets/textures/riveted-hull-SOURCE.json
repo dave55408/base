@@ -1,0 +1,10 @@
+{
+  "source": "C:/Users/David Granholm/.codex/.Project Research/Star Trek/Brushed gray riveted steel panels.png",
+  "derivedWith": "built-in image_gen",
+  "prompt": "Use case: precise-object-edit. Asset type: seamless repeating PBR albedo/detail texture for a 3D spaceship hull. Edit target: supplied brushed gray riveted steel panel image. Preserve the same gray brushed steel, rounded rectangular plate seams, small round rivets, horizontal fine scratches and wear. Make the image perfectly seamless and periodic across both left/right and top/bottom edges for tiling in a game. Flat orthographic view of only the material, no perspective, no scene, no border or text, no overall light gradient or vignette, uniform medium gray exposure, restrained relief/shadows. Preserve the material identity, scale and rectangular/staggered panel layout; adjust panel arrangement at the boundaries as needed for seamless repetition. Deliver one square texture tile at high resolution. Do not show a demonstration grid or multiple copies.",
+  "wrapping": "Mirrored repeat for continuous boundary sampling",
+  "usage": "Movie Reference hull close-range detail, aligned within existing grid cells; fades out at a surface distance of 0.45 model units.",
+  "asset": "assets/textures/riveted-hull-seamless.png",
+  "colorMode": "Relief and roughness overlay only; existing hull albedo and color remain unchanged.",
+  "surfaceMapping": "Grid-aligned polar/cylindrical coordinates on main hulls; true mesh-perimeter and meridian arc lengths on rounded fittings and clamshell doors; continuous closed seams."
+}

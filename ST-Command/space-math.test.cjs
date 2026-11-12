@@ -18,3 +18,16 @@ test('elevated systems project at different depths from the reference plane',()=
   const camera=math.camera(540,340),a=camera.project({x:500,y:450,z:0}),b=camera.project({x:500,y:450,z:100});
   assert(b.y<a.y);assert(b.depth>a.depth);assert(b.scale>a.scale);
 });
+
+test('negative power brakes to zero before accelerating astern',()=>{
+  let speed=2;const history=[];
+  for(let n=0;n<40;n++){speed=math.poweredSpeed(speed,-50,4,.05);history.push(speed);}
+  const reversed=history.findIndex(v=>v<0);assert(reversed>0);assert(history.slice(0,reversed).every(v=>v>=0));near(history[reversed-1],0);near(history.at(-1),-2);
+  assert(math.poweredSpeed(0,-25,.4,.1)<0);
+});
+test('opposing forward thrust brakes reverse momentum and all stop stays immediate',()=>{
+  near(math.poweredSpeed(-.2,100,.4,1),0);near(math.poweredSpeed(0,100,.4,.05),.4);
+  near(math.poweredSpeed(2,0,4,.05),0);near(math.poweredSpeed(-2,0,4,.05),0);
+  near(math.poweredSpeed(1,-50,4,0),1);
+});
+

@@ -1,0 +1,26 @@
+{
+  "source": "C:/Workspace/Screengrabs/Image 1424.png",
+  "dimensions": [
+    2560,
+    1440
+  ],
+  "projectionCoordinates": [
+    2048,
+    1152
+  ],
+  "appliesTo": "Movie Reference Enterprise only",
+  "features": [
+    "saucer gold band and panel seams",
+    "aft saucer access outlines",
+    "underside registry and black symbols",
+    "ventral service hatches",
+    "nacelle inspection panels",
+    "flush window placements"
+  ],
+  "preserved": [
+    "original model",
+    "movie proportions and nacelle domes",
+    "dark bronze deflector",
+    "working clamshell doors"
+  ]
+}

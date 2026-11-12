@@ -26983,6 +26983,6 @@ void main() {
   };
 
 
-window.AlpineThree={WebGLRenderer,Scene,PerspectiveCamera,Vector3,Color,Object3D,Group,Mesh,InstancedMesh,PlaneGeometry,BoxGeometry,SphereGeometry,ConeGeometry,CylinderGeometry,IcosahedronGeometry,BufferGeometry,BufferAttribute,Float32BufferAttribute,CanvasTexture,MeshStandardMaterial,MeshPhongMaterial,MeshLambertMaterial,MeshBasicMaterial,ShaderMaterial,HemisphereLight,DirectionalLight,FogExp2,BackSide,DoubleSide,PCFSoftShadowMap,ACESFilmicToneMapping,SRGBColorSpace};
+window.AlpineThree={WebGLRenderer,WebGLRenderTarget,HalfFloatType,Scene,PerspectiveCamera,OrthographicCamera,Vector3,Color,Object3D,Group,Mesh,InstancedMesh,PlaneGeometry,BoxGeometry,SphereGeometry,ConeGeometry,CylinderGeometry,IcosahedronGeometry,BufferGeometry,BufferAttribute,Float32BufferAttribute,CanvasTexture,MeshStandardMaterial,MeshPhongMaterial,MeshLambertMaterial,MeshBasicMaterial,ShaderMaterial,Light,LightShadow,HemisphereLight,DirectionalLight,FogExp2,BackSide,DoubleSide,AdditiveBlending,PCFSoftShadowMap,ACESFilmicToneMapping,SRGBColorSpace,MirroredRepeatWrapping,LinearMipmapLinearFilter,LinearFilter};
 })();
 /* Three.js MIT license: see THREE-LICENSE.txt. */

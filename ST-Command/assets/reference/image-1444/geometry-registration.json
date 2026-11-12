@@ -1,0 +1,17 @@
+{
+  "source": "User-supplied complete starboard elevation, matching Image 1444.png",
+  "normalized_sheet_size": [2048, 1152],
+  "pixel_scale": "419 pixels per 1.36 model units (saucer diameter)",
+  "landmarks": {
+    "saucer_aft_x": 1069,
+    "saucer_front_x": 1488,
+    "engine_aft_x": 552,
+    "engine_front_x": 1057,
+    "main_cylinder_aft_x": 833,
+    "main_cylinder_front_x": 1145,
+    "main_hull_top_y": 595,
+    "main_hull_bottom_y": 689
+  },
+  "verification": "node reference-proportions-check.cjs",
+  "comparison": "preview-reference-alignment.png (reference above, rendered geometry below)"
+}

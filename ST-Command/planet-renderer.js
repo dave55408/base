@@ -36,14 +36,14 @@ window.createDetailedPlanet = () => {
     surface[k]=r;surface[k+1]=g;surface[k+2]=b;
   }
   const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
-  let frame,longitude,latitude,lighting,rim,lastTime=-Infinity,lastWidth=0,lastHeight=0,lastColor=null,lastPitch=null;
+  let frame,longitude,latitude,lighting,rim,lastTime=-Infinity,lastWidth=0,lastHeight=0,lastColor=null,lastPitch=null,lastLayout='';
   const speed=.0128; // Left-and-down rotation; one revolution in about 8 minutes.
   const contrast=value=>clamp((value-80)*1.3+80,0,255);
-  function prepare(w,h,pitch){
+  function prepare(w,h,pitch,globe=null){
     canvas.width=w;canvas.height=h;frame=ctx.createImageData(w,h);
     const count=w*h;longitude=new Float32Array(count);latitude=new Uint32Array(count);lighting=new Float32Array(count);rim=new Float32Array(count);
-    const down=clamp(-pitch/85),radius=w*.78*(1+down*.25),cx=w*.18;
-    const cy=h+radius*.69+pitch/85*h*1.8,tilt=.5,cos=Math.cos(tilt),sin=Math.sin(tilt);
+    const down=clamp(-pitch/85),radius=globe?globe.radius:w*.78*(1+down*.25),cx=globe?globe.cx:w*.18;
+    const cy=globe?globe.cy:h+radius*.69+pitch/85*h*1.8,tilt=.5,cos=Math.cos(tilt),sin=Math.sin(tilt);
     const axis=40*Math.PI/180,axisCos=Math.cos(axis),axisSin=Math.sin(axis);
     for(let y=0;y<h;y++)for(let x=0;x<w;x++){
       const nx=(x-cx)/radius,ny=(y-cy)/radius,rr=nx*nx+ny*ny,p=y*w+x;if(rr>=1)continue;
@@ -55,11 +55,12 @@ window.createDetailedPlanet = () => {
       frame.data[p*4+3]=Math.round(clamp((1-rr)*radius)*255);
     }
   }
-  function draw(target,w,h,time,iconColor=0x83c8ff,pitch=0){
+  function draw(target,w,h,time,iconColor=0x83c8ff,pitch=0,globe=null){
     const rw=Math.min(1920,Math.round(w)),rh=Math.round(h*rw/w);
+    const layout=globe?`${globe.cx}/${globe.cy}/${globe.radius}`:'',layoutChanged=layout!==lastLayout;
     const viewPitch=Math.round(clamp(pitch,-85,85)*2)/2,resized=rw!==lastWidth||rh!==lastHeight;
-    if(resized||Math.abs(time-lastTime)>=1/20||iconColor!==lastColor||viewPitch!==lastPitch){
-      if(resized||viewPitch!==lastPitch){prepare(rw,rh,viewPitch);lastWidth=rw;lastHeight=rh;lastPitch=viewPitch;}
+    if(resized||layoutChanged||Math.abs(time-lastTime)>=1/20||iconColor!==lastColor||viewPitch!==lastPitch){
+      if(resized||layoutChanged||viewPitch!==lastPitch){prepare(rw,rh,viewPitch,globe?{cx:globe.cx*rw/w,cy:globe.cy*rw/w,radius:globe.radius*rw/w}:null);lastWidth=rw;lastHeight=rh;lastPitch=viewPitch;lastLayout=layout;}
       const red=(iconColor>>16)&255,green=(iconColor>>8)&255,blue=iconColor&255,max=Math.max(1,red,green,blue);
       const tr=.12+.88*red/max,tg=.12+.88*green/max,tb=.12+.88*blue/max;
       const turn=time*speed/(Math.PI*2),out=frame.data;
@@ -78,5 +79,5 @@ window.createDetailedPlanet = () => {
     }
     target.drawImage(canvas,0,0,w,h);
   }
-  return {draw,rotationSpeed:speed};
+  return {draw,drawGlobe:(target,w,h,time,color,layout)=>draw(target,w,h,time,color,0,layout),rotationSpeed:speed};
 };

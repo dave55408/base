@@ -3,6 +3,20 @@
   "version": "1.0.0",
   "private": true,
   "description": "An interactive Phaser starship navigation simulator",
-  "scripts": { "start": "node server.cjs", "test": "node --test space-math.test.cjs && node smoke-test.cjs && node zoom-fit-check.cjs && node audio-smoke.cjs && node mission-smoke.cjs" },
-  "devDependencies": { "playwright": "1.56.1" }
+  "scripts": {
+    "start": "node server.cjs",
+    "test:reference": "node reference-proportions-check.cjs",
+    "test": "node --test space-math.test.cjs && node memory-check.cjs && node smoke-test.cjs && node reverse-thrust-check.cjs && node zoom-fit-check.cjs && node ship-render-check.cjs && node bay-doors-check.cjs && node movie-model-check.cjs && node movie-geometry-check.cjs && node reference-proportions-check.cjs && node movie-decals-check.cjs && node movie-texture-upload-check.cjs && node movie-ventral-markings-check.cjs && node movie-surface-detail-check.cjs && node movie-curved-plating-check.cjs && node movie-hangar-check.cjs && node shuttle-flight-check.cjs && node audio-smoke.cjs && node mission-smoke.cjs",
+    "build:textures": "node build-ship-textures.cjs",
+    "test:memory": "node memory-check.cjs",
+    "test:remote-tactical": "node remote-tactical-direction-check.cjs",
+    "test:third": "node third-model-check.cjs",
+    "test:third-photos": "node third-photo-details-check.cjs",
+    "test:third-fantail": "node third-fantail-check.cjs",
+    "build:third-textures": "node build-ship-textures.cjs --third-only",
+    "test:third-finish": "node third-model-two-finish-check.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
 }

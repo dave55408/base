@@ -1,0 +1,71 @@
+/* Shuttle-only blue instruments; static labels retain their amber hierarchy. */
+body.shuttle-mode{--bg:#050b13;--panel:#0a1826;--line:#285572;--cyan:#6bcaff;--gold:#ffc769;--text:#f0d4a6;--muted:#bd9d71;--shuttle-label:#f3c17c;background:radial-gradient(ellipse at 50% 0,#142b40,transparent 65%),#050910}
+body.shuttle-mode .display,body.shuttle-mode .helm{border-color:#24465e;border-top-color:#478ab4;background:linear-gradient(125deg,#102337,#050c14 48%,#0b1b2c);box-shadow:inset 0 1px 2px #77cfff28,inset 0 -3px 6px #000,0 3px 0 #06101a,0 9px 0 #102235,0 12px 0 #04080d,0 22px 30px #000c}
+body.shuttle-mode .display-title{background:linear-gradient(#172a3a,#0a1520);border-bottom-color:#28516c}
+body.shuttle-mode .forward>.display-title{background:linear-gradient(#152431,#0b1620);border-bottom-color:#294454}
+body.shuttle-mode .display-title h2,body.shuttle-mode .display-title h2 span,body.shuttle-mode .display-title>span{color:var(--shuttle-label)}
+body.shuttle-mode .helm-body{background:linear-gradient(110deg,#63c6ff08,transparent 38%,#247cff06 70%,transparent),repeating-linear-gradient(0deg,#68bfff04 0px,#68bfff04 1px,transparent 1px,transparent 3px)}
+body.shuttle-mode .screen-glass{border-color:#709aaf;box-shadow:0 0 0 6px #08121d,0 0 0 8px #29445a,inset 0 0 20px #000}
+body.shuttle-mode .screen-light.top{background:linear-gradient(90deg,#40647a,#d0eeff 15%,#d0eeff 85%,#40647a);box-shadow:0 0 7px #81caff66}
+body.shuttle-mode .display-footer{background:linear-gradient(#102336,#060d15);border-top-color:#28516c;color:#d9ad72}
+body.shuttle-mode .canvas-host{border-color:#06101a;background:#050b13}
+body.shuttle-mode :is(label,.section-label,.section-label span,.control-hint,.heading-control small,.warp-readout span,.destination-data span,.course-solution span,.view-overlay,.view-overlay span:last-child){color:var(--shuttle-label)}
+body.shuttle-mode :is(output,.warp-readout strong,.destination-data strong,.course-solution strong){color:#8ed7ff}
+body.shuttle-mode .divider{background:linear-gradient(90deg,#3b789d,#102332)}
+body.shuttle-mode .course-solution,body.shuttle-mode .mission-console{border-color:#28516c}
+body.shuttle-mode .mission-console p{color:#e1b67c}
+body.shuttle-mode button,body.shuttle-mode .enterprise-model-picker select,body.shuttle-mode select,body.shuttle-mode #project-notes-open{background:linear-gradient(#193e5b,#0a2034);border:1px solid #397ca7;color:var(--shuttle-label);box-shadow:inset 0 1px #9bdcff28,inset 0 -1px #000a,0 1px 2px #000;text-shadow:none}
+body.shuttle-mode button:hover:not(:disabled),body.shuttle-mode #project-notes-open:hover{background:linear-gradient(#28658f,#123955);border-color:#74c8fa;color:#ffe1ac}
+body.shuttle-mode .heading-control button{color:#8bd6ff}
+body.shuttle-mode .heading-control small{color:var(--shuttle-label)}
+body.shuttle-mode .drive-switch button.selected,body.shuttle-mode .engage{background:linear-gradient(#266e9f,#174b71 55%,#10364f);border-color:#7dceff;color:#ffe0a4;box-shadow:inset 0 1px #c1ebff44,0 0 9px #2ca6ff33;text-shadow:none}
+body.shuttle-mode .stop{background:linear-gradient(#1c4b70,#10283e);border-color:#78badb;color:#ffdb9c}
+body.shuttle-mode input[type=range]{accent-color:#65c7ff;border-color:#356281;background:repeating-linear-gradient(90deg,#285c7c22 0px,#285c7c22 9px,#8ed4ff44 10px,#8ed4ff44 11px),linear-gradient(#030a12,#102a40);box-shadow:inset 0 1px 3px #000,0 1px #68b8f022}
+body.shuttle-mode input[type=range]::-webkit-slider-thumb{border-color:#a0deff;background:linear-gradient(#8ad9ff,#2b7fb1);box-shadow:0 0 8px #46b9ff55,inset 0 1px #d6f1ff}
+body.shuttle-mode input[type=range]::-moz-range-thumb{border-color:#a0deff;background:#469ed0;box-shadow:0 0 8px #46b9ff55}
+body.shuttle-mode .compass{border-color:#376787;background:repeating-conic-gradient(from 0deg,#75b7df 0deg 1deg,transparent 1deg 8deg),radial-gradient(circle,#081825 56%,#346c91 57%,#0b2032 60%,#3c799f 65%,#06101b 69%);box-shadow:0 0 15px #409de633,inset 0 0 8px #000,0 0 0 4px #040b12}
+body.shuttle-mode .compass::after{border-color:#579cc4;background:radial-gradient(circle at 36% 25%,#90d9ff13,transparent 48%,#0009 95%);box-shadow:inset 0 0 12px #4599d52b,0 0 0 7px #07162388}
+body.shuttle-mode .attitude-window{border-color:#35617c;background:#071624}
+body.shuttle-mode #attitude-horizon{background:linear-gradient(#071728,#24577e 48%,#6ac5f4 49.7%,#c5edff 50%,#23516c 50.3%,#07121e 100%)}
+body.shuttle-mode #attitude-horizon::after{background:repeating-linear-gradient(0deg,transparent 0px,transparent 17px,#69bfff66 17px,#69bfff66 18px)}
+body.shuttle-mode .north{color:var(--shuttle-label);background:#081624;border-color:#397395}
+body.shuttle-mode #compass-needle{filter:drop-shadow(0 0 3px #67c7ff)}
+body.shuttle-mode #compass-needle::after{border-bottom-color:#8ad6ff}
+body.shuttle-mode .compass-center{background:#c1eaff;box-shadow:0 0 7px #5cbdff}
+body.shuttle-mode .power-dial{background:radial-gradient(circle,#050c15 0 45%,#39799f 46%,#0b1e2e 48% 56%,#5ba1ce 57%,#071521 58% 66%,#284e6e 67% 69%,#050d17 70%);box-shadow:0 0 0 4px #050d17,0 0 15px #3d9ef033}
+body.shuttle-mode .dial-ring{background:conic-gradient(from 210deg,#75ccff 0 var(--power),#1a405e var(--power) 82%,transparent 82% 100%);filter:drop-shadow(0 0 4px #65baff)}
+body.shuttle-mode .power-dial::before{background:repeating-conic-gradient(from 210deg,#a1ddffaa 0deg 1deg,transparent 1deg 8deg)}
+body.shuttle-mode .dial-core{border-color:#437da3;background:radial-gradient(ellipse at 50% 25%,#234e70,#0b2236 60%,#050c15);box-shadow:inset 0 0 12px #5abaff22,0 0 0 6px #040c1599,0 0 0 7px #284b66}
+body.shuttle-mode .dial-core span,body.shuttle-mode .dial-core small{color:var(--shuttle-label)}
+body.shuttle-mode .dial-core strong{color:#9ee0ff;text-shadow:0 0 7px #39a9ff66}
+body.shuttle-mode select option{background:#0a1d2d;color:#f3c17c}
+body.shuttle-mode #help-link,body.shuttle-mode .enterprise-model-picker span{color:var(--shuttle-label)}
+body.shuttle-mode .map-tools button,body.shuttle-mode .camera-controls button{background:linear-gradient(#193e5b,#0a2034);border-color:#397ca7;color:var(--shuttle-label)}
+body.shuttle-mode #enterprise-inset{background:#081523;border-color:#356684;box-shadow:0 5px 14px #000b}
+body.shuttle-mode .enterprise-inset-title{background:#10283b;border-bottom-color:#28516c;color:var(--shuttle-label)}
+body.shuttle-mode #enterprise-inset-readout,body.shuttle-mode .enterprise-inset-keys{border-color:#28516c}
+body.shuttle-mode #enterprise-inset-readout strong{color:#9ee0ff}
+body.shuttle-mode #enterprise-inset-readout [data-active=true] strong{color:#c0edff;text-shadow:0 0 5px #4dbbff66}
+body.shuttle-mode :is(#project-notes,#shuttle-choice,#controls-help){background:linear-gradient(120deg,#142f47,#07121f);border-color:#4985ab;color:#f0d4a6}
+body.shuttle-mode #project-notes-text{background:#061320;border-color:#38617e;color:#c1e6fa}
+body.shuttle-mode #project-notes button,body.shuttle-mode #shuttle-choice button,body.shuttle-mode #help-close{background:linear-gradient(#1d496b,#0c263b);border-color:#4d94bf;color:var(--shuttle-label)}
+body.shuttle-mode #shuttle-choice-launch{background:linear-gradient(#2879ad,#164d74)!important}
+body.shuttle-mode .audio-panel{background:#081725;border-color:#397ca7;border-top-color:#75caff;box-shadow:0 12px 36px #000d,inset 0 1px #80ccff22}
+body.shuttle-mode .audio-title{background:linear-gradient(#18364e,#0a1d2e);color:var(--shuttle-label)}
+body.shuttle-mode #bridge-ambience{accent-color:#65c7ff}
+/* Button captions are white; surrounding instrument labels stay amber. */
+body.shuttle-mode button,
+body.shuttle-mode button:hover:not(:disabled),
+body.shuttle-mode .heading-control button,
+body.shuttle-mode .heading-control button small,
+body.shuttle-mode .helm .heading-control button small,
+body.shuttle-mode .engage,
+body.shuttle-mode .stop,
+body.shuttle-mode .drive-switch button.selected,
+body.shuttle-mode .map-tools button,
+body.shuttle-mode .camera-controls button,
+body.shuttle-mode #project-notes-open,
+body.shuttle-mode #project-notes-open:hover,
+body.shuttle-mode #project-notes button,
+body.shuttle-mode #shuttle-choice button,
+body.shuttle-mode #help-close{color:#ffffff}

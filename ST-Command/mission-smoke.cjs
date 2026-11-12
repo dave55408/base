@@ -6,6 +6,11 @@ const {createServer}=require('./server.cjs');
 try{browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:1440,height:1050}}),errors=[];page.on('pageerror',e=>errors.push(e.stack));await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.STCommand?.games.every(g=>g.isBooted));
 await page.locator('#warp').click();await page.locator('#throttle').fill('100');await page.locator('#engage').click();
 const arrival=await page.evaluate(()=>{const sim=STCommand;for(let n=0;n<5000&&sim.away.state.phase==='bridge';n++)sim.tick(.05);return {phase:sim.away.state.phase,distance:SpaceMath.distance(sim.state,sim.state.target)};});assert.equal(arrival.phase,'orbit');assert(arrival.distance<1);if(process.argv.includes('--screenshots'))await page.screenshot({path:path.join(__dirname,'preview-orbit.png'),fullPage:true});
+const orbitalRates=await page.evaluate(()=>{
+  const sim=STCommand,rates=[0,25,100].map(power=>{sim.state.throttle=power;const before=sim.away.state.clock;sim.tick(.5);return (sim.away.state.clock-before)/.5;});
+  sim.state.throttle=0;return rates;
+});assert(Math.abs(orbitalRates[0]-1)<1e-8&&Math.abs(orbitalRates[1]-3)<1e-8&&Math.abs(orbitalRates[2]-9)<1e-8,'orbital rotation scales smoothly with engine power');
+await page.keyboard.down('w');await page.evaluate(()=>STCommand.tick(.25));await page.keyboard.up('w');assert(await page.evaluate(()=>STCommand.state.throttle>0),'keyboard increases orbital power');await page.locator('#throttle').fill('0');
 const rotation=await page.evaluate(()=>{
   const scene=STCommand.games[0].scene.getScene('Forward');STCommand.away.render(scene,1296,331);
   const canvas=document.createElement('canvas');canvas.width=1296;canvas.height=331;const c=canvas.getContext('2d');
@@ -48,12 +53,25 @@ for(const slider of ['#heading','#pitch','#throttle'])for(const key of ['ArrowLe
 }
 for(const slider of ['#heading','#pitch','#throttle']){
   await page.locator(slider).focus();await page.keyboard.down('w');await page.evaluate(()=>STCommand.tick(.15));await page.keyboard.up('w');assert(await page.evaluate(()=>STCommand.state.throttle>4),'W adds power with '+slider+' focused');
-  await page.keyboard.down('s');await page.evaluate(()=>STCommand.tick(.3));await page.keyboard.up('s');assert.equal(await page.evaluate(()=>STCommand.state.throttle),0,'S reduces power with '+slider+' focused');
+  await page.keyboard.down('s');await page.evaluate(()=>STCommand.tick(.3));await page.keyboard.up('s');assert(await page.evaluate(()=>STCommand.state.throttle<0),'S reduces power through zero with '+slider+' focused');await page.locator('#stop').click();
 }
 await page.evaluate(attitude=>Object.assign(STCommand.state,attitude),surfaceAttitude);
 await page.waitForTimeout(150);if(process.argv.includes('--screenshots'))await page.screenshot({path:path.join(__dirname,'preview-surface.png'),fullPage:true});await page.locator('#retrieve-beacon').click();assert(await page.evaluate(()=>STCommand.away.state.recovered));assert.equal(await page.locator('#destination').inputValue(),'ship');await page.locator('#engage').click();
 const ascent=await page.evaluate(()=>{const sim=STCommand;for(let i=0;i<30000&&sim.state.autopilot;i++)sim.tick(.05);return {range:sim.away.range(),heading:sim.state.heading,pitch:sim.state.pitch,phase:sim.away.state.phase,message:document.getElementById('message').textContent};});console.log('Return:',ascent);assert(ascent.range<.65,JSON.stringify(ascent));await page.waitForTimeout(150);
 assert((await page.locator('.galaxy .display-title h2').textContent()).includes('3D SHUTTLE ATTITUDE'));
+const bayPixels=await page.evaluate(()=>{
+  const sim=STCommand,scene=sim.games[0].scene.getScene('Forward'),savedMission={...sim.away.state},savedFlight={...sim.state},w=1296,h=448;
+  const samples=[[0,3,110],[.2,3,110.1],[0,.6,110]].map(([x,y,z])=>{
+    Object.assign(sim.away.state,{x,y,z,target:'ship',phase:'flight'});Object.assign(sim.state,{heading:0,pitch:0});
+    sim.away.render(scene,w,h);
+    const markerX=w/2-x/y*w*.65,markerY=h/2-(110-z)/y*w*.65;
+    // Sample the transparent ship render as well as the composited viewscreen:
+    // empty space has alpha zero, whereas the enclosed hangar is opaque.
+    const shipOnly=document.createElement('canvas');shipOnly.width=w;shipOnly.height=h;
+    const context=shipOnly.getContext('2d');context.drawImage(scene.enterpriseRenderer.renderer.domElement,0,0,w,h);
+    return {view:[...scene.awayTexture.getContext().getImageData(Math.round(markerX),Math.round(markerY),1,1).data],ship:[...context.getImageData(Math.round(markerX),Math.round(markerY),1,1).data]};
+  });Object.assign(sim.away.state,savedMission);Object.assign(sim.state,savedFlight);return samples;
+});for(const pixel of bayPixels){assert.equal(pixel.ship[3],255,'aft bay target hits opaque hangar geometry at distant, offset and close approaches');assert(Math.max(...pixel.view.slice(0,3))<110,'guidance remains centered inside the shaded bay opening');}
 const mapAttitude=await page.evaluate(()=>{
   const sim=STCommand,scene=sim.games[2].scene.getScene('Map'),draw=()=>{sim.away.renderNav(scene,scene.scale.width,scene.scale.height,'map');return {...scene.shuttleMapTelemetry};};
   const original={heading:sim.state.heading,pitch:sim.state.pitch,bank:sim.away.state.bank},before=draw();sim.state.heading=45;sim.state.pitch=20;sim.away.state.bank=-.25;const after=draw();sim.state.heading=original.heading;sim.state.pitch=original.pitch;sim.away.state.bank=original.bank;draw();return {before,after};
@@ -62,7 +80,7 @@ await page.locator('#map-view canvas').scrollIntoViewIfNeeded();const mapBox=awa
 await page.mouse.move(mapBox.x+mapBox.width/2,mapBox.y+90);await page.mouse.down();await page.mouse.move(mapBox.x+mapBox.width/2+40,mapBox.y+110,{steps:4});await page.mouse.up();assert(await page.evaluate(yaw=>STCommand.games[2].scene.getScene('Map').yaw>yaw+10,yawBefore),'drag orbits the shuttle approach map');
 const zoomBefore=await page.evaluate(()=>STCommand.games[2].scene.getScene('Map').zoom);await page.locator('#map-zoom-in').click();assert(await page.evaluate(zoom=>STCommand.games[2].scene.getScene('Map').zoom>zoom,zoomBefore));await page.locator('#map-home').click();await page.waitForTimeout(100);
 if(process.argv.includes('--screenshots'))await page.screenshot({path:path.join(__dirname,'preview-aft-bay.png'),fullPage:true});
-await page.locator('#land-bay').click();const docking=await page.evaluate(()=>{const sim=STCommand,scene=sim.games[2].scene.getScene('Map'),draw=()=>{sim.away.renderNav(scene,scene.scale.width,scene.scale.height,'map');return scene.shuttleMapTelemetry.range;};const before=draw();for(let i=0;i<40;i++)sim.tick(.05);return {before,mid:draw()};});assert(docking.mid<docking.before&&docking.mid>0,'3D landing guidance moves shuttle into the bay');
+assert(await page.locator('#land-bay').isDisabled(),'manual landing requires reaching the deck first');await page.evaluate(()=>{const a=STCommand;Object.assign(a.away.state,{x:.03,y:-.17,z:110-(EnterpriseModels.selected==='original'?.04645:.01530),bank:0,roll:0});Object.assign(a.state,{heading:180,pitch:0,throttle:0,speed:0,autopilot:false});a.away.updateUI();});await page.locator('#land-bay').click();
 await page.evaluate(()=>{for(let i=0;i<60;i++)STCommand.tick(.05);const scene=STCommand.games[2].scene.getScene('Map');STCommand.away.renderNav(scene,scene.scale.width,scene.scale.height,'map');});assert.equal(await page.evaluate(()=>STCommand.away.state.phase),'landed');assert.equal(await page.evaluate(()=>STCommand.games[2].scene.getScene('Map').shuttleMapTelemetry.range),0,'touchdown is aligned at the bay');
 await page.locator('#power-down').click();await page.evaluate(()=>{for(let i=0;i<70;i++)STCommand.tick(.05);});assert.equal(await page.evaluate(()=>STCommand.away.state.phase),'orbit');assert(await page.evaluate(()=>STCommand.away.state.completed));assert.equal(await page.locator('body').evaluate(e=>e.classList.contains('shuttle-mode')),false);
 await page.keyboard.press('r');assert.equal(await page.evaluate(()=>STCommand.away.state.phase),'bridge');assert.equal(await page.locator('#destination option').count(),11);assert.deepEqual(errors,[]);console.log('Full sortie passed: orbit, launch, atmospheric descent, retrieval, ascent, aft bay landing, power down, bridge return and reset.');
