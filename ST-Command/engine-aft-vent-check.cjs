@@ -1,0 +1,23 @@
+const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
+const {chromium}=require(require.resolve('playwright',{paths:[__dirname,path.resolve(__dirname,'../elf-adventure')]}));const {createServer}=require('./server.cjs');
+(async()=>{const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;try{
+browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&/shader|WebGLProgram/i.test(m.text()))errors.push(m.text());});await page.goto('http://127.0.0.1:'+server.address().port);
+const result=await page.evaluate(async()=>{for(const game of window.STCommand?.games||[])game.loop.sleep();const T=AlpineThree,checks=[],canvas=document.createElement('canvas');canvas.width=1600;canvas.height=1500;const ctx=canvas.getContext('2d');
+for(const [row,factory] of [createEnterpriseRenderer,createMovieEnterpriseRenderer,createThirdEnterpriseRenderer].entries()){
+const ship=factory();await ship.ready;const scratch=document.createElement('canvas').getContext('2d');ship.draw(scratch,2,2,{x:0,y:-2,z:110.49},{heading:180,pitch:0,time:0});ship.model.updateWorldMatrix(true,true);
+const vents=[];ship.model.traverse(o=>{if(o.userData.aftEngineVent&&!o.userData.aftEngineVent.inboard)vents.push(o);});let slats=0;for(const vent of vents){const spec=vent.userData.aftEngineVent;const prefix=spec.side<0?'port':'starboard',inside=ship.model.getObjectByName(prefix+'-inboard-aft-engine-vent'),tube=ship.model.getObjectByName(prefix+'-engine-outer-tube');
+if(!inside||inside.userData.aftEngineVent.width!==spec.width||inside.userData.aftEngineVent.height!==spec.height)throw Error('Inside and outside rear vents must have equal dimensions');
+function bounds(group){const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];group.traverse(o=>{if(!o.isMesh)return;const p=o.geometry.attributes.position;for(let i=0;i<p.count;i++){const v=tube.parent.worldToLocal(o.localToWorld(new T.Vector3().fromBufferAttribute(p,i))).toArray();for(let k=0;k<3;k++){min[k]=Math.min(min[k],v[k]);max[k]=Math.max(max[k],v[k]);}}});return {min,max};}
+const a=bounds(vent),b=bounds(inside);
+let finRear=-Infinity;ship.model.traverse(o=>{if(o.isMesh&&o.name.startsWith(prefix)&&o.name.endsWith('-aft-engine-fin'))finRear=Math.max(finRear,bounds(o).max[2]);});
+const body=ship.model.getObjectByName(prefix+'-inboard-service-panel').userData.inboardPanel,originalFront=body.bodyFront+(body.bodyRear-body.bodyFront)*.825;
+if(Math.abs(a.min[2]-originalFront)>1e-6)throw Error('Rear rectangle front must stay fixed');
+if(Math.abs(a.max[2]-finRear)>1e-6)throw Error('Rear rectangle must end at the fin end');
+for(const k of [1,2])for(const end of ['min','max'])if(Math.abs(a[end][k]-b[end][k])>1e-6)throw Error('Inside and outside vents must align vertically and axially');
+if(Math.abs(a.min[0]-(2*tube.position.x-b.max[0]))>1e-6||Math.abs(a.max[0]-(2*tube.position.x-b.min[0]))>1e-6)throw Error('Rear vents must mirror across the engine center');slats+=vent.children.filter(o=>o.name.includes('-vent-slat-')).length;}
+const vent=vents.find(v=>v.userData.aftEngineVent.side===1),tube=ship.model.getObjectByName('starboard-engine-outer-tube');ship.model.traverse(o=>{if(o.isMesh)o.visible=o===tube||o.parent===vent;});const panel=vent.getObjectByName('starboard-outer-service-grille'),p=panel.geometry.attributes.position,center=new T.Vector3();for(let i=0;i<p.count;i++)center.add(panel.localToWorld(new T.Vector3().fromBufferAttribute(p,i)));center.multiplyScalar(1/p.count);
+for(let col=0;col<2;col++){const camera=new T.OrthographicCamera(-.12,.12,.075,-.075,.001,10);camera.position.copy(center).add(new T.Vector3(.8,col?.18:0,col?.22:0));camera.lookAt(center);camera.updateWorldMatrix(true,false);ship.renderer.setSize(800,500,false);ship.renderer.render(ship.scene,camera);ctx.drawImage(ship.renderer.domElement,col*800,row*500);}
+checks.push({variant:ship.model.userData.variant||'original',vents:vents.length,slats,glError:ship.renderer.getContext().getError()});ship.dispose();}
+return {checks,image:canvas.toDataURL('image/png')};});
+for(const c of result.checks){assert.equal(c.vents,2);assert.equal(c.slats,24);assert.equal(c.glError,0);}assert.deepEqual(errors,[]);const file=path.join(require('node:os').tmpdir(),'st-command-aft-engine-vents.png');fs.writeFileSync(file,Buffer.from(result.image.split(',')[1],'base64'));console.log(JSON.stringify(result.checks));console.log(file);
+}finally{await browser?.close();await new Promise(r=>server.close(r));}})().catch(e=>{console.error(e);process.exitCode=1;});

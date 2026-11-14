@@ -6,7 +6,7 @@ try{
  browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
  const page=await browser.newPage({viewport:{width:2048,height:1152}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.STCommand?.games.every(g=>g.isBooted));
- assert(await page.locator('#hangar-door').isHidden());await page.locator('#stop').click();await page.locator('#launch-shuttle').click();
+ assert(await page.locator('#hangar-door').isHidden());await page.locator('#stop').click();await page.locator('#launch-shuttle').click();await page.waitForFunction(()=>STCommand.away.state.phase==='flight',null,{timeout:180000});
  await page.evaluate(()=>{STCommand.state.paused=true;STCommand.state.throttle=0;STCommand.state.speed=0;});
  const door=page.locator('#hangar-door');assert.equal(await door.textContent(),'CLOSE HANGAR DOOR');
  for(const width of [2048,1280]){await page.setViewportSize({width,height:1152});const a=await page.locator('#land-bay').boundingBox(),b=await door.boundingBox();assert(b.x>=a.x+a.width&&Math.abs(a.y-b.y)<1,'door button is immediately right of Land in Bay');}

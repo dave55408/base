@@ -1,4 +1,4 @@
-﻿const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs'),crypto=require('node:crypto');
+const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs'),crypto=require('node:crypto');
 const {chromium}=require(require.resolve('playwright',{paths:[__dirname,path.resolve(__dirname,'../elf-adventure')]}));
 const {createServer}=require('./server.cjs');
 (async()=>{const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;try{
@@ -36,7 +36,7 @@ const {createServer}=require('./server.cjs');
   for(const [name,data] of [['preview-movie-enterprise.jpg',result.movie],['preview-enterprise-comparison.jpg',result.comparison]])fs.writeFileSync(path.join(__dirname,name),Buffer.from(data.split(',')[1],'base64'));
   const picker=page.locator('#enterprise-model');assert.equal(await picker.inputValue(),'movie');
   const fit=await picker.boundingBox(),header=await page.locator('.forward>.display-title').boundingBox();assert(fit.x>=header.x&&fit.x+fit.width<=header.x+header.width&&fit.y+fit.height<=header.y+header.height,'model selector fits the existing viewscreen header');
-  await page.locator('#stop').click();await page.locator('#launch-shuttle').click();await page.evaluate(()=>{STCommand.state.paused=true;});
+  await page.locator('#stop').click();await page.locator('#launch-shuttle').click();await page.waitForFunction(()=>STCommand.away.state.phase==='flight',null,{timeout:180000});await page.evaluate(()=>{STCommand.state.paused=true;});
   await page.waitForFunction(()=>STCommand.games[0].scene.getScene('Forward').enterpriseRenderer?.model.userData.variant==='movie');
   const flight=await page.evaluate(()=>({x:STCommand.away.state.x,y:STCommand.away.state.y,z:STCommand.away.state.z,phase:STCommand.away.state.phase,target:STCommand.away.state.target}));
   await picker.selectOption('original');await page.evaluate(()=>{const scene=STCommand.games[0].scene.getScene('Forward');STCommand.away.render(scene,scene.scale.width,scene.scale.height);});

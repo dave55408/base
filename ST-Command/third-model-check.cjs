@@ -52,7 +52,7 @@ const {createServer}=require('./server.cjs');
   for(const counts of Object.values(result.detailCounts))assert(counts[1]>counts[0]*3,'curved profiles are subdivided');
   fs.writeFileSync(path.join(__dirname,'preview-third-model-reference.png'),Buffer.from(result.preview,'base64'));delete result.preview;
   // Exercise the live factory, both texture settings, cameras and persistence.
-  await page.locator('#enterprise-model').selectOption('third');await page.locator('#stop').click();await page.locator('#launch-shuttle').click();
+  await page.locator('#enterprise-model').selectOption('third');await page.locator('#stop').click();await page.locator('#launch-shuttle').click();await page.waitForFunction(()=>STCommand.away.state.phase==='flight',null,{timeout:180000});
   await page.evaluate(()=>{STCommand.state.paused=true;for(const g of STCommand.games)g.loop.stop();});
   for(const quality of ['low','high']){
    await page.locator('#texture-quality').selectOption(quality);

@@ -7,8 +7,29 @@ try{
  const result=await page.evaluate(async()=>{
   ShipTextures.quality='high';const second=createMovieEnterpriseRenderer(),third=createThirdEnterpriseRenderer();await Promise.all([second.ready,third.ready]);
   const T=AlpineThree,maps=enterpriseThirdMaps,group=third.model.getObjectByName('third-photo-details');
+  for(const side of ['port','starboard'])if(!third.model.getObjectByName(side+'-forward-hull-service-grille'))throw Error('Reference front grille must meet the pennant gray section');
+  for(const side of ['port','starboard']){
+   const ball=third.model.getObjectByName(side+'-rear-exhaust-insert'),base=third.model.getObjectByName(side+'-engine-rear-end-cap');
+   if(ball.position.x!==base.position.x||ball.position.y!==base.position.y)throw Error('Green exhaust ball must be centered on its circular end cap');
+  }
+  for(const side of ['port','starboard']){
+   const grille=third.model.getObjectByName(side+'-forward-hull-service-grille');if(grille.children.length!==11)throw Error('Front grille needs eleven physical ridges');
+   for(const rib of grille.children){rib.geometry.computeBoundingBox();const size=new T.Vector3();rib.geometry.boundingBox.getSize(size);if(size.x<.001||size.y<.001||size.z<.09)throw Error('Grille ridges must have real height and length');}
+   if(Math.abs(grille.userData.front-(grille.userData.panelFront-.006))>1e-7)throw Error('Grille must reach the front of the raised backing');
+   if(grille.children[0].userData.rear>=grille.children[10].userData.rear)throw Error('Grille aft edge must slant');
+  }
+  const raisedPanels=[];third.model.traverse(o=>{if(o.name.startsWith('saucer-raised-white-panel-'))raisedPanels.push(o);});
+  if(raisedPanels.length!==4)throw Error('Saucer needs four raised white panels');
+  for(const plate of raisedPanels){if(plate.userData.rise!==.0018||plate.material[1].color.getHex()!==0x94a296)throw Error('White panels need a subtle rise and grid-colored sides');const p=plate.geometry.attributes.position,n=plate.geometry.attributes.normal;for(let i=0;i<49;i++)if(!Number.isFinite(p.getY(i))||n.getY(i)<.8)throw Error('White panel tops must face upward and follow the saucer');}
   const windows=group.userData.features.filter(r=>['engineering','neck','bridge','rim','bowl','pylon'].includes(r.region)).length;
   const pennants=group.userData.features.filter(r=>r.region==='pennant').length;
+  if(group.userData.features.some(r=>r.region==='stencil')||maps.engineeringMaintenanceMarks!==false)throw Error('Third hull maintenance marks must be omitted');
+  for(const side of ['port','starboard']){
+   const pennant=third.model.getObjectByName(side+'-secondary-pennant'),grille=third.model.getObjectByName(side+'-forward-hull-service-grille'),gray=third.model.getObjectByName(side+'-pennant-front-gray-section');
+   if(!pennant||!grille||gray)throw Error('Hull pennant and grille must retain the hull finish without gray paint');
+   if(pennant.material.opacity!==.80||!!third.model.getObjectByName(side+'-pennant-gold-overlay')||!pennant.userData.combinedPaintLayer||pennant.userData.hullClearance>.00005||third.model.getObjectByName(side+'-nacelle-registry').material.userData.pennantOpacity!==.80)throw Error('Hull and engine pennants need twenty percent transparency');
+   for(const edge of ['upper','lower']){const line=third.model.getObjectByName(side+'-pennant-'+edge+'-raised-line');if(!line||!line.userData.roundedEnds||line.userData.edgePadding<.004||Math.abs(Math.abs(line.userData.height+.022)-.024)>1e-7||Math.abs(line.userData.front-grille.userData.panelFront-.014)>1e-7||Math.abs(line.userData.rear-(grille.userData.panelFront+(grille.userData.panelRear-grille.userData.panelFront)*(edge==='upper'?.55:.90)))>1e-7)throw Error('Raised trim must follow both gray-section edges');}
+  }
   let pennantColorPixels=0,registryInk=0;
   for(const name of ['pennant','portPennant','registry','portRegistry']){
    const image=maps[name].image,p=image.getContext('2d').getImageData(0,0,image.width,image.height).data;
@@ -34,7 +55,8 @@ try{
      strut.worldToLocal(v);minSurface=Math.min(minSurface,(Math.abs(v.x)/.020)**6+(Math.abs(v.z)/.0535)**6);vertices++;
     }
    });
-   return {count:b.length,matches:JSON.stringify(a)===JSON.stringify(b),minSurface,vertices};
+   if(b.some(panel=>panel[0]!==0xc2c2c2))throw Error('Third pylon top grilles must use the softer gray');
+   return {count:b.length,matches:JSON.stringify(a.map(panel=>panel.slice(1)))===JSON.stringify(b.map(panel=>panel.slice(1))),minSurface,vertices};
   });
   const ctx=document.createElement('canvas').getContext('2d');
   function engineState(ship){
@@ -56,7 +78,7 @@ try{
   }
   return {windows,pennants,pennantColorPixels,registryInk,undersideInk,glowBlack,paint,plated,pylonPanels,engines,appearance:maps.appearance,glError:third.renderer.getContext().getError(),preview:out.toDataURL().split(',')[1]};
  });
- assert.equal(result.windows,0);assert.equal(result.pennants,0);assert.equal(result.pennantColorPixels,0);assert(result.registryInk>1000);assert(result.glowBlack);assert(result.paint>10000);assert(result.plated>10);assert(result.pylonPanels.every(p=>p.count===5&&p.matches&&p.minSurface>1.01&&p.vertices>=425));assert(result.engines.every(Boolean));assert.equal(result.appearance,'model-two-without-windows');assert.equal(result.glError,0);assert.deepEqual(errors,[]);
- assert.equal(result.undersideInk,0);
+ assert.equal(result.windows,0);assert.equal(result.pennants,0);assert(result.pennantColorPixels>1000);assert(result.registryInk>1000);assert(result.glowBlack);assert(result.paint>10000);assert(result.plated>10);assert(result.pylonPanels.every(p=>p.count===4&&p.matches&&p.minSurface>1.01&&p.vertices>=340));assert(result.engines.every(Boolean));assert.equal(result.appearance,'model-two-without-windows');assert.equal(result.glError,0);assert.deepEqual(errors,[]);
+ assert(result.undersideInk>1000,'Model Three restores Model Two underside lettering and chevrons');
  fs.writeFileSync(path.join(__dirname,'preview-third-model-two-finish.png'),Buffer.from(result.preview,'base64'));delete result.preview;console.log(JSON.stringify(result));console.log('Passed: no small windows or underside ink, Model Two paint/plating, identical engine animation states and matching pylon panels.');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}})().catch(e=>{console.error(e);process.exitCode=1;});

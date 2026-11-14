@@ -10,7 +10,8 @@ const result=await page.evaluate(async()=>{
  const T=AlpineThree,enclosure=ship.model.getObjectByName('movie-hangar-enclosure'),triangles=[],doorProfile=hangarDoorProfile(bayScale);
  const launchRear=-.278*bodyScale-.032+.001;
  for(const name of Array.from({length:12},(_,n)=>'garage-door-panel-'+n)){const part=ship.model.getObjectByName(name),p=part.geometry.attributes.position;for(let i=0;i<p.count;i++){const v=new T.Vector3().fromBufferAttribute(p,i).applyMatrix4(part.matrixWorld);if(v.z>=launchRear)throw new Error('Recessed wall fittings must clear the shuttle at its deepest launch position');}}
- for(const root of [enclosure,ship.model.getObjectByName('bay-garage-shell'),ship.model.getObjectByName('bay-garage-door')])root.traverse(o=>{if(!o.isMesh)return;const p=o.geometry.attributes.position,idx=o.geometry.index,n=idx?idx.count:p.count;
+ // The fitted interior now includes enclosed rooms beyond the side doors.
+ for(const root of [enclosure,ship.model.getObjectByName('reference-bay-interior')])root.traverse(o=>{if(!o.isMesh)return;const p=o.geometry.attributes.position,idx=o.geometry.index,n=idx?idx.count:p.count;
   for(let i=0;i<n;i+=3){const tri=[];for(let j=0;j<3;j++){const v=new T.Vector3().fromBufferAttribute(p,idx?idx.getX(i+j):i+j).applyMatrix4(o.matrixWorld);tri.push(v.x,v.y,v.z);}triangles.push(tri);}
  });
  const rim=ship.model.getObjectByName('movie-hangar-flat-door-rim'),portalPoints=rim.geometry.userData.doorFrame.aperture.map(p=>new T.Vector3(...p).applyMatrix4(rim.matrixWorld)),portalCenter=portalPoints.reduce((sum,p)=>sum.add(p),new T.Vector3()).multiplyScalar(1/portalPoints.length),portalTriangles=[];

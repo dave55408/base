@@ -4,14 +4,16 @@ window.ShuttleBayFlight={
  departureFadeDuration:.45,
  dimensions(model=window.EnterpriseModels?.selected){
   const movie=model!=='original',body=movie?(window.EnterpriseEngineeringShape?.bodyScale??.85):1;
-  return {floor:110-(movie?.01530:.04645),ceiling:110+(movie?.050:.045),mouth:hangarDoorProfile().roofFront*body-.032,rear:-(movie?.278*body:.270)-.032,padY:(-.111+(1040/2048-.5)*.322)*body-.032,cabinTransitionY:(-.262+2*.078+.033)*body-.032,launchRearLimitY:(-.262+.078+.033)*body-.032};
+  const scaleY=movie?.128/.162:1,floorY=hangarDoorProfile().cy*scaleY+(movie?.102*(1-scaleY):0);
+  return {floor:110+floorY,ceiling:110+(movie?.050:.045),mouth:hangarDoorProfile().roofFront*body-.032,rear:-(movie?.278*body:.270)-.032,padY:(-.111+(1040/2048-.5)*.322)*body-.032,cabinTransitionY:(-.262+2*.078+.033)*body-.032,launchRearLimitY:(-.262+.078+.033)*body-.032};
  },
  inside(m,model){const b=this.dimensions(model);return Math.abs(m.x)<.071&&m.y>=b.rear+.025&&m.y<=b.mouth&&m.z>=b.floor-.005&&m.z<=b.ceiling+.008;},
  padRoot(heading,model){const b=this.dimensions(model),offset=(createClassFShuttle.aftExtent-3.40)/2*(.162/3/3.20),a=heading*Math.PI/180;return {x:Math.sin(a)*offset,y:b.padY-Math.cos(a)*offset,z:b.floor};},
  cockpitEntryPose(model){
   const b=this.dimensions(model);
-  // Reference view: centered at the rear, ring below, looking toward space.
-  return {x:0,y:b.rear-.0017,z:b.floor+.0253};
+  // Start slightly farther back so the cockpit fade retains more of the bay
+  // instead of appearing to jump forward from the rear launch camera.
+  return {x:0,y:b.rear-.0137,z:b.floor+.0253};
  },
  cockpitView(m,s){
   const rad=Math.PI/180;

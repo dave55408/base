@@ -17,7 +17,8 @@
   const ctx=texture.getContext();ctx.clearRect(0,0,w,h);
   // Updating the same selected renderer preserves lights, domes and hull details.
   const sink=scene.enterpriseChaseSink??=document.createElement('canvas').getContext('2d');
-  ship.draw(sink,w,h,{x:.20,y:1.35,z:110.23,phase:'bridge',bank:0},{heading:0,pitch:0,time:state.time,bayDoorOpen:0});
+  ship.draw(sink,w,h,{x:.20,y:1.35,z:110.23,phase:'bridge',bank:0},{heading:0,pitch:0,time:state.time,bayDoorOpen:0},true);
+  SimPerformance.resize(ship.renderer,w,h);
   ship.renderer.render(ship.scene,camera);ctx.save();ctx.filter='contrast(1.3)';ctx.drawImage(ship.renderer.domElement,0,0,w,h);ctx.restore();
   ctx.save();ctx.globalCompositeOperation='source-atop';ctx.fillStyle='rgba(98,160,235,.18)';ctx.fillRect(0,0,w,h);ctx.restore();
   // Clip the grain to the ship; simulation time holds it still while paused.

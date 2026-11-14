@@ -4,7 +4,7 @@ const {chromium}=require(require.resolve('playwright',{paths:[__dirname,path.res
 try{
  browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});const page=await browser.newPage({viewport:{width:1800,height:1100}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.STCommand?.games.every(g=>g.isBooted));
- await page.locator('#stop').click();await page.locator('#launch-shuttle').click();
+ await page.locator('#stop').click();await page.locator('#launch-shuttle').click();await page.waitForFunction(()=>STCommand.away.state.phase==='flight',null,{timeout:180000});
  const result=await page.evaluate(async(excursion)=>{
   const app=STCommand,m=app.away.state,s=app.state,scene=app.games[0].scene.getScene('Forward');s.paused=true;
   Object.assign(m,{x:.025,y:.35,z:110.01,bank:0,cameraView:excursion?'excursion':'cockpit'});Object.assign(s,{heading:0,pitch:0,speed:0,throttle:0});app.away.dock();

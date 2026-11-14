@@ -53,7 +53,7 @@ const {createServer}=require('./server.cjs');
  const baseline=JSON.parse(fs.readFileSync(path.join(__dirname,'assets/reference/movie-study/movie-dome-shape.json'),'utf8')).map(s=>({positions:s.positions,scale:[.90,.90,1.10]}));
  assert.deepEqual(signature,baseline,'glass cover retains the collector shape and reference nacelle diameter');
  assert.equal(result.bronze,0x24170f,'dark bronze deflector backing is preserved');
- assert.equal(result.domeLineEnds.length,24);assert(result.domeLineEnds.every(e=>e.finite&&Math.abs(e.z-.350/.864)<1e-6&&e.r>.0859&&e.r<.087),'all spinning blades extend into the tube while staying inside the housing radius');
+ assert.equal(result.domeLineEnds.length,24);assert(result.domeLineEnds.every(e=>e.finite&&Math.abs(e.z-.350/.864)<1e-6&&e.r>.0826&&e.r<.0833),'all spinning blades extend into the tube with clearance inside the retaining lip');
  assert(result.strutBurial.every(margin=>margin>.006),'both strut root caps are fully embedded in the curved hull with clearance');
  assert(result.hangarClearances.every(margin=>margin>.008),'both struts stay outside the hangar interior with clearance');
  console.log('Passed: concave dark gray caps block rear sightlines behind all lights, clear pylon/grille/shoe bore, hangar clearance, reference proportions and preserved dome shape.');

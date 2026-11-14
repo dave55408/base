@@ -6,7 +6,7 @@ try{
  browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
  const page=await browser.newPage({viewport:{width:2048,height:1152}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.STCommand?.games.every(g=>g.isBooted));
- assert(await page.locator('#enterprise-inset').isHidden());await page.locator('#stop').click();await page.locator('#launch-shuttle').click();
+ assert(await page.locator('#enterprise-inset').isHidden());await page.locator('#stop').click();await page.locator('#launch-shuttle').click();await page.waitForFunction(()=>STCommand.away.state.phase==='flight',null,{timeout:180000});
  async function setup(){await page.evaluate(()=>{const a=STCommand,m=a.away.state,s=a.state;Object.assign(s,{paused:true,throttle:0,speed:0,heading:180,pitch:0,autopilot:false});Object.assign(m,{phase:'flight',freeSpace:true,x:.2,y:.5,z:110.3,roll:0,bank:0,turnBank:0,pitchBob:0,lastVisualPitch:0,departureRamp:false,launchLiftRemaining:0,launchStage:null,departureCameraPending:false,departureCameraFade:null});Object.assign(m.carrier,{x:0,y:0,z:0,heading:0,pitch:0,roll:0,manualRoll:0,turnBank:0,returningNeutral:false,speed:0,moving:false,manual:false});Object.assign(m.bridgeState,{heading:90,pitch:0,throttle:0,speed:0,roll:0});});}
  async function snapshot(){return page.evaluate(()=>{const m=STCommand.away.state,s=STCommand.state,T=AlpineThree,c=m.carrier,pose=new T.Group(),shuttle=new T.Group();pose.rotation.set(c.pitch*Math.PI/180,-c.heading*Math.PI/180,-c.roll,'YXZ');shuttle.rotation.set(s.pitch*Math.PI/180,-s.heading*Math.PI/180,-m.bank,'YXZ');const p=new T.Vector3(m.x,m.z-110,m.y).applyQuaternion(pose.quaternion).add(new T.Vector3(c.x,c.z,c.y)),up=new T.Vector3(0,1,0).applyQuaternion(shuttle.quaternion).applyQuaternion(pose.quaternion),nose=new T.Vector3(0,0,-1).applyQuaternion(shuttle.quaternion).applyQuaternion(pose.quaternion);return {carrier:{...c},bridge:{...m.bridgeState},position:p.toArray(),up:up.toArray(),nose:nose.toArray(),throttle:s.throttle,hidden:m.targetSquareHidden};});}
  async function press(code,key,dt=.5){await page.dispatchEvent('body','keydown',{code,key});await page.evaluate(dt=>{STCommand.state.paused=false;for(let n=0;n<10;n++)STCommand.tick(dt/10);STCommand.state.paused=true;},dt);await page.dispatchEvent('body','keyup',{code,key});return snapshot();}
@@ -23,10 +23,21 @@ try{
   await page.dispatchEvent('body','keydown',{code:'NumpadSubtract',key:'-'});await page.dispatchEvent('body','keyup',{code:'NumpadSubtract',key:'-'});const neutralStart=await snapshot();assert(neutralStart.carrier.returningNeutral,'minus begins automatic neutral return');const settling=await advance(.2);assert(Math.abs(settling.carrier.roll)<Math.abs(neutralStart.carrier.roll)&&Math.abs(settling.carrier.roll)>.001,'neutral return starts gradually');const neutral=await advance(45);assert(Math.abs(neutral.carrier.roll)<1e-8&&Math.abs(neutral.carrier.pitch)<1e-8&&Math.abs(((neutral.carrier.heading+180)%360)-180)<1e-8&&!neutral.carrier.returningNeutral,'minus returns yaw pitch and roll to neutral: '+JSON.stringify(neutral.carrier));
  }
  for(const bank of [-Math.PI/2,-Math.PI/6,0,Math.PI/6,Math.PI/2,Math.PI]){
-  await setup();await page.evaluate(bank=>Object.assign(STCommand.away.state.carrier,{manual:true,manualRoll:bank,turnBank:0,roll:bank}),bank);
+  await setup();await page.evaluate(bank=>Object.assign(STCommand.away.state.carrier,{manual:true,manualRoll:0,turnBank:bank,roll:bank}),bank);
   const before=await snapshot(),after=await advance(2),turn=(after.carrier.heading-before.carrier.heading+540)%360-180;
   assert(Math.abs(turn-16*Math.sin(bank))<1e-8,'bank controls continued turn direction and rate, with level and inverted flight stable');
   for(const field of ['position','up','nose'])assert(after[field].every((v,i)=>Math.abs(v-before[field][i])<1e-8),'banked turns preserve shuttle world '+field);
+ }
+ for(const [code,key,sign]of [['Numpad0','0',-1],['NumpadDecimal','.',1]]){
+  await setup();const before=await snapshot(),rolled=await press(code,key,2);
+  assert(rolled.carrier.manualRoll*sign>.5,'manual roll rotates Enterprise');
+  assert.equal(rolled.carrier.turnBank,0,'manual roll does not add steering bank');
+  assert.equal(rolled.carrier.heading,before.carrier.heading,'manual roll preserves heading');
+  assert.equal(rolled.carrier.pitch,before.carrier.pitch,'manual roll preserves pitch');
+  const held=await advance(2);assert.equal(held.carrier.heading,before.carrier.heading,'heading stays fixed after roll release');
+  await setup();await page.evaluate(()=>Object.assign(STCommand.away.state.carrier,{manual:true,turnBank:.4,manualRoll:0,roll:.4}));
+  const start=await snapshot(),combined=await press(code,key,2),turn=(combined.carrier.heading-start.carrier.heading+540)%360-180;
+  assert(Math.abs(turn-16*Math.sin(.4))<1e-8,'manual roll does not change the existing yaw-bank turn rate');
  }
  for(const power of [50,100,-100]){
   await setup();await page.evaluate(power=>{const m=STCommand.away.state;m.carrier.manual=true;m.bridgeState.throttle=power;},power);
@@ -41,7 +52,7 @@ try{
  await setup();await page.dispatchEvent('body','keydown',{code:'Numpad3',key:'3'});const pausedBefore=await snapshot();await page.evaluate(()=>STCommand.tick(1));assert.deepEqual((await snapshot()).carrier,pausedBefore.carrier,'pause holds Enterprise');await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.evaluate(()=>{STCommand.state.paused=false;STCommand.tick(.5);STCommand.state.paused=true;});assert.equal((await snapshot()).carrier.heading,0,'blur releases remote controls');
  await setup();await page.evaluate(()=>EnterpriseInset.render(STCommand.away.state,STCommand.state));assert(await page.locator('#enterprise-inset').isVisible());await page.waitForTimeout(100);const imageBefore=await page.locator('#enterprise-inset-canvas').evaluate(c=>c.toDataURL());await press('NumpadDecimal','.',2);await page.waitForTimeout(100);const imageAfter=await page.locator('#enterprise-inset-canvas').evaluate(c=>c.toDataURL());assert.notEqual(imageBefore,imageAfter,'inset visibly shows Enterprise roll');assert((await page.locator('#enterprise-inset-readout').textContent()).includes('36°'),'inset reports roll');
  await page.locator('#help-link').click();const helpBefore=await snapshot();await page.keyboard.press('Numpad7');await page.evaluate(()=>STCommand.tick(.5));assert.equal((await snapshot()).bridge.throttle,helpBefore.bridge.throttle,'help blocks remote keys');await page.keyboard.press('Escape');
- for(const [code,key,axis,expected]of [['Numpad3','3','yaw','+009°'],['Numpad2','2','pitch','+06°'],['NumpadDecimal','.','roll','+18°']]){
+ for(const [code,key,axis,expected]of [['Numpad3','3','yaw','+009°'],['Numpad2','2','pitch','+04°'],['NumpadDecimal','.','roll','+18°']]){
   await setup();await press(code,key,1);await page.waitForTimeout(60);await page.evaluate(()=>EnterpriseInset.render(STCommand.away.state,STCommand.state));
   assert.equal(await page.locator('#enterprise-inset-readout [data-axis="'+axis+'"] strong').textContent(),expected,'wireframe readout follows '+axis+' input');
  }

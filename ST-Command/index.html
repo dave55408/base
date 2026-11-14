@@ -13,16 +13,18 @@
   <link rel="stylesheet" href="mission.css">
   <link rel="stylesheet" href="help.css">
   <link rel="stylesheet" href="console-slope.css">
-  <link rel="stylesheet" href="enterprise-inset.css?v=yellow-labels-2">
-  <link rel="stylesheet" href="project-notes.css">
+  <link rel="stylesheet" href="enterprise-inset.css?v=draggable-remote-helm-4">
+  <link rel="stylesheet" href="project-notes.css?v=night-mode-button-2">
   <link rel="stylesheet" href="shuttle-choice.css">
-  <link rel="stylesheet" href="shuttle-theme.css">
+  <link rel="stylesheet" href="shuttle-theme.css?v=find-enterprise-2">
+  <link rel="stylesheet" href="night-mode.css?v=deeper-night-console-2">
+  <link rel="stylesheet" href="simulation-performance.css">
 </head>
 <body>
   <main>
     <div class="console">
       <section class="display forward">
-        <div class="display-title"><h2><span>01</span> MAIN VIEWSCREEN</h2><div class="viewscreen-title-tools"><button id="project-notes-open" type="button" aria-haspopup="dialog">PROJECT NOTES</button><label class="enterprise-model-picker"><span>ENTERPRISE</span><select id="enterprise-model" aria-label="Enterprise model"><option value="movie">SECOND MODEL</option><option value="third">THIRD MODEL</option><option value="original">ORIGINAL MODEL</option></select></label><label class="enterprise-model-picker"><span>TEXTURES</span><select id="texture-quality" aria-label="Ship texture quality"><option value="low">LOW MEMORY</option><option value="high">HIGH DETAIL</option></select></label></div></div>
+        <div class="display-title"><h2><span>01</span> MAIN VIEWSCREEN</h2><div class="viewscreen-title-tools"><button id="project-notes-open" type="button" aria-haspopup="dialog">PROJECT NOTES</button><button id="night-mode-toggle" type="button" aria-pressed="false">NIGHT MODE</button><label class="enterprise-model-picker"><span>ENTERPRISE</span><select id="enterprise-model" aria-label="Enterprise model"><option value="movie">SECOND MODEL</option><option value="third">THIRD MODEL</option><option value="original">ORIGINAL MODEL</option></select></label><label class="enterprise-model-picker"><span>TEXTURES</span><select id="texture-quality" aria-label="Ship texture quality"><option value="low">LOW MEMORY</option><option value="high">HIGH DETAIL</option></select></label></div></div>
         <div class="viewscreen-shell">
           <div class="screen-light top" aria-hidden="true"></div>
           <div class="screen-glass">
@@ -46,7 +48,7 @@
           <label for="pitch" class="pitch-label">PITCH / ELEVATION <output id="pitch-output">+00°</output></label><input id="pitch" type="range" min="-85" max="85" value="0" aria-label="Set pitch in degrees">
           <div class="pitch-actions"><button id="climb">CLIMB +10°</button><button id="level">LEVEL</button><button id="dive">DIVE −10°</button></div>
           <div class="divider"></div>
-          <label for="throttle">ENGINE POWER <output id="throttle-output">14%</output></label><input id="throttle" type="range" min="-100" max="100" value="14" title="Negative power brakes forward motion, then moves astern. Space / All Stop stops immediately.">
+          <label for="throttle">ENGINE POWER <output id="throttle-output">0%</output></label><input id="throttle" type="range" min="-100" max="100" value="0" title="Negative power brakes forward motion, then moves astern. Space / All Stop stops immediately.">
           <div class="drive-switch" role="group" aria-label="Drive mode"><button id="impulse" class="selected" aria-pressed="true">IMPULSE</button><button id="warp" aria-pressed="false">WARP</button></div>
           <div class="warp-readout"><span id="engine-name">SUBLIGHT MANEUVERING</span><strong id="factor">0.14 c</strong></div>
           <button id="stop" class="stop">ALL STOP <span>SPACE</span></button>
@@ -55,7 +57,7 @@
           <div class="navigation-controls">
 <div class="mission-console"><p id="mission-status" role="status">APPROACH WITHIN 1 LY TO ENTER ORBIT</p><div class="orbit-actions"><button id="launch-craft" hidden>LAUNCH LANDING CRAFT</button><button id="leave-orbit" hidden>LEAVE ORBIT</button></div><button id="launch-shuttle" hidden>LAUNCH SHUTTLE</button><div id="mission-actions" hidden><button id="retrieve-beacon">RETRIEVE BEACON</button><div class="bay-actions"><button id="land-bay" hidden>LAND SHUTTLE</button><button id="hangar-door" hidden aria-pressed="false">OPEN HANGAR DOOR</button><button id="garage-door" hidden aria-pressed="false">OPEN GARAGE</button></div><button id="power-down" hidden>POWER DOWN CRAFT</button><p id="mission-hint"></p></div></div>
           <div class="section-label">NAVIGATION COMPUTER <span id="nav-state">STANDBY</span></div>
-          <div class="power-dial" id="power-dial" title="Drag up or down to adjust engine power"><div class="dial-ring"></div><div class="dial-core"><span>ENGINE POWER</span><strong id="power-dial-value">14%</strong><small id="power-dial-mode">IMPULSE</small></div></div>
+          <div class="power-dial" id="power-dial" title="Drag up or down to adjust engine power"><div class="dial-ring"></div><div class="dial-core"><span>ENGINE POWER</span><strong id="power-dial-value">0%</strong><small id="power-dial-mode">IMPULSE</small></div></div>
           <p class="control-hint">DRAG THE DIAL TO SET ENGINE POWER</p>
           <label class="select-label" for="destination">DESTINATION</label><select id="destination"></select>
           <div class="destination-data"><div><span>DISTANCE</span><strong id="distance">—</strong></div><div><span>ARRIVAL</span><strong id="eta">—</strong></div></div>
@@ -80,43 +82,63 @@
   </aside>
   <dialog id="controls-help" aria-labelledby="help-title">
     <div class="help-heading"><h2 id="help-title">ST Command controls</h2><button id="help-close" type="button" autofocus>Close</button></div>
-    <p class="help-intro">The simulation pauses while this window is open. Close it or press Escape to return.</p>
+    <p class="help-intro">Start stopped in space on galaxy navigation near Sol at 0% impulse power, with Vulcan selected. Help pauses the simulation; Close or Escape restores your previous pause state.</p>
     <div class="help-grid">
       <section><h3>Flight &amp; helm</h3><dl>
-        <dt>Left / Right or A / D</dt><dd>Turn the ship or landing craft.</dd>
-        <dt>Up / Down</dt><dd>Ship: climb / dive. Landing craft: dive / climb.</dd>
+        <dt>Left / Right or A / D</dt><dd>Turn Enterprise or the shuttle.</dd>
+        <dt>Up / Down</dt><dd>Enterprise: climb / dive. Shuttle and landing craft: dive / climb.</dd>
         <dt>Q / E</dt><dd>Climb / dive in either craft.</dd>
-        <dt>W / S</dt><dd>Increase / decrease engine power. The game starts at 14% impulse power, with Launch Shuttle available.</dd>
-        <dt>Space</dt><dd>All stop.</dd>
-        <dt>Mouse controls</dt><dd>Drag the attitude sphere to steer; drag the power dial up or down to set power. Sliders and helm buttons offer the same controls.</dd>
+        <dt>W / S</dt><dd>Increase / decrease power. Below zero, thrust brakes forward motion before reversing.</dd>
+        <dt>Z / X (shuttle)</dt><dd>Roll left / right, including inverted flight. Release to hold the roll. The slight bank from turning settles when the turn key is released.</dd>
+        <dt>Space / All Stop</dt><dd>Stop the craft you are flying. During a shuttle sortie, use Numpad 8 to stop Enterprise separately.</dd>
+        <dt>Mouse helm</dt><dd>Drag the attitude sphere to steer, or drag the power dial up / down to set power. Helm sliders and buttons provide the same controls.</dd>
       </dl></section>
       <section><h3>Galaxy navigation</h3><dl>
-        <dt>Enterprise number pad (space shuttle)</dt><dd>1 / 3 yaw left / right; 5 / 2 pitch like the shuttle Up / Down arrows (dive / climb); 7 / 4 increase / decrease Enterprise power; 8 immediately stops Enterprise; 0 / decimal roll left / right. Hold 1 / 3 to continue banking through any angle, including full rotations; releasing the key holds the bank, and Enterprise keeps turning until leveled. Numpad − smoothly returns yaw, pitch and roll to neutral without changing engine power; an attitude input cancels the return. Hold 4 to brake, then reverse. The tactical inset shows Enterprise attitude and speed. Physical number-pad keys work with Num Lock on or off; shuttle controls remain independent.</dd>
-        <dt>Plot &amp; engage</dt><dd>Select a destination or click a star, choose impulse or warp, set power, then press Engage Course. Manual Override releases autopilot.</dd>
-        <dt>Drag the galaxy</dt><dd>Orbit the camera above or below the galactic plane.</dd>
-        <dt>Scroll or + / minus</dt><dd>Zoom the map. The home icon resets the camera.</dd>
-        <dt>Click empty space</dt><dd>Plot a waypoint at the ship's current elevation.</dd>
+        <dt>Plot &amp; engage</dt><dd>Select a destination or click a star, choose impulse or warp, set power, then press Engage Course or Enter. Manual Override releases autopilot.</dd>
+        <dt>Drag the galaxy</dt><dd>Orbit the map camera above or below the galactic plane.</dd>
+        <dt>Scroll or + / minus</dt><dd>Zoom the map. The home icon resets its camera.</dd>
+        <dt>Click empty space</dt><dd>Plot a waypoint at Enterprise's current elevation.</dd>
+        <dt>Enter / leave orbit</dt><dd>Approach within 1 LY of a planet to enter orbit. Power controls orbital speed. Leave Orbit returns to galaxy navigation at 2% power.</dd>
+        <dt>Chase Camera</dt><dd>Show an aft view of Enterprise over the forward viewscreen during galaxy navigation. Forward View restores the normal display.</dd>
       </dl></section>
-      <section><h3>Orbit &amp; landing craft</h3><dl>
-        <dt>Clamshell hangar doors</dt><dd>Close automatically when the shuttle is more than 4 km from Enterprise. On return, they reopen automatically within 3 km.</dd>
-        <dt>Open / Close Garage</dt><dd>Retract the rear storage door to reveal four Type F shuttles, two across on each of two platform levels, below three observation windows. This door operates independently of the outer clamshell hangar doors.</dd>
-        <dt>Enter / leave orbit</dt><dd>Approach within 1 LY of a planet to enter orbit. Increase engine power to orbit faster. Leave Orbit returns to galaxy flight at 2% power; Launch Landing Craft begins a sortie.</dd>
-        <dt>Recover the beacon</dt><dd>Select Abandoned beacon and engage for guided descent, or fly manually. Retrieve within 450 m, below 450 m AGL, at 150 m/s or slower.</dd>
-        <dt>Return to Enterprise</dt><dd>After retrieval, engage for an aft bay approach. When the bay lip leaves the cockpit view, the camera fades to an external view aligned with your approach angle and roll. Fly inside and press Land Shuttle to descend. Facing Enterprise’s nose lands on the circular pad, then turns the shuttle toward the exit. After turnaround, the view fades back to the fixed launch camera. Choose Power Down to fade to black and return to the bridge, or Launch Again to lift into a hover.</dd>
-        <dt>Reverse thrust</dt><dd>Lower engine power below zero with S, the slider, or the power dial. Negative power brakes forward momentum to zero, then moves astern. W increases power; Space / All Stop stops immediately.</dd>
-        <dt>Local flight</dt><dd>Warp is unavailable aboard the landing craft. The right map shows terrain or aft bay guidance.</dd>
-        <dt>Excursion camera</dt><dd>During a space excursion, press Excursion View for a chase camera following your viewpoint, with the Class F shuttle filling about 20% of screen width. Mouse Look or drag changes the viewing angle; the wheel zooms. Cockpit View or Forward View returns to the shuttle cockpit.</dd>
-<dt>Fly around Enterprise</dt><dd>Enterprise starts at 14% impulse power, so Launch Shuttle is available immediately. Keep engine power below 15% to enable launch. A moving Enterprise continues forward with a gentle port turn while you fly. Shuttle turns produce a slight bank that settles when released. Hold Z or X to roll left or right, including inverted flight; releasing roll holds that attitude. Click the viewscreen or Mouse Look to look around without steering. Scroll to zoom from 0.5× to 8×. Escape releases the mouse; Forward View centers the camera and resets zoom. Engage Course levels the shuttle for a guided aft bay approach. Inside the bay, Land Shuttle lowers the craft to the deck. Facing Enterprise’s nose first centers it on the circular pad and turns it toward the exit after touchdown. Power Down Craft returns to the bridge.</dd>
+      <section><h3>Shuttle bay &amp; space flight</h3><dl>
+        <dt>L: engine-height cockpit</dt><dd>Jump to the shuttle cockpit centered between the engines, halfway from their front to rear and at their center height, facing forward and hovering at zero thrust. Press L again to return to this position during flight. Graphics prepare before the jump.</dd>
+        <dt>Launch Shuttle</dt><dd>Use the button for a normal bay launch from galaxy navigation with Enterprise power below 15% in either direction. After graphics preparation, the clamshell doors open and the shuttle lifts from its pad over 1.5 seconds, then hovers until you apply thrust.</dd>
+        <dt>Launch camera</dt><dd>The fixed camera stays behind the shuttle during liftoff. As you depart past the second black side door, the view fades into the cockpit.</dd>
+        <dt>Find Enterprise</dt><dd>Point the shuttle toward Enterprise and return to cockpit view. This changes direction without engaging autopilot.</dd>
+        <dt>Return &amp; land</dt><dd>Engage Course for a guided aft approach, or fly manually. When the bay lip leaves the cockpit view, the camera fades to an aligned external view. Fly inside, slow below 60 m/s, level pitch and roll within 15 degrees, then press Land Shuttle.</dd>
+        <dt>Touchdown &amp; relaunch</dt><dd>Facing Enterprise's nose centers the shuttle on the circular pad, lands it, then turns it toward the exit. After the camera returns to the launch view, choose Power Down to return to the bridge, or Launch Again to lift into a hover.</dd>
+        <dt>Hangar &amp; garage doors</dt><dd>Open / Close Hangar Door controls the outer clamshells during flight and after landing. Automatic doors close beyond 4 km and reopen within 3 km on return. Open / Close Garage operates the separate rear storage door and reveals four stored shuttles.</dd>
+        <dt>Moving Enterprise</dt><dd>Enterprise continues moving after launch if it had power or speed, with a gentle port turn and shallow dive. Stop before launch to keep it stationary, or use the remote helm during flight.</dd>
       </dl></section>
-      <section><h3>View &amp; simulation</h3><dl>
-        <dt>Project notes</dt><dd>Save notes as project-notes.html. When opening the game directly from your computer, use Choose HTML file to select your existing notes page, or Save Notes to create it. Grant browser write access to save edits directly; drafts are kept in the browser until saved.</dd>
-        <dt>Enterprise model</dt><dd>Choose Second Model or Original Model above the viewscreen. The choice is remembered and can be changed during shuttle flight.</dd>
-        <dt>F / double-click viewscreen</dt><dd>Toggle the main viewer fullscreen. Press F, double-click again, or press Escape to return.</dd>
-        <dt>P</dt><dd>Pause / resume.</dd>
-        <dt>1</dt><dd>Hide / show the shuttle target square, distance label and blue center lines. Guides start off during space excursions.</dd>
-        <dt>Enter</dt><dd>Engage a course, or resume when paused.</dd>
-        <dt>R</dt><dd>Reset the simulation and mission to Sol at 14% impulse power.</dd>
-        <dt>B</dt><dd>Toggle bridge audio. Its audio window provides volume controls.</dd>
+      <section><h3>Remote Enterprise helm</h3><dl>
+        <dt>Physical number pad</dt><dd>These controls operate Enterprise during a space shuttle sortie, independently of the shuttle. Num Lock may be on or off. The tactical inset shows Enterprise's attitude and speed; its power slider also controls Enterprise.</dd>
+        <dt>Numpad 1 / 3</dt><dd>Yaw left / right. Hold to bank through any angle, including full rotations. Release to hold the bank; Enterprise keeps turning until leveled.</dd>
+        <dt>Numpad 5 / 2</dt><dd>Dive / climb, matching the shuttle Up / Down arrows.</dd>
+        <dt>Numpad 7 / 4</dt><dd>Increase / decrease Enterprise power. Hold 4 to brake and then reverse.</dd>
+        <dt>Numpad 8</dt><dd>Immediately stop Enterprise and its automatic drift. Shuttle motion stays independent.</dd>
+        <dt>Numpad 0 / decimal</dt><dd>Roll Enterprise left / right. Release to hold attitude.</dd>
+        <dt>Numpad minus</dt><dd>Smoothly return yaw, pitch and roll to neutral without changing power. An attitude input cancels the return.</dd>
+      </dl></section>
+      <section><h3>Landing craft &amp; cameras</h3><dl>
+        <dt>Launch Landing Craft</dt><dd>Use the button to launch a surface sortie from orbit. Warp is unavailable in local flight; the right map shows terrain or aft bay guidance.</dd>
+        <dt>Recover the beacon</dt><dd>Select Abandoned beacon and engage for guided descent, or fly manually. Retrieve within 450 m, below 450 m AGL, at 150 m/s or slower. Then select Enterprise for the return.</dd>
+        <dt>Excursion View / Cockpit View</dt><dd>Switch between the exterior shuttle camera and cockpit. Inside the bay, the exterior camera stays fixed while the helm rotates the shuttle.</dd>
+        <dt>Mouse Look / drag the viewscreen</dt><dd>Look around without steering during space flight. The wheel zooms from 0.5&times; to 8&times;. Escape releases mouse capture. Mouse Look is disabled for the fixed bay camera.</dd>
+        <dt>Forward View</dt><dd>Return to the cockpit, center the view and reset zoom.</dd>
+        <dt>1 (top row)</dt><dd>Show / hide the target square, distance label and blue center guides. These guides start hidden on space shuttle launches.</dd>
+      </dl></section>
+      <section><h3>Display, performance &amp; simulation</h3><dl>
+        <dt>Enterprise model &amp; textures</dt><dd>Choose Original Model, Second Model or Third Model above the viewscreen. Model and texture choices are remembered and can change during flight. Low Memory textures are the default.</dd>
+        <dt>Performance</dt><dd>Choose Full, Balanced (75% resolution) or Economy (50%), and a 60 or 30 FPS limit. The panel also shows frame timing and rendering statistics. Settings apply immediately.</dd>
+        <dt>Launch preparation</dt><dd>Launch and Launch Again prepare the 3D graphics before liftoff. Wait for Preparing Shuttle to finish; the lift then starts from the pad. Prepared graphics are reused when settings stay the same. Lower resolution reduces rendering work; Low Memory textures reduce memory use.</dd>
+        <dt>Night Mode</dt><dd>Dim external lighting to emphasize stars and ship lights. Toggle again to restore normal lighting; the choice is remembered.</dd>
+        <dt>H</dt><dd>Open / close the aft bridge hatch to view its Y-shaped room and bridge picture.</dd>
+        <dt>F / double-click viewscreen</dt><dd>Toggle the main viewer fullscreen. F, another double-click or Escape returns.</dd>
+        <dt>P / Enter</dt><dd>P pauses or resumes. Enter resumes when paused; otherwise it engages a course.</dd>
+        <dt>R</dt><dd>Reset to galaxy navigation at Sol, stopped with 0% impulse power.</dd>
+        <dt>B</dt><dd>Toggle bridge audio. Open its audio window to adjust volume.</dd>
+        <dt>Project notes</dt><dd>Save notes in project-notes.html. When opening the game directly from your computer, choose the existing HTML file or use Save Notes to create it. Browser drafts remain until saved.</dd>
       </dl></section>
     </div>
   </dialog>
@@ -134,39 +156,52 @@
   </dialog>
   <script src="vendor/phaser.min.js"></script>
   <script src="space-math.js"></script>
-  <script src="galaxy3d.js"></script>
+  <script src="galaxy3d.js?v=attitude-auto-fit-2"></script>
   <script src="planet-renderer.js"></script>
   <script src="vendor/alpine-three.js?v=spotlight-exports-2"></script>
   <script src="vendor/three-spotlight.js?v=1"></script>
   <script src="ship-texture-manifest.js"></script>
-  <script src="ship-textures.js"></script>
+  <script src="ship-textures.js?v=shared-plating-owners-2"></script>
+  <script src="simulation-performance.js?v=launch-bay-culling-2"></script>
   <script src="enterprise-detailing.js?v=baked-1"></script>
-  <script src="shuttle-garage.js?v=three-cached-spotlights-9"></script>
-  <script src="shuttle-bay-walls.js?v=raked-wall-parallel-consoles-4"></script>
-  <script src="shuttle-bay-interior.js?v=reference-walls-9"></script>
-  <script src="hangar-door-frame.js?v=recessed-brim-15"></script>
-  <script src="enterprise-renderer.js?v=recessed-brim-hull-finish-20"></script>
+  <script src="shuttle-garage.js?v=recessed-clearance-safe-lamps-28"></script>
+  <script src="shuttle-bay-walls.js?v=trim-flush-with-last-jamb-top-50"></script>
+  <script src="shuttle-bay-interior.js?v=red-line-and-gray-deck-pulled-back-25"></script>
+  <script src="hangar-door-frame.js?v=hemisphere-fantail-light-25"></script>
+  <script src="hangar-signal-lights.js?v=dark-lamp-bezels-4"></script>
+  <script src="assets/reference/bridge-room-image.js?v=exact-picture-2"></script>
+  <script src="bridge-hatch-room.js?v=raised-floor-two-steps-14"></script>
+  <script src="bridge-docking-port.js?v=overlapping-hatch-doors-11"></script>
+  <script src="engine-outboard-patch.js?v=subtle-curved-paint-12"></script>
+  <script src="engine-inboard-panel.js?v=full-engine-room-wall-glow-22"></script>
+  <script src="engine-aft-vent.js?v=twelve-cowling-ridges-4"></script>
+  <script src="engine-handle-fin.js?v=diagonal-fin-mesh-9"></script>
+  <script src="saucer-raised-panels.js?v=barely-raised-white-panels-2"></script>
+  <script src="enterprise-renderer.js?v=small-plated-hatch-56"></script>
   <script src="assets/reference/image-1444/lettering-stencils.js?v=image1444-curved-panels-14"></script>
   <script src="enterprise-engineering-shape.js?v=rounded-bay-cutout-7"></script>
   <script src="enterprise-movie-detailing.js?v=baked-1"></script>
   <script src="assets/textures/riveted-hull-reference-v2.js?v=close-hull-2"></script>
-  <script src="enterprise-hull-surface-detail.js?v=surface-wrap-11"></script>
+  <script src="enterprise-hull-surface-detail.js?v=local-plating-density-17"></script>
   <script src="class-f-shuttle.js?v=rear-wing-stop-3"></script>
-  <script src="enterprise-movie-renderer.js?v=recessed-brim-hull-finish-56"></script>
-  <script src="enterprise-third-geometry.js?v=rounded-grilles-4"></script>
+  <script src="impulse-grates.js?v=reverse-right-impulse-animation-16"></script>
+  <script src="impulse-spine.js?v=full-width-dome-connection-16"></script>
+  <script src="enterprise-movie-renderer.js?v=small-plated-hatch-114"></script>
+  <script src="enterprise-third-geometry.js?v=rear-fittings-forward-7"></script>
   <script src="enterprise-third-detailing.js?v=photo-1"></script>
-  <script src="enterprise-third-photo-details.js?v=no-pennants-9"></script>
-  <script src="enterprise-third-renderer.js?v=rounded-grilles-9"></script>
-  <script src="shuttle-bay-flight.js?v=recessed-ring-clearance-6"></script>
-  <script src="excursion-camera.js?v=garage-spotlight-shadows-13"></script>
-  <script src="enterprise-models.js?v=third-1"></script>
+  <script src="enterprise-third-photo-details.js?v=preserve-amber-hangar-lamp-1"></script>
+  <script src="enterprise-third-renderer.js?v=small-plated-hatch-72"></script>
+  <script src="shuttle-bay-flight.js?v=raised-deck-landing-height-8"></script>
+  <script src="excursion-camera.js?v=prepared-bay-launch-18"></script>
+  <script src="night-mode.js?v=1"></script>
+  <script src="enterprise-models.js?v=launch-warmup-3"></script>
   <script src="enterprise-chase-camera.js?v=centered-overlay-2"></script>
   <script src="orbit-arrival.js?v=3"></script>
   <script src="surface-world.js"></script>
-  <script src="shuttle-map.js?v=bank-direction-4"></script>
-  <script src="away-mission.js?v=shuttle-bank-13"></script>
-  <script src="enterprise-inset.js?v=remote-bank-direction-4"></script>
-  <script src="simulation.js"></script>
+  <script src="shuttle-map.js?v=both-ships-auto-fit-5"></script>
+  <script src="away-mission.js?v=engine-midpoint-cockpit-key-27"></script>
+  <script src="enterprise-inset.js?v=draggable-remote-helm-6"></script>
+  <script src="simulation.js?v=stopped-in-space-start-4"></script>
   <script src="audio.js"></script>
   <script src="viewscreen.js"></script>
   <script src="help.js"></script>

@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),path=require('node:path'),fs=require(
 const {chromium}=require(require.resolve('playwright',{paths:[__dirname,path.resolve(__dirname,'../elf-adventure')]}));const {createServer}=require('./server.cjs');
 (async()=>{const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;try{
  browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.STCommand?.games.every(g=>g.isBooted));await page.locator('#stop').click();await page.locator('#launch-shuttle').click();
+ await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.STCommand?.games.every(g=>g.isBooted));await page.locator('#stop').click();await page.locator('#launch-shuttle').click();await page.waitForFunction(()=>STCommand.away.state.phase==='flight',null,{timeout:180000});
  const result=await page.evaluate(async()=>{
   const a=STCommand,m=a.away.state,s=a.state,scene=a.games[0].scene.getScene('Forward');s.paused=true;
   Object.assign(m,{x:0,y:-.080,z:110.005,cameraView:'cockpit',cockpitFromBerth:false});Object.assign(s,{heading:0,pitch:0,speed:0,throttle:0});a.away.render(scene,900,450);const ship=scene.enterpriseRenderer;await ship.ready;a.away.render(scene,900,450);const before=ship.camera.position.toArray();a.away.dock();s.paused=true;

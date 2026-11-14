@@ -66,6 +66,13 @@ window.createEnterpriseRenderer=()=>{
     o.material=mat;o.name='flush-hull-pennant';return o;
   }
   const registryMat=decalMaterial(details.registry);
+  for(const paint of [pennantMaterial])paint.opacity=.80;
+  // Fade engine paint while keeping the dark registry lettering crisp.
+  for(const paint of [registryMat]){
+    paint.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\nif(diffuseColor.r > diffuseColor.b*1.3 && (diffuseColor.r > diffuseColor.g*1.3 || diffuseColor.g > diffuseColor.b*1.15)) diffuseColor.a *= .80;');};
+    paint.customProgramCacheKey=()=> 'engine-pennant-eighty-percent-opacity-v1';
+    paint.userData.pennantOpacity=.80;
+  }
   const saucerMat=material(0xffffff,{map:details.top,side:T.DoubleSide}),bottomSaucerMat=material(0xffffff,{map:details.bottom,side:T.DoubleSide});
   // Keep the mirrored underside UV seam off the rim and avoid coplanar trim.
   const saucerProfile=[[0,-.028],[.31,-.028],[.48,-.026],[.66,-.026],[.68,-.004],[.68,.025],[.57,.038],[.36,.055],[.18,.066],[0,.066]];
@@ -90,11 +97,12 @@ window.createEnterpriseRenderer=()=>{
   }
   const upperHousing=lathe(deckProfile,saucerMat,0,.488,-1.53);teardropHousing(upperHousing.geometry);upperHousing.name='upper-saucer-teardrop';
   const deckMarker=new T.Object3D();deckMarker.position.set(0,.539,-1.405);deckMarker.name='top-yellow-service-panel';model.add(deckMarker);
-  lathe([[0,0],[.077,0],[.077,.009],[.071,.022],[.059,.028],[.040,.029],[0,.029]],hull,0,.536,-1.53);
-  box(0,.551,-1.466,.021,.031,.035,hull);
+  const bridgeDome=lathe([[0,0],[.077,0],[.077,.009],[.071,.022],[.059,.028],[.040,.029],[0,.029]],hull,0,.536,-1.53);bridgeDome.name='bridge-dome';carveBridgeHatch(T,bridgeDome,{centerY:.551});
+  const bridgeDockingPort=createBridgeDockingPort(T,{centerY:.551,hull,dome:bridgeDome});model.add(bridgeDockingPort);
   const sensorGlass=material(0xa9d4ac,{emissive:0x4b8755,emissiveIntensity:.38,roughness:.3,metalness:.08});
+  sensorGlass.userData.lightLens=true;
   lathe([[0,0],[.036,0],[.036,.003],[0,.003]],edge,0,.564,-1.53);
-  sphere(0,.570,-1.53,.034,.010,.034,sensorGlass);
+  sphere(0,.568,-1.53,.034,.010,.034,sensorGlass);
   // The underside is a broad tapered bowl with a flattened base, not a sphere.
   const bowlProfile=[[0,-.095],[.10,-.095],[.135,-.090],[.17,-.075],[.22,-.044],[.275,-.010],[.29,0],[0,0]];
   lathe(bowlProfile,bottomSaucerMat,0,.405,-1.53);
@@ -129,23 +137,19 @@ window.createEnterpriseRenderer=()=>{
     const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(positions,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex([0,1,2,0,2,3]);geo.computeVertexNormals();const skin=mesh(geo,neckMaterial);skin.renderOrder=1;
   }
   const strutGrilleMaterial=material(0x303b38,{roughness:.85,metalness:.12,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
-  const finMaterial=hull,finGroove=material(0x66736a,{roughness:.8});
+  const pylonMetal=hull.clone();
+  const finMaterial=hull;
   const nacelleMetal=material(0xffffff,{map:details.nacelle});
-  const inboardChannelMaterial=decalMaterial(details.inboardChannel);
-  const outerGrilleMaterial=decalMaterial(details.outerGrille);
   const exhaustHoodMaterial=material(0x34413e,{roughness:.78,side:T.DoubleSide}),exhaustInsertMaterial=material(0xb3c9cc,{roughness:.35,metalness:.25});
   for(const side of [-1,1]){
-    const strut=beam([side*.085,.045,-.30],[side*.445,.50,-.30],.055,.12),grilleLength=Math.hypot(.360,.455)*.82;
+    const strut=beam([side*.085,.045,-.30],[side*.445,.50,-.30],.055,.12,pylonMetal),grilleLength=Math.hypot(.360,.455)*.82;
+    strut.name=(side<0?'port':'starboard')+'-engine-strut';
     // Recessed-looking panels follow the upward-facing side of each sloped strut.
-    for(let n=0;n<5;n++){
-      const panel=new T.Mesh(new T.PlaneGeometry(.084,grilleLength/5-.006),strutGrilleMaterial);
-      panel.position.set(-side*.055/2,-grilleLength/2+(n+.5)*grilleLength/5,0);panel.rotation.y=-side*Math.PI/2;
-      panel.name=(side<0?'port':'starboard')+'-strut-top-grille';strut.add(panel);
-    }
-    box(side*.445,.485,-.30,.058,.06,.17,edge);
+    addPylonGrilleStrip(T,strut,{side,grilleLength,face:.055/2,material:strutGrilleMaterial});
+    box(side*.445,.485,-.30,.058,.06,.17,pylonMetal).name=(side<0?'port':'starboard')+'-engine-pylon-shoe';
     const x=side*.445;
     const nacelleProfile=[[0,capSeam],[capRadius,capSeam],[capRadius,-.75],[.087,.64],[.08146,.73],[.079,.755],[.068,.78],[0,.78]];
-    lathe(nacelleProfile,[nacelleMetal,hull,exhaustHoodMaterial],x,.535,0,'z',64);
+    lathe(nacelleProfile,[nacelleMetal,hull,exhaustHoodMaterial],x,.535,0,'z',64).name=(side<0?'port':'starboard')+'-engine-outer-tube';
     // A forward hemisphere meets the full-width cylinder tangentially at its rim.
     const capGeometry=new T.SphereGeometry(capRadius,64,32,0,Math.PI*2,0,Math.PI/2);capGeometry.rotateX(-Math.PI/2);
     const capPositions=capGeometry.attributes.position,capUV=capGeometry.attributes.uv;
@@ -171,22 +175,11 @@ window.createEnterpriseRenderer=()=>{
       {angle:Math.PI/4,width:.0155,tip:.113},
       {angle:-side*Math.PI/2,width:.025,tip:.099}
     ]){
-      const growth=1.15,width=baseWidth*growth,tip=.083+(baseTip-.083)*growth;
-      const section=[[.27,.083],[.278,.096],[.294,.105],[.316,.109],[.622,.109],[.657,.105],[.677,.097],[.685,.083]],vertices=[],indices=[];
-      const finZ=z=>.4775+(z-.4775)*growth;
-      const radialX=Math.sin(angle),radialY=Math.cos(angle),tangentX=Math.cos(angle),tangentY=-Math.sin(angle);
-      const finRadius=r=>.083+(r-.083)*(tip-.083)/(.109-.083);
-      for(const offset of [-width/2,width/2])for(const [z,r] of section){const radius=finRadius(r);vertices.push(x+radialX*radius+tangentX*offset,.535+radialY*radius+tangentY*offset,finZ(z));}
-      const count=section.length;for(let i=1;i<count-1;i++)indices.push(0,i+1,i,count,count+i,count+i+1);
-      for(let i=0;i<count;i++){const n=(i+1)%count;indices.push(i,n,i+count,n,n+count,i+count);}
-      const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geo.setIndex(indices);
-      const faces=geo.toNonIndexed();faces.computeVertexNormals();const fin=mesh(faces,finMaterial);fin.name=(side<0?'port':'starboard')+'-aft-engine-fin';fin.userData.referenceDimensions={width,tip,inboard:Math.abs(angle)===Math.PI/2};
-      for(const offset of [-width*.25,0,width*.25]){const groove=box(x+radialX*(tip+.0006)+tangentX*offset,.535+radialY*(tip+.0006)+tangentY*offset,finZ(.475),.001,.001,.27*growth,finGroove);groove.rotation.z=-angle;}
-      const rootRadius=.083+(.096-.083)*(baseTip-.083)/(.109-.083);beam([x+radialX*rootRadius,.535+radialY*rootRadius,.215],[x+radialX*rootRadius,.535+radialY*rootRadius,.285],.005,.005,finMaterial);
+      if(Math.abs(angle)===Math.PI/2){const width=.0155*1.15,tip=.083+(.113-.083)*1.15,fin=mesh(createEngineHandleFinGeometry(T,{x,centerY:.535,angle,width,tip,frontZ:-.30,rearZ:.10}),finMaterial);fin.name=(side<0?'port':'starboard')+'-inboard-engine-fin';fin.userData.referenceDimensions={width,tip,inboard:true,angle};continue;}
+      const growth=1.15,width=.0165*growth,tip=.083+(.109-.083)*growth;
+      const fin=mesh(createSolidEngineFinGeometry(T,{x,centerY:.535,angle,width,tip,frontZ:.5575+(.435-.5575)*growth,rearZ:.5575+(.680-.5575)*growth}),finMaterial);fin.name=(side<0?'port':'starboard')+'-aft-engine-fin';fin.userData.referenceDimensions={width,tip,inboard:false,angle};
     }
-    const outerGrille=hullDecal(nacelleProfile,side,.49,.036,.19,outerGrilleMaterial,[x,.535,0],64);outerGrille.name=(side<0?'port':'starboard')+'-outer-service-grille';
     hullDecal(nacelleProfile,side,-.03,.068,1.03,registryMat,[x,.535,0],64);
-    const channel=hullDecal(nacelleProfile,-side,-.08,.052,.94,inboardChannelMaterial,[x,.535,0],64);channel.name=(side<0?'port':'starboard')+'-dark-inboard-channel';
     const rotor=new T.Group();rotor.name=side<0?'port-cap-lines':'starboard-cap-lines';rotor.position.set(x,.535,capSeam);model.add(rotor);capRotors.push({rotor,side});
     // Curved radial ribbons sit on the bulb surface rather than around its rim.
     for(let n=0;n<12;n++){
@@ -248,13 +241,13 @@ window.createEnterpriseRenderer=()=>{
   mesh(doorFrame.throat,framePaint).name='original-hangar-door-return';
   arch(.083,.071,0,Math.PI,-.018,-.265,.004,material(0x60696b,{side:T.DoubleSide}));
   for(const side of [-1,1]){
-    box(side*.085,-.020,-.14115,.008,.056,.2457,interior).name=(side<0?'port':'starboard')+'-hangar-wall';
+    cutShuttleBaySideWall(T,box(side*.085,-.020,-.14115,.008,.056,.2457,interior)).name=(side<0?'port':'starboard')+'-hangar-wall';
   }
   const bayDoorLeaves=[],bayDoors=new T.Group();bayDoors.name='shuttle-bay-clamshell-doors';
   const upperLampY=doorFrame.profile.lampY;
-  bayDoors.position.set(0,doorFrame.profile.cy,.018);bayDoors.scale.set(doorFrame.profile.rx,doorFrame.profile.ry,.048);model.add(bayDoors);
+  bayDoors.position.set(0,doorFrame.profile.cy,doorFrame.profile.hingeDepth);bayDoors.scale.set(doorFrame.profile.rx,doorFrame.profile.ry,.048);model.add(bayDoors);
   const bayDoorPaint=hullDouble;
-  const doorSeamMaterial=hullDouble;
+  const doorSeamMaterial=material(0x637169,{roughness:.78,metalness:.15,side:T.DoubleSide});
   // Concentric tracks let the inner leaves tuck behind each successive leaf.
   function shellLeaf(start,end,layer,mat){
     const positions=[],indices=[],rows=28,cols=10,r=1+layer*.008;
@@ -266,21 +259,25 @@ window.createEnterpriseRenderer=()=>{
       const a=j*(cols+1)+i,b=a+cols+1;indices.push(a,b,a+1,a+1,b,b+1);
     }
     const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setIndex(indices);g.computeVertexNormals();
+    g.userData.hullPanelTopology={segments:cols,rows:rows+1,kind:'clamshell',start,end};
     return new T.Mesh(g,mat);
   }
   for(const side of [-1,1])for(let n=0;n<3;n++){
-    const span=Math.PI/6,start=side*n*span,end=side*((n+1)*span+(n<2?.025:0)),leaf=new T.Group();
+    // Matching 30-degree curved segments foreshorten toward the sides.
+    const span=Math.PI/6,start=side*n*span,end=side*(n+1)*span,leaf=new T.Group();
     leaf.name=(side<0?'port':'starboard')+'-clamshell-leaf-'+n;
     leaf.add(shellLeaf(start,end,n,bayDoorPaint));
-    leaf.add(shellLeaf(start,start+side*.010,n+.2,doorSeamMaterial));
-    bayDoors.add(leaf);bayDoorLeaves.push({leaf,side,n,span});
+    const overlap=shellLeaf(end,end+side*.025,n,bayDoorPaint);overlap.name='clamshell-outboard-overlap';leaf.add(overlap);
+    if(n>0){const gasket=shellLeaf(start-side*.012,start,n-.2,doorSeamMaterial);gasket.name='clamshell-joint-gasket';leaf.add(gasket);}
+    const seam=shellLeaf(start,start+side*.009,n+.3,doorSeamMaterial);seam.name='clamshell-segment-edge';leaf.add(seam);
+    bayDoors.add(leaf);bayDoorLeaves.push({leaf,side,n,startAngle:Math.abs(start)});
   }
   let bayDoorOpen=1,lastDoorTime;
   function setBayDoorOpen(value){
-    bayDoorOpen=Math.max(0,Math.min(1,value));
+    bayDoorOpen=Math.max(0,Math.min(1,value));model.userData.bayDoorOpen=bayDoorOpen;
     const eased=bayDoorOpen*bayDoorOpen*(3-2*bayDoorOpen);
     // The center leaf collects its neighbors in sequence into one side stack.
-    for(const {leaf,side,n,span} of bayDoorLeaves)leaf.rotation.y=side*Math.max(0,eased*(Math.asin(.90)+n*.012)-n*span);
+    for(const {leaf,side,n,startAngle} of bayDoorLeaves)leaf.rotation.y=side*Math.max(0,eased*(Math.asin(.90)+n*.024)-startAngle);
     bayDoors.userData.open=bayDoorOpen;
     bayDoors.userData.apertureOpen=bayDoorOpen*.90;
   }
@@ -288,21 +285,22 @@ window.createEnterpriseRenderer=()=>{
   const outline=[[-.083,-.047],[.083,-.047],[.083,.008]];
   for(let n=0;n<=24;n++){const a=n*Math.PI/24;outline.push([Math.cos(a)*.083,.008+Math.sin(a)*.071]);}outline.push([-.083,-.047]);
   const doorGeo=createGarageBulkheadGeometry(T,outline,-.27,-.282);mesh(doorGeo,material(0x586369,{emissive:0x586369,emissiveIntensity:.22,side:T.DoubleSide})).name='original-hangar-forward-bulkhead';
-  box(0,-.051,-.1095,.18,.009,.307,deck);
+  box(0,-.04925,(-.263+shuttleBayFloorFront())/2,.18,.0125,shuttleBayFloorFront()+.263,deck).name='original-hangar-floor';
   for(const side of [-1,1]){
     const redLamp=box(side*.055,doorFrame.profile.floor-.008,doorFrame.profile.baseFront+.001,.022,.002,.002,red);redLamp.name=(side<0?'port':'starboard')+'-hangar-red-light';
     const yellowLamp=box(side*.025,doorFrame.profile.floor-.014,doorFrame.profile.baseFront+.001,.0018,.011,.002,amber);yellowLamp.name=(side<0?'port':'starboard')+'-hangar-yellow-light';
   }
   const greenLamp=box(0,doorFrame.profile.floor-.008,doorFrame.profile.baseFront+.001,.024,.002,.002,glow(0x64c995));greenLamp.name='hangar-green-light';
+  addHangarLandingLights(T,model,doorFrame.profile,hullDouble);
   const doorCrown=doorFrame.profile.cy+doorFrame.profile.ry;
-  box(0,upperLampY+.0015,doorFrame.profile.lampFront-.005,.018,.013,.010,framePaint).name='hangar-upper-light-mount';
-  const upperLamp=box(0,upperLampY,doorFrame.profile.lampFront+.001,.010,.007,.002,amber);upperLamp.name='hangar-upper-yellow-light';
+  box(0,upperLampY+.0015,doorFrame.profile.lampFront-.015,.018,.013,.010,framePaint).name='hangar-upper-light-mount';
+  const upperLamp=box(0,upperLampY,doorFrame.profile.lampFront-.009,.010,.007,.002,amber);upperLamp.name='hangar-upper-white-light';addHangarWhiteLamp(T,upperLamp);
   model.add(createHangarRoofBeacon(T,1,hullDouble));
   box(0,doorCrown+.0055,doorFrame.profile.roofFront+.001,.007,.0015,.002,white);
   const bayInterior=createShuttleBayInterior(T,{rearZ:-.2698});model.add(bayInterior);
   model.position.z=-.032;
-  let lastW=0,lastH=0;
-  function draw(ctx,w,h,m,s){
+  function draw(ctx,w,h,m,s,updateOnly=false){
+    bridgeDockingPort.updateHatch();
     bayInterior.setGarageDoorOpen(m.garageDoorOpen??0);
     // Viewed head-on, +Z rotation is clockwise: port spins opposite starboard.
     const rotorTime=Number.isFinite(s.time)?s.time:(m.clock||0);
@@ -312,12 +310,12 @@ window.createEnterpriseRenderer=()=>{
     else if(m.phase){
       const range=Math.hypot(m.x,m.y,m.z-110);
       const wantOpen=m.phase==='docking'||m.phase==='flight'&&(range<3||(m.clock||0)<6)||m.phase==='landed'&&(m.clock||0)<6;
-      setBayDoorOpen(bayDoorOpen+Math.sign((wantOpen?1:0)-bayDoorOpen)*Math.min(Math.abs((wantOpen?1:0)-bayDoorOpen),doorDt/2.4));
+      setBayDoorOpen(advanceHangarDoor(bayDoorOpen,wantOpen?1:0,doorDt));
     }
     const navigationFlash=((rotorTime%5)+5)%5<.5;
     for(const {lens,on,off} of navigationLights)lens.material.color.setHex(navigationFlash?on:off);
-    const rw=Math.min(1920,Math.round(w)),rh=Math.round(h*rw/w);
-    if(lastW!==rw||lastH!==rh){renderer.setSize(rw,rh,false);lastW=rw;lastH=rh;}
+    if(updateOnly)return null;
+    SimPerformance.resize(renderer,w,h);
     const zoom=Math.max(.5,Math.min(8,s.cameraZoom||1));
     camera.near=Math.max(.005,Math.min(10,Math.hypot(m.x,m.y,m.z-110)*.01));
     camera.fov=2*Math.atan(h/(2*w*.65*zoom))*180/Math.PI;camera.aspect=w/h;camera.updateProjectionMatrix();
@@ -328,5 +326,8 @@ window.createEnterpriseRenderer=()=>{
     const bay=new T.Vector3(0,0,0).project(camera);
     return {x:(bay.x+1)*w/2,y:(1-bay.y)*h/2,visible:bay.z>=-1&&bay.z<=1};
   }
-  return trackEnterpriseResources({draw,renderer,scene,model,camera,setBayDoorOpen,ready:details.ready},details);
+  const hullSurfaceDetail=createMovieHullSurfaceDetail(T,Math.min(8,renderer.capabilities.getMaxAnisotropy()));
+  hullSurfaceDetail.apply(pylonMetal,0,{bareMetal:true,physical:true});resizeAftEngineFins(T,model,1.8);addEngineInboardPanels(T,model,{surfaceDetail:hullSurfaceDetail});addEngineCouplingPatches(T,model,{surfaceDetail:hullSurfaceDetail});addEngineCouplingPatches(T,model,{inboard:true,surfaceDetail:hullSurfaceDetail});hullSurfaceDetail.prepare(model);
+  applyGlassLightLenses(T,model);
+  return trackEnterpriseResources({draw,renderer,scene,model,camera,setBayDoorOpen,ready:Promise.all([details.ready,hullSurfaceDetail.ready,bridgeDockingPort.ready])},details);
 };

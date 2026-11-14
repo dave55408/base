@@ -4,14 +4,17 @@ window.drawShuttleApproachMap=(c,w,h,m,s,view)=>{
   let location={x:m.x,y:m.y,z:m.z};
   if(m.landing&&['docking','cockpitfade','landed','powerdown'].includes(m.phase)){const pad=m.landing.pad;location={x:m.x-pad.x,y:m.y-pad.y,z:110+m.z-pad.z};}
   const center={x:location.x*.45,y:location.y*.45,z:110+(location.z-110)*.45};
-  const camera=SpaceMath.camera(w,h,view.yaw,view.tilt,view.zoom);
-  const project=p=>camera.project({x:500+(p.x-center.x)*unit,y:450+(p.y-center.y)*unit,z:(p.z-center.z)*unit});
-  function line(a,b,color='#9e713e',width=1,dash=[]){const p=project(a),q=project(b);c.strokeStyle=color;c.lineWidth=width;c.setLineDash(dash);c.beginPath();c.moveTo(p.x,p.y);c.lineTo(q.x,q.y);c.stroke();c.setLineDash([]);}
+  const camera=SpaceMath.camera(w,h,view.yaw,view.tilt,1);let zoom=1,offsetX=0,offsetY=0,queueLines=true;
+  const fitPoint=p=>({...p,x:w/2+(p.x-w/2)*zoom+offsetX,y:h*.53+(p.y-h*.53)*zoom+offsetY,scale:p.scale*zoom});
+  const project=p=>fitPoint(camera.project({x:500+(p.x-center.x)*unit,y:450+(p.y-center.y)*unit,z:(p.z-center.z)*unit}));
+  const queuedLines=[];
+  function line(a,b,color='#9e713e',width=1,dash=[]){if(queueLines){queuedLines.push([a,b,color,width,dash]);return;}const p=project(a),q=project(b);c.strokeStyle=color;c.lineWidth=width;c.setLineDash(dash);c.beginPath();c.moveTo(p.x,p.y);c.lineTo(q.x,q.y);c.stroke();c.setLineDash([]);}
   const point=(x,y,z)=>({x,y,z});
   c.fillStyle='#090908';c.fillRect(0,0,w,h);
   const floor=110-extent*.24;
   for(let i=-4;i<=4;i++){const k=i*extent/4;line(point(-extent,k,floor),point(extent,k,floor),'#9b632c30');line(point(k,-extent,floor),point(k,extent,floor),'#9b632c30');}
   for(const x of [-extent,extent])for(const y of [-extent,extent])line(point(x,y,floor),point(x,y,110+extent*.65),'#b77d3e25');
+  const gridLineCount=queuedLines.length;
   // Unfilled wireframe of the registered Enterprise, anchored at the bay.
   const ship=(x,y,z=0)=>point(x*extent,y*extent,110+z*extent);
   const shipScale=extent*.36,shipFaces=[];
@@ -41,7 +44,6 @@ window.drawShuttleApproachMap=(c,w,h,m,s,view)=>{
     prism([[side*.065,.07],[side*.105,.07],[side*.459,.455],[side*.419,.455]],-.293,.0535);
     ringHull([[0,-.752],[.078,-.675],[.078,.715],[.06,.815],[0,.83]],[side*.439,0,.490],false,8);
   }
-  shipFaces.sort((a,b)=>a.depth-b.depth).forEach(({points})=>{c.strokeStyle='#7bc9ff88';c.lineWidth=.65;c.beginPath();points.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));c.closePath();c.stroke();});
   const bayArch=Array.from({length:13},(_,i)=>hullPoint([.083*Math.cos(i/12*Math.PI),.014,.008+.071*Math.sin(i/12*Math.PI)]));
   bayArch.unshift(hullPoint([.083,.014,-.046]));bayArch.push(hullPoint([-.083,.014,-.046]),bayArch[0]);
   for(let i=1;i<bayArch.length;i++)line(bayArch[i-1],bayArch[i],'#ffe1a0',1.4);
@@ -67,7 +69,9 @@ window.drawShuttleApproachMap=(c,w,h,m,s,view)=>{
       if(!o.isMesh||!o.name||/markings|glow|rib-/.test(o.name))return;
       const g=o.geometry,p=g.attributes.position,topology=g.userData.hullPanelTopology;
       const vertex=i=>{const v=new T.Vector3().fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld);return [v.x*.026,v.z*.026,(v.y-.90)*.026];};
-      const add=indices=>polygons.push({vertices:indices.map(vertex),color:'#'+o.material.color.getHexString()});
+      // Half-opacity blue tactical surfaces, with darker glass and recesses.
+      const color=/windshield|recess|exhaust|cowling/.test(o.name)?'rgba(22,76,124,.5)':/slot|engine-cap/.test(o.name)?'rgba(114,199,255,.5)':'rgba(41,139,208,.5)';
+      const add=indices=>polygons.push({vertices:indices.map(vertex),color});
       if(topology){
         const {segments,rows}=topology,step=5;
         for(let row=1;row<rows;row++)for(let i=0;i<segments;i+=step){const a=(row-1)*(segments+1)+i,b=row*(segments+1)+i;add([a,a+step,b+step,b]);}
@@ -83,6 +87,19 @@ window.drawShuttleApproachMap=(c,w,h,m,s,view)=>{
     craft.traverse(o=>{if(o.isMesh){o.geometry.dispose();o.material.dispose();}});
   }
   for(const {vertices,color} of drawShuttleApproachMap.craftFaces)face(vertices,color);
+  // Fit the actual projected hulls, rather than a fixed zoom or just the
+  // two ship centers. The bound adapts to orbit, range and viewport shape.
+  const boundsOf=points=>{let left=Infinity,right=-Infinity,top=Infinity,bottom=-Infinity;for(const p of points){left=Math.min(left,p.x);right=Math.max(right,p.x);top=Math.min(top,p.y);bottom=Math.max(bottom,p.y);}return {left,right,top,bottom};};
+  const shipPoints=shipFaces.flatMap(face=>face.points),craftPoints=faces.flatMap(face=>face.points),rawBounds=boundsOf([...shipPoints,...craftPoints,project(local(0,.3,0))]);
+  const marginX=Math.min(24,w*.08),marginTop=Math.min(60,h*.20),marginBottom=Math.min(64,h*.22);
+  const maxZoom=Math.min((w-marginX*2)/Math.max(1e-6,rawBounds.right-rawBounds.left),(h-marginTop-marginBottom)/Math.max(1e-6,rawBounds.bottom-rawBounds.top));
+  zoom=Math.min(Number.isFinite(view.shuttleApproachZoom)?Math.max(.1,view.shuttleApproachZoom):maxZoom,maxZoom);
+  offsetX=-((rawBounds.left+rawBounds.right)/2-w/2)*zoom;
+  offsetY=(marginTop+h-marginBottom)/2-h*.53-((rawBounds.top+rawBounds.bottom)/2-h*.53)*zoom;
+  for(const p of [...shipPoints,...craftPoints])Object.assign(p,fitPoint(p));
+  queueLines=false;queuedLines.slice(0,gridLineCount).forEach(args=>line(...args));
+  shipFaces.sort((a,b)=>a.depth-b.depth).forEach(({points})=>{c.strokeStyle='#7bc9ff88';c.lineWidth=.65;c.beginPath();points.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));c.closePath();c.stroke();});
+  queuedLines.slice(gridLineCount).forEach(args=>line(...args));
   faces.sort((a,b)=>a.depth-b.depth).forEach(({points,color})=>{c.fillStyle=color;c.strokeStyle='#9ad9ff8a';c.lineWidth=.8;c.beginPath();points.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));c.closePath();c.fill();c.stroke();});
   line(location,local(0,.3,0),'#91d8ff',1.7);
   const shuttle=project(location),bay=project(point(0,0,110)),nose=project(local(0,.3,0)),wing=project(local(.12,0,0));
@@ -93,5 +110,5 @@ window.drawShuttleApproachMap=(c,w,h,m,s,view)=>{
   c.fillText(`${m.phase==='flight'?'APPROACH':m.phase.toUpperCase()} · RANGE ${format(Math.hypot(location.x,location.y,location.z-110))}`,14,h-21);
   c.fillStyle='#ffe1a0';c.fillText('AFT BAY',Math.max(10,Math.min(w-65,bay.x+10)),Math.max(62,Math.min(h-65,bay.y-8)));
   c.fillStyle='#f9ce86';c.fillText('LANDING CRAFT',Math.max(10,Math.min(w-108,shuttle.x+13)),Math.max(76,Math.min(h-55,shuttle.y+26)));
-  return {heading:s.heading,pitch:s.pitch,bank:bank/rad,range:Math.hypot(location.x,location.y,location.z-110),shuttle,bay,nose,wing,phase:m.phase};
+  return {heading:s.heading,pitch:s.pitch,bank:bank/rad,range:Math.hypot(location.x,location.y,location.z-110),shuttle,bay,nose,wing,phase:m.phase,zoom,maxZoom,enterpriseBounds:boundsOf(shipPoints),shuttleBounds:boundsOf(craftPoints),viewport:{left:marginX,right:w-marginX,top:marginTop,bottom:h-marginBottom}};
 };

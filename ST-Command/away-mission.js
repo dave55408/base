@@ -1,8 +1,10 @@
 /* Local flight uses kilometres; the bridge continues to use light years. */
 window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
   const $=id=>document.getElementById(id),rad=Math.PI/180,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const findEnterpriseButton=document.createElement('button');findEnterpriseButton.id='find-enterprise';findEnterpriseButton.type='button';findEnterpriseButton.textContent='Find Enterprise';findEnterpriseButton.hidden=true;findEnterpriseButton.title='Return to forward view and point the shuttle toward Enterprise';document.querySelector('.map-tools').prepend(findEnterpriseButton);
   const wrap=v=>(v%360+360)%360,angle=(a,b)=>(b-a+540)%360-180;
   const m={phase:'bridge',planet:null,x:0,y:0,z:110,recovered:false,target:'beacon',clock:0,completed:false,roll:0,turnBank:0,pitchBob:0,lastVisualPitch:null,bank:0,garageDoorTarget:0,garageDoorOpen:0};
+  let pendingLaunch=null;
   const terrain=PlanetSurface.height;
   const beacon={x:8,y:-12,z:terrain(8,-12)+.12};
   const ship={x:0,y:0,z:110};
@@ -60,6 +62,21 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     const x=cr*v.x+sr*v.z,z=-sr*v.x+cr*v.z;
     return {x:ch*x-sh*cp*v.y-sh*sp*z,y:sh*x+ch*cp*v.y+ch*sp*z,z:-sp*v.y+cp*z};
   }
+  function setEnterprisePower(value){
+    if(!m.freeSpace||!active()||!m.carrier||!m.bridgeState||!Number.isFinite(value))return;
+    m.carrier.manual=true;m.bridgeState.throttle=clamp(value,-100,100);m.bridgeState.autopilot=false;
+    telemetry();window.EnterpriseInset?.render(m,s);
+  }
+  function findEnterprise(){
+    if(m.phase!=='flight')return;
+    if(document.pointerLockElement)document.exitPointerLock();
+    const dx=ship.x-m.x,dy=ship.y-m.y,dz=ship.z-m.z;
+    if(Math.hypot(dx,dy,dz)>.000001){s.heading=wrap(Math.atan2(dx,-dy)/rad);s.pitch=clamp(Math.atan2(dz,Math.hypot(dx,dy))/rad,-85,85);}
+    s.autopilot=false;s.turn=0;s.pitchTurn=0;m.turnBank=0;m.bank=m.roll||0;m.pitchBob=0;m.lastVisualPitch=s.pitch;
+    Object.assign(m,{target:'ship',cameraView:'cockpit',lookYaw:0,lookPitch:0,cameraZoom:1,departureCameraPending:false,departureCameraFade:null,entranceCameraPose:null,entranceCameraFade:null});
+    $('destination').value='ship';say('Forward view. Shuttle pointed toward Enterprise.');telemetry();
+  }
+  findEnterpriseButton.onclick=findEnterprise;
   function stopEnterprise(){
     if(!m.freeSpace||!active()||!m.carrier||!m.bridgeState)return;
     Object.assign(m.carrier,{manual:true,moving:false,speed:0,returningNeutral:false});
@@ -78,6 +95,15 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     if(m.launchAttached&&ShuttleBayFlight.clearedEntrance(m,s))m.launchAttached=false;
     const yaw=(keys.has('Numpad3')?1:0)-(keys.has('Numpad1')?1:0),tilt=(keys.has('Numpad2')?1:0)-(keys.has('Numpad5')?1:0);
     const power=(keys.has('Numpad7')?1:0)-(keys.has('Numpad4')?1:0),roll=(keys.has('NumpadDecimal')?1:0)-(keys.has('Numpad0')?1:0);
+    // Ease into remote bank, pitch and roll commands; release or reversal starts a fresh
+    // ramp, while a held input reaches the existing rate after .65 seconds.
+    const rampHelm=(axis,input)=>{
+      const prior=carrier[axis+'Input'],held=prior===input?(carrier[axis+'Held']||0):0;
+      carrier[axis+'Input']=input;carrier[axis+'Held']=input?Math.min(.65,held+dt):0;
+      if(!input)return 0;
+      const t=Math.min(1,(held+dt/2)/.65);return input*(.2+.8*t*t*(3-2*t));
+    };
+    const yawCommand=rampHelm('yaw',yaw),pitchCommand=rampHelm('pitch',tilt),rollCommand=rampHelm('roll',roll);
     if(yaw||tilt||power||roll)carrier.manual=true;
     if(yaw||tilt||roll)carrier.returningNeutral=false;
     if(!carrier.manual&&!carrier.moving)return;
@@ -86,17 +112,17 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     const worldUp=carrierVector({x:-Math.sin(h)*Math.sin(p)*Math.cos(bank)+Math.cos(h)*Math.sin(bank),y:Math.cos(h)*Math.sin(p)*Math.cos(bank)+Math.sin(h)*Math.sin(bank),z:Math.cos(p)*Math.cos(bank)},carrier);
     const wx=carrier.x+point.x,wy=carrier.y+point.y,wz=carrier.z+point.z;
     const neutralStep=(delta,rate)=>Math.abs(delta)<.02?delta:Math.sign(delta)*Math.min(Math.abs(delta),rate*dt,Math.abs(delta)*(1-Math.exp(-dt*.7)));
-    const dive=carrier.returningNeutral?neutralStep(-carrier.pitch,6):carrier.manual?clamp(carrier.pitch+tilt*6*dt,-85,85)-carrier.pitch:Math.max(-3,carrier.pitch-.05*dt)-carrier.pitch;
+    const dive=carrier.returningNeutral?neutralStep(-carrier.pitch,6):carrier.manual?clamp(carrier.pitch+pitchCommand*6*dt,-85,85)-carrier.pitch:Math.max(-3,carrier.pitch-.05*dt)-carrier.pitch;
     if(carrier.manual){b.throttle=clamp(b.throttle+power*15*dt,-100,100);carrier.speed=SpaceMath.poweredSpeed(carrier.speed,b.throttle,.8,dt);b.speed=SpaceMath.poweredSpeed(b.speed,b.throttle,b.drive==='warp'?112:8,dt);}
     // Hold bank after releasing the helm; only a correction or neutral return
     // changes it. Manual roll remains independent of the turn bank.
     if(carrier.returningNeutral){
       carrier.manualRoll=(carrier.roll/rad+neutralStep(-carrier.roll/rad,18))*rad;carrier.turnBank=0;
     }else{
-      const manualRoll=(carrier.manualRoll??((carrier.roll||0)-(carrier.turnBank||0)))+roll*18*rad*dt;
+      const manualRoll=(carrier.manualRoll??((carrier.roll||0)-(carrier.turnBank||0)))+rollCommand*18*rad*dt;
       carrier.manualRoll=Math.atan2(Math.sin(manualRoll),Math.cos(manualRoll));
       if(yaw){
-        const nextBank=(carrier.turnBank||0)+yaw*10*rad*dt;
+        const nextBank=(carrier.turnBank||0)+yawCommand*10*rad*dt;
         carrier.turnBank=Math.atan2(Math.sin(nextBank),Math.cos(nextBank));
       }else if(!carrier.manual){
         const bankTarget=-.5*rad;
@@ -105,9 +131,9 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     }
     const bankedRoll=carrier.manualRoll+carrier.turnBank;
     carrier.roll=Math.atan2(Math.sin(bankedRoll),Math.cos(bankedRoll));
-    // A held bank keeps steering the ship after the yaw key is released.
-    // Sine keeps the rate bounded through knife-edge and inverted attitudes.
-    const turn=carrier.returningNeutral?neutralStep(angle(carrier.heading,0),8):(carrier.manual?yaw*8+Math.sin(carrier.roll)*8:-.2)*dt;
+    // Only the bank commanded by yaw steers the ship. Manual axial roll
+    // changes attitude without adding to or reversing that steering bank.
+    const turn=carrier.returningNeutral?neutralStep(angle(carrier.heading,0),8):(carrier.manual?yawCommand*8+Math.sin(carrier.turnBank||0)*8:-.2)*dt;
     carrier.moving=Math.abs(carrier.speed)>.000001;
     const mid=(carrier.heading+turn/2)*rad,midPitch=(carrier.pitch+dive/2)*rad;
     carrier.x+=Math.sin(mid)*Math.cos(midPitch)*carrier.speed*dt;carrier.y-=Math.cos(mid)*Math.cos(midPitch)*carrier.speed*dt;carrier.z+=Math.sin(midPitch)*carrier.speed*dt;
@@ -120,7 +146,11 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     if(m.phase==='flight'&&!m.launchAttached){
       const local=carrierVector({x:wx-carrier.x,y:wy-carrier.y,z:wz-carrier.z},carrier,true),nose=carrierVector(direction,carrier,true);
       m.x=local.x;m.y=local.y;m.z=110+local.z;
+      const previousPitch=s.pitch;
       s.heading=wrap(Math.atan2(nose.x,-nose.y)/rad);s.pitch=Math.asin(clamp(nose.z,-1,1))/rad;
+      // Carrier-frame compensation is not a shuttle pitch input. Preserve the
+      // visual pitch delta so remote ship movement cannot bob its chase camera.
+      if(m.lastVisualPitch!=null)m.lastVisualPitch+=s.pitch-previousPitch;
       const up=carrierVector(worldUp,carrier,true),nh=s.heading*rad,np=s.pitch*rad;
       const relativeBank=Math.atan2(up.x*Math.cos(nh)+up.y*Math.sin(nh),-up.x*Math.sin(nh)*Math.sin(np)+up.y*Math.cos(nh)*Math.sin(np)+up.z*Math.cos(np));
       m.roll=relativeBank-(m.turnBank||0);m.bank=relativeBank;
@@ -132,6 +162,9 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
   }
   function launchShuttle(){
     if(!canLaunchShuttle())return;
+    beginShuttleSortie();
+  }
+  function beginShuttleSortie(){
     m.landingChoicePending=false;m.landingCameraFade=null;$('shuttle-choice').close();
     m.departureCameraPending=true;m.departureCameraFade=null;
     m.entranceCameraFade=null;
@@ -156,6 +189,53 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     destinations(true);document.body.classList.add('shuttle-mode');
     say('Clamshell doors open. Shuttle lifting to a hover. Apply thrust when ready; cockpit view engages at the second black side door from space.');telemetry();
   }
+  const canJumpToEngines=()=>['bridge','orbit','flight','landed'].includes(m.phase);
+  function jumpToEngines(ship){
+    if(!m.freeSpace||!active())beginShuttleSortie();
+    let height=EnterpriseModels.selected==='original'?.535:.490,station=0;
+    const tube=ship?.model.getObjectByName('starboard-engine-outer-tube');
+    if(tube){
+      const T=AlpineThree;ship.model.updateWorldMatrix(true,true);height=tube.getWorldPosition(new T.Vector3()).y;
+      tube.geometry.computeBoundingBox();const bounds=tube.geometry.boundingBox;let front=Infinity,rear=-Infinity;
+      for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z]){const axial=tube.localToWorld(new T.Vector3(x,y,z)).z;front=Math.min(front,axial);rear=Math.max(rear,axial);}
+      station=(front+rear)/2;
+    }
+    if(document.pointerLockElement)document.exitPointerLock();$('shuttle-choice').close();
+    Object.assign(m,{phase:'flight',freeSpace:true,planet:null,x:0,y:station,z:110+height,cameraView:'cockpit',lookYaw:0,lookPitch:0,cameraZoom:1,clock:6,target:'ship',returnLeg:1,approach:false,recovered:false,completed:false,targetSquareHidden:true,cockpitFromBerth:false,landing:null,landingChoicePending:false,landingCameraFade:null,launchAttached:false,launchStage:null,launchLiftRemaining:0,liftRemaining:0,departureRamp:false,departureCameraPending:false,departureCameraFade:null,departureCameraAnchor:null,entranceCameraFade:null,entranceCameraPose:null,roll:0,turnBank:0,bank:0,pitchBob:0,lastVisualPitch:0,hangarDoorTarget:0,bayDoorOpen:0});
+    Object.assign(s,{paused:false,heading:0,pitch:0,throttle:0,speed:0,drive:'impulse',autopilot:false,arrived:false,turn:0,pitchTurn:0});keys.clear();
+    destinations(true);document.body.classList.add('shuttle-mode');
+    say('Shuttle cockpit centered between the engines at their midpoint, facing forward. Apply thrust when ready.');telemetry();
+  }
+  async function requestLaunch(relaunch=false,engineLevel=false){
+    if(pendingLaunch||!(engineLevel?canJumpToEngines():relaunch?m.phase==='landed'&&m.landingChoicePending:canLaunchShuttle()))return;
+    const request={model:EnterpriseModels.selected,phase:m.phase};pendingLaunch=request;
+    say(engineLevel?'Preparing shuttle cockpit at engine height.':'Preparing shuttle graphics. Liftoff will begin when ready.');telemetry();
+    try{
+      // Give the status and disabled button a chance to paint before building.
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      if(pendingLaunch!==request)return;
+      const scene=STCommand.games[0].scene.getScene('Forward');
+      const ship=await EnterpriseModels.prepareLaunch(scene,scene.scale.width,scene.scale.height);
+      if(pendingLaunch!==request)return;
+      pendingLaunch=null;
+      for(const game of STCommand.games)game.loop.resetDelta();
+      if(m.phase!==request.phase||EnterpriseModels.selected!==request.model||!(engineLevel?canJumpToEngines():relaunch?m.landingChoicePending:canLaunchShuttle())||document.querySelector('dialog[open]:not(#shuttle-choice)')){say(engineLevel?'Shuttle graphics ready. Press L again when ready.':'Shuttle graphics ready. Select Launch when ready; Enterprise power must be below 15% in either direction.');telemetry();return;}
+      if(engineLevel)jumpToEngines(ship);else if(relaunch)takeOff();else launchShuttle();
+    }catch(error){
+      if(pendingLaunch===request){pendingLaunch=null;say('Shuttle preparation could not finish. Select Launch to try again.');telemetry();console.error(error);}
+    }finally{if(pendingLaunch===request)pendingLaunch=null;updateUI();}
+  }
+  // Temporary inspection start; the normal bay launch remains available after reset.
+  function startNearImpulseEngines(){
+    launchShuttle();
+    if(!m.freeSpace)return;
+    // The outlets are at carrier-relative y=-.776, z=110.384;
+    // leave clearance aft and align the cockpit eye with the starboard outlet.
+    Object.assign(m,{x:.065,y:-.52,z:110.36,clock:6,cameraView:'cockpit',lookYaw:0,lookPitch:0,launchAttached:false,launchStage:null,launchLiftRemaining:0,departureRamp:false,departureCameraPending:false,departureCameraFade:null,departureCameraAnchor:null,hangarDoorTarget:0,bayDoorOpen:0});
+    Object.assign(m.carrier,{moving:false,manual:true,speed:0});Object.assign(m.bridgeState,{throttle:0,speed:0});
+    Object.assign(s,{heading:0,pitch:0,throttle:0,speed:0});
+    say('Shuttle hovering near the impulse engines. Reset returns to the bridge for a normal hangar launch.');telemetry();
+  }
   function retrieve(){if(m.freeSpace||m.phase!=='flight'||m.recovered||m.target!=='beacon'||range()>.45||agl()>.45||Math.abs(s.speed)>.15)return;
     m.recovered=true;m.target='ship';m.returnLeg=0;$('destination').value='ship';s.autopilot=false;s.throttle=0;
     say('Beacon secured aboard. Select Enterprise and engage a return course, or climb manually to the aft bay.');telemetry();}
@@ -168,6 +248,7 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     if(Math.abs(s.pitch)>15||Math.abs(Math.atan2(Math.sin(m.bank||0),Math.cos(m.bank||0)))>15*rad)return 'Level the shuttle before landing.';
     return '';
   }
+  const landingChoiceReady=()=>m.clock>=1+(m.landing?.keepLaunchCamera?0:ShuttleBayFlight.departureFadeDuration);
   function finishLanding(){
     m.phase='landed';m.clock=0;s.throttle=0;s.speed=0;s.pitch=0;s.turn=0;s.pitchTurn=0;m.roll=0;m.turnBank=0;m.bank=0;m.pitchBob=0;
     Object.assign(m.landing,{pad:{x:m.x,y:m.y,z:m.z},heading:s.heading,pitch:0,bank:0});
@@ -181,7 +262,8 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     m.launchAttached=false;
     m.departureCameraPending=false;m.departureCameraFade=null;m.entranceCameraFade=null;m.landingChoicePending=false;m.landingCameraFade=null;m.launchLiftRemaining=0;
     const alignPad=!keepLaunchCamera&&Math.cos(s.heading*rad)>.5,b=ShuttleBayFlight.dimensions();
-    m.landing={automatic:true,inside:true,alignPad,keepLaunchCamera,start:{x:m.x,y:m.y,z:m.z,heading:s.heading,pitch:s.pitch,bank:m.bank||0},pad:alignPad?ShuttleBayFlight.padRoot(180):{x:m.x,y:m.y,z:b.floor},heading:alignPad?180:s.heading,duration:alignPad?5.3:1.8};
+    // The pad turn ends at 5.3 seconds; hold that view for two more seconds.
+    m.landing={automatic:true,inside:true,alignPad,keepLaunchCamera,start:{x:m.x,y:m.y,z:m.z,heading:s.heading,pitch:s.pitch,bank:m.bank||0},pad:alignPad?ShuttleBayFlight.padRoot(180):{x:m.x,y:m.y,z:b.floor},heading:alignPad?180:s.heading,duration:alignPad?7.3:1.8};
     m.phase='docking';m.departureRamp=false;m.clock=0;m.cameraView='excursion';m.lookYaw=0;m.lookPitch=0;m.hangarDoorTarget=1;
     s.throttle=0;s.speed=0;s.autopilot=false;s.paused=false;keys.clear();if(document.pointerLockElement)document.exitPointerLock();
     if(!alignPad&&Math.abs(m.z-b.floor)<.0001){m.z=b.floor;finishLanding();return;}
@@ -210,7 +292,7 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     say('Shuttle lifting to a hover. Apply thrust when ready.');telemetry();
   }
   function powerDown(){if(m.phase!=='landed')return;$('shuttle-choice').close();m.phase='powerdown';m.clock=0;s.throttle=0;s.speed=0;s.autopilot=false;s.paused=false;keys.clear();say('Landing craft powering down. Transferring control to the bridge.');telemetry();}
-  function reset(){Object.assign(m,{phase:'bridge',orbitArrival:null,landing:null,cockpitFromBerth:false,liftRemaining:0,roll:0,turnBank:0,pitchBob:0,lastVisualPitch:null,bank:0,departureRamp:false,cameraView:'cockpit',hangarDoorTarget:null,bayDoorOpen:1,garageDoorTarget:0,garageDoorOpen:0,freeSpace:false,bridgeState:null,carrier:null,planet:null,departedPlanet:null,recovered:false,completed:false,clock:0,landingChoicePending:false,landingCameraFade:null,departureCameraPending:false,departureCameraFade:null,entranceCameraFade:null,entranceCameraPose:null,launchLiftRemaining:0,launchStage:null,launchAttached:false});$('shuttle-choice').close();document.body.classList.remove('shuttle-mode');destinations(false);}
+  function reset(){pendingLaunch=null;Object.assign(m,{phase:'bridge',orbitArrival:null,landing:null,cockpitFromBerth:false,liftRemaining:0,roll:0,turnBank:0,pitchBob:0,lastVisualPitch:null,bank:0,departureRamp:false,cameraView:'cockpit',hangarDoorTarget:null,bayDoorOpen:1,garageDoorTarget:0,garageDoorOpen:0,freeSpace:false,bridgeState:null,carrier:null,planet:null,departedPlanet:null,recovered:false,completed:false,clock:0,landingChoicePending:false,landingCameraFade:null,departureCameraPending:false,departureCameraFade:null,entranceCameraFade:null,entranceCameraPose:null,launchLiftRemaining:0,launchStage:null,launchAttached:false});$('shuttle-choice').close();document.body.classList.remove('shuttle-mode');destinations(false);}
   function engage(){if(!active())return false;if(m.phase!=='flight')return true;s.autopilot=true;s.paused=false;s.throttle=65;say(`Local navigation engaged: ${m.target==='beacon'?'beacon recovery approach':'Enterprise aft bay'}.`);return true;}
   function tick(dt){
     if(m.phase==='bridge'){m.departureCameraPending=false;m.departureCameraFade=null;m.entranceCameraFade=null;m.launchLiftRemaining=0;m.launchStage=null;m.landingChoicePending=false;m.landingCameraFade=null;}
@@ -230,7 +312,7 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     // doors close automatically and can reopen on the return approach.
     if(m.phase==='flight'&&(m.freeSpace||m.recovered)&&Math.hypot(m.x,m.y,m.z-110)>4)m.hangarDoorTarget=null;
     const doorTarget=m.hangarDoorTarget??Number(automaticBayOpen());
-    m.bayDoorOpen=clamp((m.bayDoorOpen??1)+Math.sign(doorTarget-(m.bayDoorOpen??1))*Math.min(Math.abs(doorTarget-(m.bayDoorOpen??1)),dt/2.4),0,1);
+    m.bayDoorOpen=clamp(advanceHangarDoor(m.bayDoorOpen??1,doorTarget,dt),0,1);
     if(m.phase==='docking'&&m.landing?.automatic){advanceLanding();return true;}
     if(m.phase==='powerdown'&&m.clock>3){
       if(m.freeSpace){const time=s.time,moving=m.carrier?.moving;Object.assign(s,m.bridgeState,{time,paused:false,autopilot:false});Object.assign(m,{phase:'bridge',freeSpace:false,bridgeState:null,carrier:null});say(moving?'Shuttle secured in the hangar. Bridge has control; Enterprise is still underway.':'Shuttle secured in the hangar. Bridge has control; Enterprise remains stopped.');}
@@ -299,7 +381,7 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
         m.launchReverseStopped=true;
       }else if(m.y>rearLimit+.001)m.launchReverseStopped=false;
     }
-    if(m.liftRemaining>0){const liftStep=Math.min(dt,m.liftRemaining);m.z+=(110.007-(EnterpriseModels.selected==='original'?110-.04645:110-.01530))*liftStep/1.2;m.liftRemaining-=liftStep;}
+    if(m.liftRemaining>0){const liftStep=Math.min(dt,m.liftRemaining);m.z+=(110.007-ShuttleBayFlight.dimensions().floor)*liftStep/1.2;m.liftRemaining-=liftStep;}
     if(m.launchAttached&&ShuttleBayFlight.clearedEntrance(m,s))m.launchAttached=false;
     if(m.departureCameraFade!=null){
       m.departureCameraFade+=dt;
@@ -332,7 +414,9 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     return true;
   }
   function updateUI(){
-    const choice=$('shuttle-choice'),showChoice=m.phase==='landed'&&m.landingChoicePending&&m.landingCameraFade==null;
+    window.SimPerformance?.invalidate();
+    $('launch-shuttle').disabled=!!pendingLaunch;$('launch-shuttle').textContent=pendingLaunch?'PREPARING SHUTTLE...':'LAUNCH SHUTTLE';$('shuttle-choice-launch').disabled=!!pendingLaunch;
+    const choice=$('shuttle-choice'),showChoice=m.phase==='landed'&&m.landingChoicePending&&m.landingCameraFade==null&&landingChoiceReady();
     if(showChoice)$('shuttle-choice-description').textContent=m.landing?.keepLaunchCamera?'Shuttle is back on deck. Power down or launch again?':'Turnaround complete. Power down or launch again?';
     if(showChoice&&!choice.open){keys.clear();choice.showModal();}
     else if(!showChoice&&choice.open)choice.close();
@@ -348,6 +432,7 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     if((!spaceLook||fixedBayView)&&document.pointerLockElement===$('main-view'))document.exitPointerLock();
     $('camera-zoom').textContent=(m.cameraZoom||1).toFixed(1)+'×';
     const mapMode=local?(m.target==='ship'||m.phase!=='flight'?'approach':'surface'):'galaxy';
+    findEnterpriseButton.hidden=m.phase!=='flight'||mapMode!=='approach';
     if(m.mapMode!==mapMode){m.mapMode=mapMode;const approach=mapMode==='approach',surface=mapMode==='surface';
       document.querySelector('.galaxy .display-title h2').lastChild.textContent=approach?' 3D SHUTTLE ATTITUDE':surface?' SURFACE NAVIGATION':' 3D GALAXY NAVIGATION';
       document.querySelector('.galaxy .display-title>span').textContent=approach?'AFT BAY GUIDANCE':surface?'LOCAL TERRAIN':'SPATIAL HOLOGRAM';
@@ -381,16 +466,24 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     $('view-label').textContent=m.freeSpace?'SHUTTLE · ENTERPRISE':'LANDING CRAFT · '+m.planet.name.toUpperCase();$('drive-label').textContent=s.paused?'SIMULATION PAUSED':m.phase==='powerdown'?'POWERING DOWN':m.freeSpace?'LOCAL SPACE FLIGHT':'ATMOSPHERIC FLIGHT';
     $('distance').textContent=range().toFixed(2)+' KM';$('target-bearing').textContent=bearing().toFixed(0).padStart(3,'0')+'°';$('target-pitch').textContent=elevation().toFixed(0)+'°';$('target-elevation').textContent=(target().z-m.z).toFixed(2)+' KM';$('factor').textContent=(s.speed*1000).toFixed(0)+' m/s';$('engine-name').textContent=s.throttle<0?(s.speed>=0?'BRAKING FOR REVERSE':'LANDING CRAFT / REVERSE'):'LANDING CRAFT THRUST';$('eta').textContent=s.paused?'PAUSED':s.throttle<0&&s.speed>=0?'BRAKING':s.speed<0?'REVERSING':s.throttle?Math.ceil(range()/Math.max(.001,s.speed))+' SEC':'HOLDING';$('nav-state').textContent=s.autopilot?'LOCAL TRACK':'LOCAL NAV';
   }
-  $('launch-craft').onclick=launch;$('launch-shuttle').onclick=launchShuttle;$('leave-orbit').onclick=leaveOrbit;$('retrieve-beacon').onclick=retrieve;$('land-bay').onclick=dock;$('power-down').onclick=powerDown;
+  $('launch-craft').onclick=launch;$('launch-shuttle').onclick=()=>requestLaunch();$('leave-orbit').onclick=leaveOrbit;$('retrieve-beacon').onclick=retrieve;$('land-bay').onclick=dock;$('power-down').onclick=powerDown;
   $('hangar-door').onclick=toggleHangarDoor;
   $('garage-door').onclick=toggleGarageDoor;
   $('shuttle-choice-power-down').onclick=powerDown;
-  $('shuttle-choice-launch').onclick=()=>{if(m.phase==='landed'&&m.landingChoicePending)takeOff();};
+  $('shuttle-choice-launch').onclick=()=>requestLaunch(true);
   $('shuttle-choice').addEventListener('cancel',event=>event.preventDefault());
   window.addEventListener('keydown',event=>{
-    if(!$('shuttle-choice').open)return;
-    event.stopImmediatePropagation();
-    if(!['Tab','Enter',' '].includes(event.key))event.preventDefault();
+    const choiceOpen=$('shuttle-choice').open;
+    const launchKey=event.key.toLowerCase()==='l'&&!event.ctrlKey&&!event.altKey&&!event.metaKey;
+    const editing=event.target?.closest?.('input,select,textarea,[contenteditable]:not([contenteditable="false"])')&&!event.target.matches('.helm input[type="range"],#enterprise-inset-power');
+    if(launchKey&&!editing&&!document.querySelector('dialog[open]:not(#shuttle-choice)')){
+      const action=canJumpToEngines()?()=>requestLaunch(false,true):null;
+      if(action){event.preventDefault();event.stopImmediatePropagation();if(!event.repeat)action();return;}
+    }
+    if(choiceOpen){
+      event.stopImmediatePropagation();
+      if(!['Tab','Enter',' '].includes(event.key))event.preventDefault();
+    }
   },{capture:true});
   $('excursion-view').onclick=()=>{if(m.phase!=='flight')return;if(document.pointerLockElement)document.exitPointerLock();m.entranceCameraPose=null;m.entranceCameraFade=null;m.cameraView=m.cameraView==='excursion'?'cockpit':'excursion';m.lookYaw=0;m.lookPitch=0;m.cameraZoom=1;telemetry();};
   $('destination').addEventListener('change',()=>{if(active()){m.target=$('destination').value;s.autopilot=false;say('Local target selected. Engage course or use manual helm.');telemetry();}});
@@ -407,7 +500,9 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     const heading=camera.heading*rad,pitch=camera.pitch*rad,focal=w*.65*(camera.cameraZoom||1);
     const forward=carrierVector(SpaceMath.direction(camera.heading,camera.pitch),carrier),right=carrierVector({x:Math.cos(heading),y:Math.sin(heading),z:0},carrier),up=carrierVector({x:-Math.sin(heading)*Math.sin(pitch),y:Math.cos(heading)*Math.sin(pitch),z:Math.cos(pitch)},carrier);
     const cb=Math.cos(m.bank||0),sb=Math.sin(m.bank||0),baseRight={...right},baseUp={...up};
-    for(const axis of ['x','y','z']){right[axis]=baseRight[axis]*cb+baseUp[axis]*sb;up[axis]=-baseRight[axis]*sb+baseUp[axis]*cb;}
+    // Match the cockpit camera's rotateZ(-bank), including the compensating
+    // bank that holds the shuttle steady while Enterprise rolls beneath it.
+    for(const axis of ['x','y','z']){right[axis]=baseRight[axis]*cb-baseUp[axis]*sb;up[axis]=baseRight[axis]*sb+baseUp[axis]*cb;}
     const relative=(p,origin)=>((p-origin+60)%120+120)%120-60;
     c.fillStyle='#d2e7ff';
     for(const star of spaceStars){
@@ -543,5 +638,5 @@ const p=m.target==='ship'&&shipBay?.visible?shipBay:project(target().x,target().
     for(const [id,p,label] of [['beacon',beacon,m.recovered?'RECOVERED':'BEACON'],['ship',ship,'ENTERPRISE / AFT BAY']].filter(([id])=>!m.freeSpace||id==='ship')){const dx=(p.x-m.x)*scale,dy=(p.y-m.y)*scale,ratio=Math.min(1,(Math.min(w,h)*.4)/Math.max(1,Math.hypot(dx,dy))),x=cx+dx*ratio,y=cy+dy*ratio;c.strokeStyle=id===m.target?'#9adfff':'#4d789b';c.strokeRect(x-5,y-5,10,10);c.fillStyle=c.strokeStyle;c.fillText(label,clamp(x+9,8,w-165),clamp(y+15,40,h-40));c.fillText(m.freeSpace?'VERTICAL 0.00 KM':`ALT ${p.z.toFixed(2)} KM`,clamp(x+9,8,w-165),clamp(y+29,54,h-26));}
     c.save();c.translate(cx,cy);c.rotate(s.heading*rad);c.fillStyle='#94e1ff';c.beginPath();c.moveTo(0,-10);c.lineTo(-6,7);c.lineTo(0,3);c.lineTo(6,7);c.fill();c.restore();tex.refresh();return true;
   }
-  return {state:m,active,tick,updateUI,render,renderNav,orbit,launch,launchShuttle,stopEnterprise,neutralEnterprise,retrieve,dock,powerDown,reset,engage,terrain,range};
+  return {state:m,active,tick,updateUI,render,renderNav,orbit,launch,launchShuttle,startNearImpulseEngines,setEnterprisePower,stopEnterprise,neutralEnterprise,retrieve,dock,powerDown,reset,engage,terrain,range};
 };

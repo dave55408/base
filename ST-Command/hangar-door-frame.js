@@ -1,7 +1,12 @@
 /* Reference stern: a broad arch, shallow beveled rim and level threshold. */
+window.advanceHangarDoor=(current,target,dt)=>{
+ const visible=current*current*(3-2*current),t=Math.min(1,visible/.15);
+ const speed=target<current?.40+.60*t*t*(3-2*t):1;
+ return current+Math.sign(target-current)*Math.min(Math.abs(target-current),Math.max(0,dt)*speed/2.4);
+};
 window.hangarDoorProfile=(scaleY=1)=>{
  const floor=-.04645,baseThickness=.024,bellyLocalDepth=-floor+baseThickness/scaleY;
- return {rx:.083,ry:.112,cy:-.043,floor,width:.010,baseThickness,bellyLocalDepth,bellyDepth:bellyLocalDepth*scaleY-.102*(1-scaleY),baseFront:.062,roofFront:.014,canopyFront:.0325,hingeDepth:.018,lampY:.076,lampFront:.029,scaleY};
+ return {rx:.083,ry:.112,cy:-.043,floor,width:.010,baseThickness,bellyLocalDepth,bellyDepth:bellyLocalDepth*scaleY-.102*(1-scaleY),baseFront:.062,roofFront:.014,canopyFront:.0325,hingeDepth:.008,lampY:.076,lampFront:.029,scaleY};
 };
 window.createHangarDoorFrameGeometry=(T,{scaleY=1,flatBelly=false,aftHull=null}={})=>{
  const profile=hangarDoorProfile(scaleY),{width,baseThickness,rx,ry,cy,floor}=profile,segments=192,corner=cy-floor;
@@ -51,6 +56,17 @@ window.createHangarDoorFrameGeometry=(T,{scaleY=1,flatBelly=false,aftHull=null}=
  };
  const insetHull=hull.map(([x,y])=>[x*.997,.008+(y-.008)*.997]);
  const doorReturn=inner.map(([x,y])=>[x*1.004,cy+(y-cy)*1.004]);
+ // Size the canopy band to half the gap from the roof to the crown lamp.
+ // Its underside still returns into the recessed bulkhead.
+ const canopyLipWidth=Math.max(.0025,(hull[0][1]-profile.lampY-.0035/scaleY)*scaleY/2);
+ const recessBlend=y=>{const t=Math.max(0,Math.min(1,(y-.005)/.025));return t*t*(3-2*t);};
+ const lipInner=hull.map(([x,y],n)=>{
+  const [ix,iy]=doorReturn[n],span=Math.hypot(x-ix,(y-iy)*scaleY);
+  const t=Math.min(.5,canopyLipWidth/Math.max(span,1e-8));
+  return [x+(ix-x)*t,y+(iy-y)*t];
+ });
+ const lipFront=(p,n)=>cutAt(hull[n]);
+ const recessedAt=(p,n)=>(lipFront(p,n)-.0006)*(1-recessBlend(hull[n][1]))-.004*recessBlend(hull[n][1]);
  function strips(layers,topology=false){
   const positions=[],indices=[];
   // Separate faces retain a flat front rather than smoothing its normals
@@ -68,7 +84,7 @@ window.createHangarDoorFrameGeometry=(T,{scaleY=1,flatBelly=false,aftHull=null}=
  }
  const backAt=p=>frontAt(p)-.006;
  const rim=strips([[outer,edgeAt],[outerBevel,frontAt],[innerBevel,frontAt],[inner,edgeAt],[inner,backAt],[outer,backAt],[outer,edgeAt]]);
- rim.userData.doorFrame={...profile,inner,outer,sideCut:hull.map(cutAt),aperture:inner.map(p=>[p[0],p[1],profile.hingeDepth]),front:profile.roofFront};
+ rim.userData.doorFrame={...profile,inner,outer,sideCut:hull.map(cutAt),canopyLipWidth,canopyRecess:-.004,aperture:inner.map(p=>[p[0],p[1],profile.hingeDepth]),front:profile.roofFront};
  // A solid sill reaches the door's bottom edge, closing the dark slit that
  // a thin separate apron would leave beneath the exposed clamshell.
  const r=rx+width,bottom=floor-baseThickness/scaleY,chamfer=.002;
@@ -81,12 +97,53 @@ window.createHangarDoorFrameGeometry=(T,{scaleY=1,flatBelly=false,aftHull=null}=
  return {
   rim,profile,base,
   fairing:strips([[hull,-.0004],[hull,cutAt]],true),
-  seal:strips([[insetHull,-.008],[hull,cutAt],[doorReturn,profile.roofFront-.002],[inner,profile.hingeDepth],[inner,-.008],[insetHull,-.008]]),
+  seal:strips([[insetHull,-.008],[hull,cutAt],[lipInner,lipFront],[lipInner,recessedAt],[doorReturn,recessedAt],[doorReturn,profile.roofFront-.002],[inner,profile.hingeDepth],[inner,-.008],[insetHull,-.008]]),
   throat:strips([[inner,-.008],[interior,-.018]])
  };
 };
-window.createHangarRoofBeacon=(T,scaleY=1,hullMaterial=null)=>{
- const beacon=new T.Group();beacon.name='shuttle-bay-roof-beacon';beacon.position.set(0,.101,.010);
- const mount=new T.Mesh(new T.CylinderGeometry(.013,.013,.0025/scaleY,32),hullMaterial??new T.MeshStandardMaterial({color:0x6f7e7b,roughness:.7,metalness:.15}));mount.name='shuttle-bay-beacon-mount';mount.position.y=.00125/scaleY;mount.scale.z=.85;beacon.add(mount);
- const dome=new T.Mesh(new T.SphereGeometry(1,32,16,0,Math.PI*2,0,Math.PI/2),new T.MeshStandardMaterial({color:0xa7c4a4,emissive:0x7bb98a,emissiveIntensity:.55,roughness:.28,metalness:.12}));dome.name='shuttle-bay-green-light';dome.position.y=.0025/scaleY;dome.scale.set(.012,.007/scaleY,.010);beacon.add(dome);return beacon;
+// Sill-mounted floodlights wash the outer jambs up toward the arch shoulders.
+window.createHangarUplights=(T,profile)=>{
+ const group=new T.Group();group.name='hangar-arch-uplights';
+ const {floor,scaleY}=profile;
+ const metal=new T.MeshStandardMaterial({color:0x444e50,roughness:.65,metalness:.45});
+ const lensMaterial=new T.MeshStandardMaterial({color:0x88928e,roughness:.3,metalness:.25});
+ for(const side of [-1,1]){
+  const name=side<0?'port':'starboard',fixture=new T.Group();fixture.name=name+'-hangar-uplight-fixture';
+  fixture.position.set(side*.087,floor,.036);fixture.scale.y=1/scaleY;group.add(fixture);
+  const foot=new T.Mesh(new T.BoxGeometry(.009,.0015,.010),metal);foot.position.y=.00075;fixture.add(foot);
+  const direction=new T.Vector3(-side*.022,.080,-.022).normalize();
+  const housing=new T.Mesh(new T.CylinderGeometry(.0035,.0042,.005,20),metal);
+  housing.position.set(0,.0035,0);housing.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),direction);fixture.add(housing);
+  const lens=new T.Mesh(new T.SphereGeometry(1,20,10),lensMaterial);lens.scale.set(.0029,.0029,.0004);lens.name=name+'-hangar-uplight-lens';
+  lens.position.copy(housing.position).addScaledVector(direction,.00255);lens.quaternion.setFromUnitVectors(new T.Vector3(0,0,1),direction);fixture.add(lens);
+  const lamp=new T.SpotLight(0xffedcf,0,.17,.30,.65,2);lamp.name=name+'-hangar-arch-uplight';
+  lamp.position.set(side*.087,floor+.006/scaleY,.035);
+  lamp.target.position.set(side*.062,.034,profile.roofFront-.001);group.add(lamp,lamp.target);
+ }
+ return group;
+};
+window.createHangarRoofBeacon=(T,scaleY=1,hullMaterial=null,scaleZ=1)=>{
+ const beacon=new T.Group();beacon.name='shuttle-bay-roof-beacon';beacon.position.set(0,.101,.010);beacon.scale.z=1/scaleZ;
+ const metal=new T.MeshStandardMaterial({color:0x6a7770,roughness:.52,metalness:.4});
+ const mount=new T.Mesh(new T.CylinderGeometry(.0128,.014,.0032/scaleY,48),metal);mount.name='shuttle-bay-beacon-mount';mount.position.y=.0016/scaleY;beacon.add(mount);
+ const collar=new T.Mesh(new T.CylinderGeometry(.0123,.0128,.0007/scaleY,48),new T.MeshStandardMaterial({color:0x4f6055,roughness:.5,metalness:.3}));collar.name='shuttle-bay-beacon-collar';collar.position.y=.00335/scaleY;beacon.add(collar);
+ // A full hemisphere rises from the existing collar. Compensate for the hull's
+ // vertical scale so the lens retains a circular dome in the finished model.
+ const geometry=new T.SphereGeometry(.012,64,32,0,Math.PI*2,0,Math.PI/2);geometry.scale(1,1/scaleY,1);
+ const dome=new T.Mesh(geometry,new T.MeshStandardMaterial({color:0x69d596,emissive:0x45ba73,emissiveIntensity:.85,roughness:.30,metalness:.04}));dome.name='shuttle-bay-green-light';dome.position.y=.0037/scaleY;beacon.add(dome);
+ const light=new T.Light(0x69d596,.000025);light.isPointLight=true;light.type='PointLight';light.distance=.12;light.decay=2;light.name='shuttle-bay-roof-green-emitter';light.position.set(0,.010/scaleY,.003);beacon.add(light);
+ beacon.userData.roofBeacon={lensHeight:.012,lensRadius:.012,color:0x69d596};return beacon;
+};
+
+/* The small lamp beneath the canopy lip casts steady white light. */
+window.addHangarWhiteLamp=(T,lens)=>{
+ const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const c=canvas.getContext('2d'),g=c.createLinearGradient(0,0,0,128);
+ for(const [stop,color]of [[0,'#43515b'],[.18,'#b6c2ca'],[.43,'#edf2f5'],[.68,'#a4b5c0'],[1,'#35434d']])g.addColorStop(stop,color);c.fillStyle=g;c.fillRect(0,0,128,128);c.fillStyle='rgba(255,255,255,.55)';c.fillRect(5,18,118,5);
+ const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;
+ lens.material=new T.MeshStandardMaterial({color:0xffffff,map,emissive:0xffffff,emissiveMap:map,emissiveIntensity:.7,roughness:.12,metalness:0});
+ const light=new T.Light(0xffffff,.000045);light.isPointLight=true;light.type='PointLight';light.distance=.28;light.decay=2;light.name='hangar-under-lip-white-emitter';light.position.set(0,-.001,.003);lens.add(light);
+ // Offset, unshadowed emitters spread a soft wash across the lip and stern.
+ for(const side of [-1,1]){const spill=new T.Light(0xffffff,.000018);spill.isPointLight=true;spill.type='PointLight';spill.distance=.28;spill.decay=2;spill.name='hangar-under-lip-white-spill-'+(side<0?'port':'starboard');spill.position.set(side*.006,-.0025,.004);lens.add(spill);}
+ lens.userData.diffuseLightWash={range:.28,emitters:3};
+ return light;
 };

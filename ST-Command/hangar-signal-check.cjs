@@ -13,11 +13,11 @@ try{
    const on=frame(),red=ship.model.getObjectByName('port-hangar-red-light'),green=ship.model.getObjectByName('hangar-green-light'),beacon=ship.model.getObjectByName('shuttle-bay-green-light');
    halos.forEach(o=>o.visible=false);const off=frame();let changed=0;for(let p=0;p<on.pixels.length;p+=4)if(Math.abs(on.pixels[p]-off.pixels[p])+Math.abs(on.pixels[p+1]-off.pixels[p+1])+Math.abs(on.pixels[p+2]-off.pixels[p+2])>5)changed++;
    ctx.fillStyle='#04070c';ctx.fillRect(i*600,0,600,500);ctx.drawImage(on.canvas,i*600,0);ctx.fillStyle='#ffe16b';ctx.font='14px monospace';ctx.fillText(i?'ORIGINAL MODEL':'SECOND MODEL',i*600+16,24);
-   checks.push({halos:halos.length,changed,red:red.material.color.getHex(),green:green.material.color.getHex(),beacon:beacon.material.color.getHex(),beaconEmission:beacon.material.emissiveIntensity,glError:ship.renderer.getContext().getError()});
+   checks.push({halos:halos.length,changed,lowerLightsRestored:!!red&&!!green,beacon:beacon.material.color.getHex(),beaconEmission:beacon.material.emissiveIntensity,glError:ship.renderer.getContext().getError()});
   }
   return {checks,image:sheet.toDataURL('image/png')};
  });
  if(process.argv.includes('--image'))console.log(JSON.stringify(result));
- for(const check of result.checks){assert.equal(check.halos,0);assert.equal(check.changed,0);assert.equal(check.red,0x9c2820);assert.equal(check.green,0x64c995);assert.equal(check.beacon,0xa7c4a4);assert.equal(check.beaconEmission,.55);assert.equal(check.glError,0);}assert.deepEqual(errors,[]);
- if(!process.argv.includes('--image'))console.log('Passed: hangar marker colors and the roof dome light render without added halos on both models.');
+ for(const check of result.checks){assert.equal(check.halos,5);assert(check.changed>100,'landing lights have visible soft glows');assert(check.lowerLightsRestored);assert.equal(check.beacon,0xa7c4a4);assert.equal(check.beaconEmission,.55);assert.equal(check.glError,0);}assert.deepEqual(errors,[]);
+ if(!process.argv.includes('--image'))console.log('Passed: five illuminated landing lights with visible soft glows and preserved roof dome on both models.');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -2,7 +2,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const root = __dirname;
-const types = {'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/javascript','.json':'application/json','.png':'image/png','.m4a':'audio/mp4','.mp3':'audio/mpeg','.ogg':'audio/ogg','.wav':'audio/wav'};
+const types = {'.html':'text/html; charset=utf-8','.css':'text/css','.svg':'image/svg+xml','.js':'text/javascript','.json':'application/json','.png':'image/png','.m4a':'audio/mp4','.mp3':'audio/mpeg','.ogg':'audio/ogg','.wav':'audio/wav'};
 const {notesDocument,readNotesDocument}=require('./project-notes-format.js');
 function createServer({notesFile=path.join(root,'project-notes.html'),legacyNotesFile=path.join(path.dirname(notesFile),'project-notes.txt')}={}){
   const htmlNotes=path.extname(notesFile).toLowerCase()==='.html',notesName=path.basename(notesFile);

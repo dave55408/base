@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),path=require('node:path'),os=require(
  browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});const page=await browser.newPage({viewport:{width:2048,height:1152}}),errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.STCommand?.games.every(game=>game.isBooted));
  const styles=()=>page.evaluate(()=>Object.fromEntries(['#impulse','#engage','#stop','.power-dial','.compass','#throttle','#destination','#project-notes-open','.helm'].map(selector=>{const style=getComputedStyle(document.querySelector(selector));return [selector,{background:style.backgroundImage,color:style.color,border:style.borderColor}];})));
- const bridge=await styles();await page.locator('#launch-shuttle').click();await page.evaluate(()=>{STCommand.state.paused=true;for(const game of STCommand.games)game.loop.stop();});
+ const bridge=await styles();await page.locator('#launch-shuttle').click();await page.waitForFunction(()=>STCommand.away.state.phase==='flight',null,{timeout:180000});await page.evaluate(()=>{STCommand.state.paused=true;for(const game of STCommand.games)game.loop.stop();});
  assert(await page.locator('body').evaluate(body=>body.classList.contains('shuttle-mode')));const shuttle=await styles();
  for(const selector of Object.keys(bridge))assert.notEqual(shuttle[selector].background,bridge[selector].background,selector+' switches to the shuttle palette');
  const labels=await page.locator('.section-label,.select-label').evaluateAll(elements=>elements.map(element=>getComputedStyle(element).color.match(/\d+/g).map(Number)));

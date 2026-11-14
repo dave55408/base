@@ -74,7 +74,7 @@ window.PlanetSurface=(()=>{
     }
     function draw(ctx,w,h,m,s){
       setPlanetColor(m.planet.color);
-      const rw=Math.min(1920,Math.round(w)),rh=Math.round(h*rw/w);if(width!==rw||tall!==rh){renderer.setSize(rw,rh,false);camera.aspect=rw/rh;camera.updateProjectionMatrix();width=rw;tall=rh;}
+      const {width:rw,height:rh}=SimPerformance.size(w,h);if(width!==rw||tall!==rh){renderer.setSize(rw,rh,false);camera.aspect=rw/rh;camera.updateProjectionMatrix();width=rw;tall=rh;}
       const bank=m.bank||0;
       const heading=s.heading*Math.PI/180,pitch=s.pitch*Math.PI/180;
       forward.set(Math.sin(heading)*Math.cos(pitch),Math.sin(pitch),-Math.cos(heading)*Math.cos(pitch));camera.position.set(m.x*1000,m.z*1000,m.y*1000);

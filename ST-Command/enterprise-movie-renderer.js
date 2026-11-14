@@ -21,12 +21,12 @@ window.createMovieEnterpriseRenderer=()=>{
   for(let i=0;i<frostPixels.data.length;i+=4){frostSeed=(Math.imul(frostSeed,1664525)+1013904223)>>>0;const value=96+(frostSeed>>>26);frostPixels.data[i]=frostPixels.data[i+1]=frostPixels.data[i+2]=value;frostPixels.data[i+3]=255;}
   frostContext.putImageData(frostPixels,0,0);const frostMap=new T.CanvasTexture(frostCanvas);
   const capMaterial=material(0x000000,{roughness:.50,bumpMap:frostMap,bumpScale:.00024,metalness:0,transparent:true,opacity:.44,depthWrite:false});
-  const domeLampBrightness=1.6;
+  const domeLampBrightness=.85;
   const bladeCanvas=document.createElement('canvas');bladeCanvas.width=128;bladeCanvas.height=8;
   const bladeContext=bladeCanvas.getContext('2d'),bladeGradient=bladeContext.createLinearGradient(0,0,128,0);
   for(const [stop,alpha] of [[0,0],[.10,.03],[.20,.14],[.30,.41],[.40,.80],[.50,1],[.60,.80],[.70,.41],[.80,.14],[.90,.03],[1,0]])bladeGradient.addColorStop(stop,'rgba(255,255,255,'+alpha+')');
   bladeContext.fillStyle=bladeGradient;bladeContext.fillRect(0,0,128,8);const bladeMap=new T.CanvasTexture(bladeCanvas);bladeMap.colorSpace=T.SRGBColorSpace;
-  const capLineMaterial=material(0x000000,{map:bladeMap,roughness:.98,metalness:0,side:T.DoubleSide,transparent:true,opacity:.72,depthWrite:false}),capRotors=[],capInternalLights=[];
+  const capLineMaterial=material(0x000000,{map:bladeMap,roughness:.98,metalness:0,side:T.DoubleSide,transparent:true,opacity:.72,depthWrite:false,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:2}),capRotors=[],capInternalLights=[];
   const bladeDistanceFade={value:1};
   const domeEmissionTime={value:0};
   // Camera-relative fade across each rotor's full dome-and-tube depth.
@@ -86,6 +86,13 @@ window.createMovieEnterpriseRenderer=()=>{
   const decalMaterial=map=>material(0xffffff,{map,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1,side:T.DoubleSide});
   const pennantMaterial=decalMaterial(details.pennant),portPennantMaterial=decalMaterial(details.portPennant);
   const registryMat=decalMaterial(details.registry),portRegistryMat=decalMaterial(details.portRegistry);
+  for(const paint of [pennantMaterial,portPennantMaterial])paint.opacity=.80;
+  // Fade engine paint while keeping the dark registry lettering crisp.
+  for(const paint of [registryMat,portRegistryMat]){
+    paint.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\nif(diffuseColor.r > diffuseColor.b*1.3 && (diffuseColor.r > diffuseColor.g*1.3 || diffuseColor.g > diffuseColor.b*1.15)) diffuseColor.a *= .80;');};
+    paint.customProgramCacheKey=()=> 'engine-pennant-eighty-percent-opacity-v1';
+    paint.userData.pennantOpacity=.80;
+  }
   function hullDecal(profile,side,level,width,height,mat,center=[0,0,0],segments=96){
     const o=hullWindow(profile,'z',center,side*Math.PI/2,level,width,height,false,segments),uv=o.geometry.attributes.uv;
     for(let i=0;i<uv.count;i++){const u=uv.getX(i),v=uv.getY(i);uv.setXY(i,side>0?1-v:v,side>0?u:1-u);}
@@ -94,7 +101,7 @@ window.createMovieEnterpriseRenderer=()=>{
   const saucerMat=material(0xffffff,{map:details.top,emissive:0xffead0,emissiveMap:details.topGlow,emissiveIntensity:.55,side:T.DoubleSide}),bottomSaucerMat=material(0xffffff,{map:details.bottom,emissive:0xffead0,emissiveMap:details.bottomGlow,emissiveIntensity:.55,side:T.DoubleSide});
   // Keep the mirrored underside UV seam off the rim and avoid coplanar trim.
   const saucerProfile=[[0,-.033],[.31,-.033],[.48,-.033],[.645,-.025],[.650,-.022],[.680,.022],[.674,.029],[.57,.038],[.36,.065],[.18,.078],[0,.078]];
-  const saucer=lathe(saucerProfile,[saucerMat,material(0xffffff,{map:details.rim,emissive:0xffead0,emissiveMap:details.rimGlow,emissiveIntensity:.75,side:T.DoubleSide}),bottomSaucerMat],0,.380,-1.53);saucer.name='movie-saucer';
+  const saucer=lathe(saucerProfile,[saucerMat,material(0xffffff,{map:details.rim,emissive:0xffead0,emissiveMap:details.rimGlow,emissiveIntensity:.75,side:T.DoubleSide}),bottomSaucerMat],0,.380,-1.53);saucer.name='movie-saucer';addRaisedSaucerPanels(T,saucer);
   // Give the vertical rim its own orthographic projection without disturbing
   // the top and bottom planar maps at their shared edges.
   saucer.geometry=saucer.geometry.toNonIndexed();
@@ -114,11 +121,12 @@ window.createMovieEnterpriseRenderer=()=>{
     p.needsUpdate=true;const uv=geometry.attributes.uv;for(let i=0;i<p.count;i++)uv.setXY(i,.5+p.getX(i)/1.38,.5-p.getZ(i)/1.38);uv.needsUpdate=true;geometry.computeVertexNormals();
   }
   const upperHousing=lathe(deckProfile,material(0xffffff,{map:details.deck,emissive:0xffead0,emissiveMap:details.deckGlow,emissiveIntensity:.55,side:T.DoubleSide}),0,.456,-1.53);upperHousing.scale.y=1.05;teardropHousing(upperHousing.geometry);upperHousing.name='upper-saucer-teardrop';
-  lathe([[0,0],[.077,0],[.077,.009],[.071,.022],[.059,.028],[.040,.029],[0,.029]],hull,0,.516,-1.53);
-  box(0,.531,-1.466,.021,.031,.035,hull);
+  const bridgeDome=lathe([[0,0],[.077,0],[.077,.009],[.071,.022],[.059,.028],[.040,.029],[0,.029]],hull,0,.516,-1.53);bridgeDome.name='bridge-dome';carveBridgeHatch(T,bridgeDome,{centerY:.531});
+  const bridgeDockingPort=createBridgeDockingPort(T,{centerY:.531,hull,dome:bridgeDome});model.add(bridgeDockingPort);
   const sensorGlass=material(0xf0e5ce,{emissive:0xffdcc2,emissiveIntensity:1.3,roughness:.3,metalness:.08});
+  sensorGlass.userData.lightLens=true;
   lathe([[0,0],[.036,0],[.036,.003],[0,.003]],edge,0,.544,-1.53);
-  sphere(0,.550,-1.53,.034,.010,.034,sensorGlass);
+  sphere(0,.548,-1.53,.034,.010,.034,sensorGlass);
   // The underside is a broad tapered bowl with a flattened base, not a sphere.
   const bowlProfile=[[0,-.095],[.10,-.095],[.135,-.090],[.17,-.075],[.22,-.044],[.275,-.010],[.29,0],[0,0]];
   const bowl=lathe(bowlProfile,bottomSaucerMat,0,.353,-1.53);bowl.name='movie-underside-bowl';
@@ -152,38 +160,18 @@ window.createMovieEnterpriseRenderer=()=>{
     impulseIndices.push(n,n+1,n+2,n+1,n+3,n+2);
   }
   const impulseGeometry=new T.BufferGeometry();impulseGeometry.setAttribute('position',new T.Float32BufferAttribute(impulsePositions,3));impulseGeometry.setIndex(impulseIndices);impulseGeometry.computeVertexNormals();
-  const impulseHousing=mesh(impulseGeometry,material(0x99a49b,{side:T.DoubleSide}));impulseHousing.name='movie-impulse-housing';
-  for(const side of [-1,1]){
-    const outlet=box(side*.061,.379,-.827,.062,.028,.003,black);outlet.name=(side<0?'port':'starboard')+'-impulse-outlet';
-  }
-  const impulsePort=sphere(0,.379,-.825,.004,.004,.002,black);impulsePort.name='movie-impulse-center-port';
-  // The narrow spine runs from the outer impulse edge to the marked deck
-  // endpoint, retaining its constant width and semicircular nose.
-  // Match the longer endpoint in the supplied green outline, while keeping
-  // the narrow section and rounded nose independent of grid-ring counting.
-  const ridgeHalfWidth=.017,ridgeTipZ=-1.53+.400,ridgeTipCenter=ridgeTipZ+ridgeHalfWidth;
-  const ridgeSections=[[-.828,ridgeHalfWidth],[impulseFrontZ(0),ridgeHalfWidth],[(impulseFrontZ(0)+ridgeTipCenter)/2,ridgeHalfWidth],[ridgeTipCenter,ridgeHalfWidth]],ridgePositions=[],ridgeIndices=[];
-  for(let i=1;i<=20;i++){const a=i/20*Math.PI/2;ridgeSections.push([ridgeTipCenter-ridgeHalfWidth*Math.sin(a),ridgeHalfWidth*Math.cos(a)]);}
+  const impulseHousing=mesh(impulseGeometry,material(0x5a6065,{roughness:.92,metalness:.12,side:T.DoubleSide}));impulseHousing.name='movie-impulse-housing';
+  const impulseGrates=addRecessedImpulseGrates(T,impulseHousing,impulseOutline,saucer);model.add(impulseGrates);
+  // A continuous half-round spine ends in a semicircle on the impulse roof.
   const deckHeight=r=>{
     const levels=[[.18,.078],[.36,.065],[.57,.038],[.674,.029],[.680,.022]];
     for(let i=1;i<levels.length;i++)if(r<=levels[i][0]){const [a,ya]=levels[i-1],[b,yb]=levels[i];return .380+ya+(yb-ya)*(r-a)/(b-a);}
     return .402;
   };
-  for(const [z,halfWidth] of ridgeSections){
-    const centerY=deckHeight(Math.abs(z+1.53));
-    // At the outer edge, only the portion above the impulse face is exposed.
-    // Starting its cap at the housing top avoids two coplanar faces fighting.
-    for(const [x,top] of [[-halfWidth,false],[-halfWidth,true],[halfWidth,true],[halfWidth,false]])ridgePositions.push(x,top?centerY+.011:z===-.828?.405:deckHeight(Math.hypot(z+1.53,x))-.006,z);
-  }
-  for(let row=0;row<ridgeSections.length-1;row++)for(let col=0;col<4;col++){
-    const a=row*4+col,b=row*4+(col+1)%4,c=a+4,d=b+4;ridgeIndices.push(a,b,c,b,d,c);
-  }
-  // Give the flat rear cap independent vertices so it cannot bend the top
-  // normals into a dark triangular crease. The rounded nose closes naturally.
-  const ridgeCap=ridgePositions.length/3;ridgePositions.push(...ridgePositions.slice(0,12));
-  ridgeIndices.push(ridgeCap,ridgeCap+2,ridgeCap+1,ridgeCap,ridgeCap+3,ridgeCap+2);
-  const ridgeGeometry=new T.BufferGeometry();ridgeGeometry.setAttribute('position',new T.Float32BufferAttribute(ridgePositions,3));ridgeGeometry.setIndex(ridgeIndices);ridgeGeometry.computeVertexNormals();
-  const impulseRidge=mesh(ridgeGeometry,hullDouble);impulseRidge.name='movie-impulse-dorsal-ridge';
+  const ridgeGeometry=createImpulseSpineGeometry(T,{deckHeight,housingGeometry:impulseGeometry,domeGeometry:upperHousing.geometry,domeZ:upperHousing.position.z,domeY:upperHousing.position.y,domeScaleY:upperHousing.scale.y});
+  const ridgeMaterial=hullDouble.clone();ridgeMaterial.polygonOffset=true;ridgeMaterial.polygonOffsetFactor=1;ridgeMaterial.polygonOffsetUnits=2;
+  const ridgeEndMaterial=impulseHousing.material.clone();ridgeEndMaterial.polygonOffset=true;ridgeEndMaterial.polygonOffsetFactor=1;ridgeEndMaterial.polygonOffsetUnits=2;
+  const impulseRidge=mesh(ridgeGeometry,[ridgeMaterial,ridgeEndMaterial]);impulseRidge.name='movie-impulse-dorsal-ridge';addImpulseRidgeStripes(T,model,[impulseRidge,saucer]);
   const impulseAssembly=new T.Group();impulseAssembly.name='movie-impulse-assembly';for(const part of model.children.slice(impulseStart))impulseAssembly.add(part);model.add(impulseAssembly);
   const primaryHull=new T.Group();primaryHull.name='reference-saucer-assembly';for(const part of [...model.children])primaryHull.add(part);primaryHull.position.set(0,.005,.084);model.add(primaryHull);
   const engineeringParts=[];
@@ -231,11 +219,10 @@ window.createMovieEnterpriseRenderer=()=>{
   }
   const pylonMetal=material(0xb1b1b1,{side:T.DoubleSide});
   const strutGrilleMaterial=material(0x3e3e3e,{roughness:.85,metalness:.12,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
+  const pylonTopGrilleMaterial=createRecessedPylonGrilleMaterial(T);
   const finMaterial=hullDouble;
   const nacelleMetal=material(0xffffff,{map:details.nacelle,emissive:0xffead0,emissiveMap:details.nacelleGlow,emissiveIntensity:.5});
-  const inboardChannelMaterial=decalMaterial(details.inboardChannel);
-  const outerGrilleMaterial=decalMaterial(details.outerGrille);
-  const exhaustHoodMaterial=material(0x666666,{roughness:.62,metalness:.18,side:T.DoubleSide}),exhaustInsertMaterial=material(0x788e80,{roughness:.54,metalness:.28});
+  const exhaustHoodMaterial=material(0x484848,{roughness:.62,metalness:.18,side:T.DoubleSide}),exhaustInsertMaterial=material(0x788e80,{roughness:.54,metalness:.28});
   for(const side of [-1,1]){
     // Seat the pylon just inside the shell, leaving the hangar ceiling clear.
     // Keep its slope, outer attachment and visible grille stations unchanged.
@@ -245,11 +232,7 @@ window.createMovieEnterpriseRenderer=()=>{
     strut.geometry.dispose();strut.geometry=new T.BoxGeometry(.040,new T.Vector3(side*.439,.455,-.261).distanceTo(strutRoot),.107,16,1,1);
     strut.name=(side<0?'port':'starboard')+'-engine-strut';
     // Recessed-looking panels follow the upward-facing side of each sloped strut.
-    for(let n=0;n<5;n++){
-      const panel=new T.Mesh(new T.PlaneGeometry(.084,grilleLength/5-.006),strutGrilleMaterial);
-      panel.position.set(-side*.040/2,-grilleLength/2+(n+.5)*grilleLength/5+strutEmbed/2,0);panel.rotation.y=-side*Math.PI/2;
-      panel.name=(side<0?'port':'starboard')+'-strut-top-grille';strut.add(panel);
-    }
+    addPylonGrilleStrip(T,strut,{side,grilleLength,embed:strutEmbed,face:.040/2,material:pylonTopGrilleMaterial});
     // End the pylon and its grille at the nacelle wall, outside the clear bore.
     model.updateWorldMatrix(true,true);
     strut.traverse(o=>{if(!o.isMesh)return;const p=o.geometry.attributes.position;for(let i=0;i<p.count;i++){
@@ -261,13 +244,18 @@ window.createMovieEnterpriseRenderer=()=>{
     for(let i=0;i<=shoeSteps;i++){const a=-side*.45-.40+i*.80/shoeSteps;for(const [r,z] of [[.0779,-.331],[.0779,-.191],[.089,-.331],[.089,-.191]])shoeP.push(side*.439+Math.sin(a)*r,.490-Math.cos(a)*r,z);}
     for(let i=0;i<shoeSteps;i++){const a=i*4,b=a+4;for(const [u,v] of [[0,1],[2,3],[0,2],[1,3]])shoeI.push(a+u,b+u,a+v,a+v,b+u,b+v);}
     shoeI.push(0,1,2,1,3,2,shoeSteps*4,shoeSteps*4+2,shoeSteps*4+1,shoeSteps*4+1,shoeSteps*4+2,shoeSteps*4+3);
-    const shoeG=new T.BufferGeometry();shoeG.setAttribute('position',new T.Float32BufferAttribute(shoeP,3));shoeG.setIndex(shoeI);shoeG.computeVertexNormals();mesh(shoeG,pylonMetal).name=(side<0?'port':'starboard')+'-engine-pylon-shoe';
+    const shoeG=new T.BufferGeometry();shoeG.setAttribute('position',new T.Float32BufferAttribute(shoeP,3));shoeG.setIndex(shoeI);mesh(createPlatedPylonShoeGeometry(T,shoeG,side*.439,.490),pylonMetal).name=(side<0?'port':'starboard')+'-engine-pylon-shoe';
     const engineStart=model.children.length;
     const x=side*.439;
     // Diffuse-only shading removes reflective highlights inside the domes.
     const interiorGray=new T.MeshLambertMaterial({color:0x353535,side:T.DoubleSide});
-    const nacelleProfile=[[capRadius,capSeam],[capRadius,-.75],[.087,.64],[.087,.715],[.08146,.745],[.079,.755],[.068,.78]];
-    lathe(nacelleProfile,[nacelleMetal,hull,exhaustHoodMaterial],x,.515,0,'z',64).name=(side<0?'port':'starboard')+'-engine-outer-tube';
+    const nacelleProfile=[[capRadius,capSeam],[capRadius,capSeam+.006],[capRadius,-.75],[.087,.64],[.087,.715],[.08146,.745],[.079,.755],[.068,.78]];
+    const tube=lathe(nacelleProfile,[nacelleMetal,hull,exhaustHoodMaterial],x,.515,0,'z',64);tube.name=(side<0?'port':'starboard')+'-engine-outer-tube';
+    // The retaining ring owns this first axial band. Remove the duplicate skin;
+    // retain the reference vertices so existing fitting measurements stay fixed.
+    const tubeGroups=tube.geometry.groups.slice(1);tube.geometry.setIndex(Array.from(tube.geometry.index.array).slice(64*6));tube.geometry.clearGroups();
+    for(const group of tubeGroups)tube.geometry.addGroup(group.start-64*6,group.count,group.materialIndex);
+    tube.userData.domeSeam={ringRear:capSeam+.006,referenceFront:capSeam,overlapRemoved:true};
     const rim=lathe([[.0843,capSeam-.001],[.087,capSeam-.001],[.087,capSeam+.006],[.0843,capSeam+.006]],[hullDouble,interiorGray],x,.515,0,'z',64);rim.name=(side<0?'port':'starboard')+'-dome-gray-retaining-rim';rim.geometry.clearGroups();rim.geometry.addGroup(0,64*6*2,0);rim.geometry.addGroup(64*6*2,64*6,1);
     lathe([[.0843,capSeam+.006],[.0843,capSeam-.001]],interiorGray,x,.515,0,'z',64).name=(side<0?'port':'starboard')+'-engine-inner-lip';
     // A slightly flattened dome retains the full cylinder diameter at its rim.
@@ -325,12 +313,12 @@ window.createMovieEnterpriseRenderer=()=>{
       };
       mat.customProgramCacheKey=()=> 'diffuse-spherical-dome-light-v1';
       // Bright diffuse emission mixes amber and green into the red cover.
-      mat.color.multiplyScalar((color==='amber'?3:1.2)*domeLampBrightness);
+      mat.color.multiplyScalar((color==='amber'?1:.8)*domeLampBrightness);
       const lamp=new T.Mesh(g,mat);lamp.position.set(cx*capRadius,cy*capRadius,-.50*Math.sqrt(.0805**2-(cx*capRadius)**2-(cy*capRadius)**2));lamp.scale.z=.90/1.10;lamp.name=color+'-diffuse-dome-light-'+index;lamp.renderOrder=10;lampAssembly.add(lamp);capInternalLights.push({lamp,green:color==='green',seed:index+(side<0?19:71)});
       const redMat=mat.clone();redMat.onBeforeCompile=function(shader){
         mat.onBeforeCompile.call(this,shader);
         shader.fragmentShader=shader.fragmentShader.replace('pow(lampFacing,3.0)','pow(lampFacing,3.45)');
-      };redMat.customProgramCacheKey=()=> 'red-sphere-diffusion-115-percent-v1';redMat.color.setHex(0xff6f1a).multiplyScalar(2*domeLampBrightness);redMat.opacity=.40;
+      };redMat.customProgramCacheKey=()=> 'red-sphere-diffusion-115-percent-v1';redMat.color.setHex(0xff6f1a).multiplyScalar(domeLampBrightness);redMat.opacity=.40;
       const redLamp=new T.Mesh(g,redMat),angle=-Math.PI/6,c=Math.cos(angle),s=Math.sin(angle);
       // Negative Z rotation reads counterclockwise when looking into the front.
       redLamp.position.set(1.32*(lamp.position.x*c-lamp.position.y*s),1.32*(lamp.position.x*s+lamp.position.y*c),lamp.position.z+.018);redLamp.scale.copy(lamp.scale).multiplyScalar(1.05);redLamp.name='red-diffuse-dome-light-'+index;redLamp.renderOrder=9;redLampAssembly.add(redLamp);capInternalLights.push({lamp:redLamp,red:true,seed:index+(side<0?156:208)});
@@ -358,14 +346,14 @@ window.createMovieEnterpriseRenderer=()=>{
     const hoodGeo=new T.BufferGeometry();hoodGeo.setAttribute('position',new T.Float32BufferAttribute(hoodPositions,3));hoodGeo.setIndex(hoodIndices);hoodGeo.computeVertexNormals();const exhaustHood=mesh(hoodGeo,[exhaustHoodMaterial,interiorGray]);exhaustHood.name=(side<0?'port':'starboard')+'-rear-exhaust-hood';
     // Rounded ribs run along the engine axis, from the cowl's forward seam
     // to its swept aft edge. Their ends blend into the curved shell.
-    for(let rib=0;rib<12;rib++){
+    const cowlingRibCount=48;
+    for(let rib=0;rib<cowlingRibCount;rib++){
       const positions=[],indices=[],section=[[-1,0],[-.5,.0014],[0,.0021],[.5,.0014],[1,0]];
       for(let n=0;n<=hoodSteps;n++){
-        const t=n/hoodSteps,centerAngle=-Math.PI+(rib+.5)/12*Math.PI*2;
-        const shortScale=Math.min(1,(hoodCut(centerAngle)-.736)/.05);
+        const t=n/hoodSteps,centerAngle=-Math.PI+(rib+.5)/cowlingRibCount*Math.PI*2;
         for(const [offset,lift] of section){
-          const a=centerAngle+offset*.026*shortScale,cut=hoodCut(a);
-          const endBlend=Math.min(1,t/.08,(1-t)/.08),r=.0871+lift*endBlend*shortScale,z=.736+(cut-.736)*t;
+          const a=centerAngle+offset*.050,cut=hoodCut(a);
+          const endBlend=Math.min(1,t/.08,(1-t)/.08),r=.0871+lift*endBlend,z=.736+(cut-.736)*t;
           positions.push(x+Math.sin(a)*r,.515+Math.cos(a)*r,z);
         }
       }
@@ -375,45 +363,28 @@ window.createMovieEnterpriseRenderer=()=>{
       const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(positions,3));geo.setIndex(indices);geo.computeVertexNormals();
       const ridge=mesh(geo,exhaustHoodMaterial);ridge.name=(side<0?'port':'starboard')+'-rear-cowling-ridge-'+rib;
     }
-    // Forward inboard and rear upper fins share the same section and dimensions.
+    // Forward inboard fittings are open rounded handles; aft fins have solid rounded webs.
     for(const angle of [-Math.PI/4,Math.PI/4,-side*Math.PI/2]){
       const width=.0155,tip=.113;
-      const section=[[.27,.083],[.278,.096],[.294,.105],[.316,.109],[.622,.109],[.657,.105],[.677,.097],[.685,.083]],vertices=[],indices=[];
-      const finZ=z=>.314+(z-.27)*.841;
-      const radialX=Math.sin(angle),radialY=Math.cos(angle),tangentX=Math.cos(angle),tangentY=-Math.sin(angle);
-      const finRadius=r=>.083+(r-.083)*(tip-.083)/(.109-.083);
-      for(const offset of [-width/2,width/2])for(const [z,r] of section){const radius=finRadius(r);vertices.push(x+radialX*radius+tangentX*offset,.515+radialY*radius+tangentY*offset,finZ(z));}
-      const count=section.length;for(let i=1;i<count-1;i++)indices.push(0,i+1,i,count,count+i,count+i+1);
-      for(let i=0;i<count;i++){const n=(i+1)%count;indices.push(i,n,i+count,n,n+count,i+count);}
-      const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geo.setIndex(indices);
-      const faces=geo.toNonIndexed();faces.computeVertexNormals();const fin=mesh(faces,finMaterial);const inboard=Math.abs(angle)===Math.PI/2;fin.name=(side<0?'port':'starboard')+(inboard?'-inboard-engine-fin':'-aft-engine-fin');fin.userData.referenceDimensions={width,tip,inboard,angle};
-    }
-    // A raised rectangular vent sits aft of the pennant's tail, clear of paint.
-    const ventZ=.62,ventRadius=radiusAt(nacelleProfile,ventZ);
-    const ventHousing=box(x+side*(ventRadius-.001),.515,ventZ,.014,.052,.125,hull);
-    ventHousing.name=(side<0?'port':'starboard')+'-raised-aft-engine-vent';
-    const outerGrille=mesh(new T.PlaneGeometry(.119,.046),outerGrilleMaterial,x+side*(ventRadius+.0061),.515,ventZ);
-    outerGrille.rotation.y=side*Math.PI/2;outerGrille.name=(side<0?'port':'starboard')+'-outer-service-grille';
-    for(let n=0;n<12;n++){
-      const slat=box(x+side*(ventRadius+.00625),.515-.018+n*.00327,ventZ,.0002,.0007,.113,strutGrilleMaterial);
-      slat.name=(side<0?'port':'starboard')+'-aft-engine-vent-slat-'+n;
+      if(Math.abs(angle)===Math.PI/2){const fin=mesh(createEngineHandleFinGeometry(T,{x,centerY:.515,angle,width,tip}),finMaterial);fin.name=(side<0?'port':'starboard')+'-inboard-engine-fin';fin.userData.referenceDimensions={width,tip,inboard:true,angle};continue;}
+      const aftWidth=.0165,aftTip=.109,fin=mesh(createSolidEngineFinGeometry(T,{x,centerY:.515,angle,width:aftWidth,tip:aftTip}),finMaterial);fin.name=(side<0?'port':'starboard')+'-aft-engine-fin';fin.userData.referenceDimensions={width:aftWidth,tip:aftTip,inboard:false,angle};
     }
     // Three matching clamps share one axial station. Mirroring the side angles
     // puts the inboard and outboard clamps at exactly the same elevation.
-    const clampStart=-.775,clampEnd=-.660,clampHalfArc=.50;
+    const clampScale=.90,clampCenter=(-.775-.660)/2,clampStart=clampCenter-.115*clampScale/2,clampEnd=clampCenter+.115*clampScale/2,clampHalfArc=.50*clampScale;
     for(const [location,clampAngle] of [['outboard',side*(Math.PI/2-.43)],['inboard',-side*(Math.PI/2-.43)],['bottom',0]]){
     const clampPositions=[],clampIndices=[],clampRows=30,clampCols=24;
     for(let row=0;row<=clampRows;row++)for(let col=0;col<=clampCols;col++){
       const z=clampStart+(clampEnd-clampStart)*row/clampRows,a=clampAngle+(col/clampCols-.5)*clampHalfArc*2;
-      const edge=Math.min((z-clampStart)/.012,(clampEnd-z)/.012,(a-clampAngle+clampHalfArc)/.07,(clampAngle+clampHalfArc-a)/.07);
-      const t=Math.max(0,Math.min(1,edge)),radius=radiusAt(nacelleProfile,z)+.009*t*t*(3-2*t);
+      const edge=Math.min((z-clampStart)/(.012*clampScale),(clampEnd-z)/(.012*clampScale),(a-clampAngle+clampHalfArc)/(.07*clampScale),(clampAngle+clampHalfArc-a)/(.07*clampScale));
+      const t=Math.max(0,Math.min(1,edge)),radius=radiusAt(nacelleProfile,z)+.009*clampScale*t*t*(3-2*t);
       clampPositions.push(x+Math.sin(a)*radius,.515-Math.cos(a)*radius,z);
     }
     for(let row=0;row<clampRows;row++)for(let col=0;col<clampCols;col++){
       const a=row*(clampCols+1)+col,b=a+clampCols+1;clampIndices.push(a,b,a+1,a+1,b,b+1);
     }
     const clampGeometry=new T.BufferGeometry();clampGeometry.setAttribute('position',new T.Float32BufferAttribute(clampPositions,3));clampGeometry.setIndex(clampIndices);clampGeometry.computeVertexNormals();
-    const clamp=mesh(clampGeometry,hullDouble);clamp.name=(side<0?'port':'starboard')+'-'+location+'-forward-engine-clamp';clamp.userData.raisedDepth=.009;
+    const clamp=mesh(clampGeometry,hullDouble);clamp.name=(side<0?'port':'starboard')+'-'+location+'-forward-engine-clamp';clamp.userData.raisedDepth=.009*clampScale;
     }
     // Continuous circumferential grooves run behind the raised clamp.
     for(let n=0;n<5;n++){
@@ -422,9 +393,10 @@ window.createMovieEnterpriseRenderer=()=>{
       rib.material=strutGrilleMaterial;rib.name=(side<0?'port':'starboard')+'-forward-clamp-vent-'+n;
     }
     const registryDecal=hullDecal(nacelleProfile,side,-.03,.068,1.03,side<0?portRegistryMat:registryMat,[x,.515,0],64);registryDecal.name=(side<0?'port':'starboard')+'-nacelle-registry';
-    const channel=hullDecal(nacelleProfile,-side,-.08,.052,.94,inboardChannelMaterial,[x,.515,0],64);channel.name=(side<0?'port':'starboard')+'-dark-inboard-channel';
     const rotor=new T.Group();rotor.name=side<0?'port-cap-lines':'starboard-cap-lines';rotor.position.set(x,.515,capSeam+.0006);rotor.scale.z=.864;model.add(rotor);capRotors.push({rotor,side});
-    // Curved radial ribbons continue from the dome into the engine tube.
+    // Keep the rotating ribbons inside the narrow retaining lip as they
+    // transition from the dome into the tube, clear of the faceted lining.
+    const bladeTubeRadius=.0805;
     for(let n=0;n<12;n++){
       const positions=[],indices=[],uv=[];
       const rows=48,startAngle=Math.asin(.009/capRadius);
@@ -432,14 +404,14 @@ window.createMovieEnterpriseRenderer=()=>{
         // Sample the spherical arc all the way to its equator/rear rim.
         const u=j/rows,theta=startAngle+u*(Math.PI/2-startAngle),r=capRadius*Math.sin(theta),a=n*Math.PI/6+u*.15,half=15*(.0012+r*.012)/r;
         for(const [across,t] of [[0,a-half],[1,a+half]]){
-          const surfaceRadius=capRadius-.001,x=Math.sin(t)*Math.sin(theta)*surfaceRadius,y=Math.cos(t)*Math.sin(theta)*surfaceRadius,z=-Math.cos(theta)*surfaceRadius;
+          const surfaceRadius=capRadius-.0035,radial=Math.min(Math.sin(theta)*surfaceRadius,bladeTubeRadius),x=Math.sin(t)*radial,y=Math.cos(t)*radial,z=-Math.cos(theta)*surfaceRadius;
           positions.push(x,y,z);
           uv.push(across,u);
         }
       }
       const tubeRows=32,tubeDepth=.350;
       for(let j=1;j<=tubeRows;j++){
-        const u=j/tubeRows,r=capRadius-.001-.001*u,a=n*Math.PI/6+.15,half=15*(.0012+capRadius*.012)/capRadius;
+        const u=j/tubeRows,r=bladeTubeRadius-.0005*u,a=n*Math.PI/6+.15,half=15*(.0012+capRadius*.012)/capRadius;
         for(const [across,t] of [[0,a-half],[1,a+half]]){positions.push(Math.sin(t)*r,Math.cos(t)*r,tubeDepth*u/rotor.scale.z);uv.push(across,1+u);}
       }
       for(let j=0;j<rows+tubeRows;j++){const i=j*2;indices.push(i,i+1,i+2,i+1,i+3,i+2);}
@@ -464,14 +436,14 @@ window.createMovieEnterpriseRenderer=()=>{
       p.needsUpdate=true;o.geometry.computeVertexNormals();
     });
     assembly.position.z+=.157;assembly.position.y-=.025;
-    // Slide the inboard fin forward until its leading edge bisects the pylon.
+    // Initial fitting placement; the inboard panel sets the final axial proportions.
     assembly.updateWorldMatrix(true,true);
     const inboardFin=assembly.getObjectByName((side<0?'port':'starboard')+'-inboard-engine-fin'),finPositions=inboardFin.geometry.attributes.position;
     let finFront=Infinity;
     for(let i=0;i<finPositions.count;i++)finFront=Math.min(finFront,new T.Vector3().fromBufferAttribute(finPositions,i).applyMatrix4(inboardFin.matrixWorld).z);
     inboardFin.position.z+=(strut.getWorldPosition(new T.Vector3()).z-finFront)/assembly.scale.z;
     // Grow about each fin's existing center station and casing attachment.
-    // Apply after registration so the inboard fins do not get repositioned.
+    // The service-panel helper registers the forward handles after this growth.
     for(const fin of assembly.children.filter(o=>o.isMesh&&/-engine-fin$/.test(o.name))){
       const p=fin.geometry.attributes.position,{angle}=fin.userData.referenceDimensions,growth=1.15,rx=Math.sin(angle),ry=Math.cos(angle);
       let z0=Infinity,z1=-Infinity;for(let i=0;i<p.count;i++){z0=Math.min(z0,p.getZ(i));z1=Math.max(z1,p.getZ(i));}
@@ -620,10 +592,48 @@ window.createMovieEnterpriseRenderer=()=>{
     }
     p.needsUpdate=true;o.geometry.computeVertexNormals();
   }
+  function addPennantFrontDetails(side){
+    const prefix=side<0?'port':'starboard',centerY=0,front=forwardPadStart+.006,rear=-.950,halfHeight=.030;
+    const trim=material(0xa1ada2,{roughness:.6,metalness:.25});
+    // The raised backing retains its hull finish beneath the grille.
+    const lineFront=front+.014;
+    for(const [edge,height]of [['upper',.024],['lower',-.024]]){
+      const lineRear=front+(rear-front)*(edge==='upper'?.55:.90),positions=[],indices=[],rows=128,segments=20,capLength=.002;
+      for(let row=0;row<=rows;row++){
+        const level=lineFront+(lineRear-lineFront)*row/rows,edgeDistance=Math.min(level-lineFront,lineRear-level),t=Math.min(1,edgeDistance/capLength),round=Math.sqrt(Math.max(0,1-(1-t)*(1-t)));
+        for(let n=0;n<=segments;n++){
+          const angle=n/segments*Math.PI*2,h=height+Math.sin(angle)*.0014*round,distance=padFaceAt(-side*h,level,side*Math.PI/2);
+          positions.push(side*(distance+.0012+Math.cos(angle)*.0018*round),centerY+h,level);
+        }
+      }
+      for(let row=0;row<rows;row++)for(let n=0;n<segments;n++){const a=row*(segments+1)+n,b=a+segments+1;indices.push(a,a+1,b,a+1,b+1,b);}
+      const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();
+      const rail=mesh(geometry,trim);rail.material.side=T.DoubleSide;rail.name=prefix+'-pennant-'+edge+'-raised-line';rail.userData={front:lineFront,rear:lineRear,height:centerY+height,projection:.0024,roundedEnds:true,frontSetback:.014,edgePadding:.0046};engineeringParts.push(rail);
+    }
+    // Eleven thicker solid ribs follow the hull face and its slanted aft edge.
+    const grille=new T.Group();grille.name=prefix+'-forward-hull-service-grille';
+    const ribMaterial=material(0x66766a,{roughness:.69,metalness:.24}),grilleFront=forwardPadStart;
+    grille.userData={raisedRidges:11,panelFront:front,panelRear:rear,front:grilleFront,topRear:grilleFront+.105,bottomRear:grilleFront+.130,projection:.0019};
+    for(let row=0;row<11;row++){
+      const t=row/10,height=.017-t*.034,ribRear=grilleFront+.105+t*.025,positions=[],indices=[],sections=24;
+      for(let col=0;col<=sections;col++){
+        const level=grilleFront+(ribRear-grilleFront)*col/sections;
+        for(const [dh,lift]of [[-.00075,.00025],[-.00075,.0019],[.00075,.0019],[.00075,.00025]]){
+          const h=height+dh,distance=padFaceAt(-side*h,level,side*Math.PI/2);
+          positions.push(side*(distance+lift),centerY+h,level);
+        }
+      }
+      for(let col=0;col<sections;col++)for(let corner=0;corner<4;corner++){const a=col*4+corner,b=col*4+(corner+1)%4;indices.push(a,b,a+4,b,b+4,a+4);}
+      indices.push(0,2,1,0,3,2);const last=sections*4;indices.push(last,last+1,last+2,last,last+2,last+3);
+      const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();
+      const rib=new T.Mesh(geometry,ribMaterial);rib.material.side=T.DoubleSide;rib.name=prefix+'-front-grille-ridge-'+row;rib.userData={front:grilleFront,rear:ribRear,height:centerY+height};grille.add(rib);
+    }
+    model.add(grille);engineeringParts.push(grille);
+  }
   for(const side of [-1,1]){
     const on=side<0?0xff5144:0x69e991,off=side<0?0x442823:0x243e2a;
     const surfaceY=.380+.029+(.674-.635)*.009/.104;
-    const lens=sphere(side*.635,surfaceY+.002,-1.53,.012,.008,.012,material(on,{emissive:on,emissiveIntensity:.8,roughness:.22,metalness:0}));
+    const lens=sphere(side*.635,surfaceY+.002,-1.53,.012,.008,.012,new T.MeshBasicMaterial({color:on,toneMapped:false}));
     lens.name=side<0?'port-red-navigation-light':'starboard-green-navigation-light';
     primaryHull.add(lens);
     navigationLights.push({lens,on,off,fade:true,onColor:new T.Color(on),offColor:new T.Color(off)});
@@ -634,9 +644,10 @@ window.createMovieEnterpriseRenderer=()=>{
     runningLight.name=(side<0?'port':'starboard')+'-saucer-underside-running-light';primaryHull.add(runningLight);
     navigationLights.push({lens:runningLight,on:0xffedcd,off:0x25251e});
     engineeringParts.push(createForwardPad((side<0?'port':'starboard')+'-raised-forward-pennant-pad',side*Math.PI/2,hullDouble));
-    const serviceGrille=hullDecal(forwardProfile,side,-1.147,.046,.064,decalMaterial(details.secondaryServiceGrille),[0,0,0],secondarySegments);serviceGrille.name=(side<0?'port':'starboard')+'-forward-hull-service-grille';followForwardPad(serviceGrille,side*Math.PI/2,.00005);engineeringParts.push(serviceGrille);
+    addPennantFrontDetails(side);
     const pennantLength=.563/engineeringShape.bodyScale;
-    const hullPennant=hullDecal(forwardProfile,side,-.5925-pennantLength/2,.068,pennantLength,side<0?portPennantMaterial:pennantMaterial,[0,0,0],secondarySegments);hullPennant.name=(side<0?'port':'starboard')+'-secondary-pennant';followForwardPad(hullPennant,side*Math.PI/2,.00005);engineeringParts.push(hullPennant);
+    const hullPennant=hullDecal(forwardProfile,side,-.430-pennantLength/2,.068,pennantLength,side<0?portPennantMaterial:pennantMaterial,[0,0,0],secondarySegments);hullPennant.name=(side<0?'port':'starboard')+'-secondary-pennant';followForwardPad(hullPennant,side*Math.PI/2,.00005);hullPennant.userData={combinedPaintLayer:true,hullClearance:.00005};engineeringParts.push(hullPennant);
+
   }
   // The same rectangular template below; per-cell UVs preserve its seam.
   const ventralPad=new T.Group();ventralPad.name='ventral-raised-forward-hull-pad';model.add(ventralPad);
@@ -667,7 +678,7 @@ window.createMovieEnterpriseRenderer=()=>{
   enclosed(mesh(doorFrame.throat,framePaint),'movie-hangar-door-return');
   enclosed(arch(.083,.071,0,Math.PI,-.018,-.283,.007,material(0x727b7e,{side:T.DoubleSide})),'movie-hangar-ceiling');
   for(const side of [-1,1]){
-    enclosed(box(side*.087,-.019,-.149,.012,.060,.262,interior),(side<0?'port':'starboard')+'-hangar-wall');
+    enclosed(cutShuttleBaySideWall(T,box(side*.087,-.019,-.149,.012,.060,.262,interior)),(side<0?'port':'starboard')+'-hangar-wall');
     // Keep the full interior arch behind the recessed door return. These
     // structural shoulders sit outside the ceiling instead of narrowing
     // the whole bay to the clamshell's smaller frontal outline.
@@ -685,9 +696,9 @@ window.createMovieEnterpriseRenderer=()=>{
   }
   const bayDoorLeaves=[],bayDoors=new T.Group();bayDoors.name='shuttle-bay-clamshell-doors';
   const upperLampY=doorFrame.profile.lampY;
-  bayDoors.position.set(0,doorFrame.profile.cy,.018);bayDoors.scale.set(doorFrame.profile.rx,doorFrame.profile.ry,.048);model.add(bayDoors);
+  bayDoors.position.set(0,doorFrame.profile.cy,doorFrame.profile.hingeDepth);bayDoors.scale.set(doorFrame.profile.rx,doorFrame.profile.ry,.048);model.add(bayDoors);
   const bayDoorPaint=hullDouble;
-  const doorSeamMaterial=hullDouble;
+  const doorSeamMaterial=material(0x637169,{roughness:.78,metalness:.15,side:T.DoubleSide});
   // Concentric tracks let the inner leaves tuck behind each successive leaf.
   function shellLeaf(start,end,layer,mat){
     const positions=[],indices=[],rows=28,cols=10,r=1+layer*.008;
@@ -703,18 +714,21 @@ window.createMovieEnterpriseRenderer=()=>{
     return new T.Mesh(g,mat);
   }
   for(const side of [-1,1])for(let n=0;n<3;n++){
-    const span=Math.PI/6,start=side*n*span,end=side*((n+1)*span+(n<2?.025:0)),leaf=new T.Group();
+    // Matching 30-degree curved segments foreshorten toward the sides.
+    const span=Math.PI/6,start=side*n*span,end=side*(n+1)*span,leaf=new T.Group();
     leaf.name=(side<0?'port':'starboard')+'-clamshell-leaf-'+n;
     leaf.add(shellLeaf(start,end,n,bayDoorPaint));
-    leaf.add(shellLeaf(start,start+side*.010,n+.2,doorSeamMaterial));
-    bayDoors.add(leaf);bayDoorLeaves.push({leaf,side,n,span});
+    const overlap=shellLeaf(end,end+side*.025,n,bayDoorPaint);overlap.name='clamshell-outboard-overlap';leaf.add(overlap);
+    if(n>0){const gasket=shellLeaf(start-side*.012,start,n-.2,doorSeamMaterial);gasket.name='clamshell-joint-gasket';leaf.add(gasket);}
+    const seam=shellLeaf(start,start+side*.009,n+.3,doorSeamMaterial);seam.name='clamshell-segment-edge';leaf.add(seam);
+    bayDoors.add(leaf);bayDoorLeaves.push({leaf,side,n,startAngle:Math.abs(start)});
   }
   let bayDoorOpen=1,lastDoorTime;
   function setBayDoorOpen(value){
-    bayDoorOpen=Math.max(0,Math.min(1,value));
+    bayDoorOpen=Math.max(0,Math.min(1,value));model.userData.bayDoorOpen=bayDoorOpen;
     const eased=bayDoorOpen*bayDoorOpen*(3-2*bayDoorOpen);
     // The center leaf collects its neighbors in sequence into one side stack.
-    for(const {leaf,side,n,span} of bayDoorLeaves)leaf.rotation.y=side*Math.max(0,eased*(Math.asin(.90)+n*.012)-n*span);
+    for(const {leaf,side,n,startAngle} of bayDoorLeaves)leaf.rotation.y=side*Math.max(0,eased*(Math.asin(.90)+n*.024)-startAngle);
     bayDoors.userData.open=bayDoorOpen;
     bayDoors.userData.apertureOpen=bayDoorOpen*.90;
   }
@@ -725,16 +739,17 @@ window.createMovieEnterpriseRenderer=()=>{
   for(let n=0;n<=40;n++){const a=n*Math.PI/40;outline.push([Math.cos(a)*.085,.008+Math.sin(a)*.074]);}
   const wallGeo=createGarageBulkheadGeometry(T,outline,-.278,-.290);
   enclosed(mesh(wallGeo,material(0x778177,{side:T.DoubleSide})),'movie-hangar-forward-bulkhead');
-  enclosed(box(0,-.051,-.1155,.18,.009,.319,deck),'movie-hangar-floor');
+  enclosed(box(0,-.04925,(-.275+shuttleBayFloorFront())/2,.18,.0125,shuttleBayFloorFront()+.275,deck),'movie-hangar-floor');
   for(const side of [-1,1]){
     const redLamp=box(side*.055,doorFrame.profile.floor-.008/doorFrame.profile.scaleY,doorFrame.profile.baseFront+.001,.022,.002/doorFrame.profile.scaleY,.002,red);redLamp.name=(side<0?'port':'starboard')+'-hangar-red-light';
     const yellowLamp=box(side*.025,doorFrame.profile.floor-.014/doorFrame.profile.scaleY,doorFrame.profile.baseFront+.001,.0018,.011/doorFrame.profile.scaleY,.002,amber);yellowLamp.name=(side<0?'port':'starboard')+'-hangar-yellow-light';
   }
   const greenLamp=box(0,doorFrame.profile.floor-.008/doorFrame.profile.scaleY,doorFrame.profile.baseFront+.001,.024,.002/doorFrame.profile.scaleY,.002,glow(0x64c995));greenLamp.name='hangar-green-light';
+  addHangarLandingLights(T,model,doorFrame.profile,hullDouble);
   const doorCrown=doorFrame.profile.cy+doorFrame.profile.ry,beaconScale=doorFrame.profile.scaleY;
-  enclosed(box(0,upperLampY+.0015/beaconScale,doorFrame.profile.lampFront-.005,.018,.013/beaconScale,.010,framePaint),'hangar-upper-light-mount');
-  const upperLamp=box(0,upperLampY,doorFrame.profile.lampFront+.001,.010,.007/beaconScale,.002,amber);upperLamp.name='hangar-upper-yellow-light';
-  model.add(createHangarRoofBeacon(T,beaconScale,hullDouble));
+  enclosed(box(0,upperLampY+.0015/beaconScale,doorFrame.profile.lampFront-.015,.018,.013/beaconScale,.010,framePaint),'hangar-upper-light-mount');
+  const upperLamp=box(0,upperLampY,doorFrame.profile.lampFront-.009,.010,.007/beaconScale,.002,amber);upperLamp.name='hangar-upper-white-light';addHangarWhiteLamp(T,upperLamp);
+  model.add(createHangarRoofBeacon(T,beaconScale,hullDouble,engineeringShape.bodyScale));
   box(0,doorCrown+.0055/beaconScale,doorFrame.profile.roofFront+.001,.007,.0015/beaconScale,.002,white);
   // Reference-style fittings share the registered bay's existing transforms.
   const bayInterior=createShuttleBayInterior(T,{fitDoorShoulders:true,storageScaleY:.162/.128,storageScaleZ:1/engineeringShape.bodyScale});model.add(bayInterior);
@@ -743,12 +758,12 @@ window.createMovieEnterpriseRenderer=()=>{
   const engineeringAssembly=new T.Group();engineeringAssembly.name='reference-engineering-assembly';for(const part of engineeringParts)engineeringAssembly.add(part);engineeringAssembly.scale.z=engineeringShape.bodyScale;model.add(engineeringAssembly);
   model.userData.referenceDimensions={bodyScale:engineeringShape.bodyScale,bayScaleY:bayAssembly.scale.y,bayOffsetY:bayAssembly.position.y,saucerDiameter:1.36};
   model.position.z=-.032;
-  let lastW=0,lastH=0;
-  function draw(ctx,w,h,m,s){
+  function draw(ctx,w,h,m,s,updateOnly=false){
+    bridgeDockingPort.updateHatch();
     bayInterior.setGarageDoorOpen(m.garageDoorOpen??0);
     // Viewed head-on, +Z rotation is clockwise: port spins opposite starboard.
     const rotorTime=Number.isFinite(s.time)?s.time:(m.clock||0);
-    domeEmissionTime.value=rotorTime;
+    domeEmissionTime.value=rotorTime;impulseGrates.userData.updateGlow(rotorTime);
     for(const {rotor,side} of capRotors)rotor.rotation.z=-side*rotorTime*Math.PI*.75;
     for(const {lamp,green,red,seed} of capInternalLights){
       if(green){
@@ -759,7 +774,7 @@ window.createMovieEnterpriseRenderer=()=>{
         const random=n=>{const v=Math.sin(n*127.1+seed*311.7)*43758.5453;return v-Math.floor(v);};
         const pulse=random(frame)*(1-smooth)+random(frame+1)*smooth;
         lamp.material.opacity=red?.15+.35*pulse:.08+.92*pulse;
-        lamp.material.color.setHex(red?0xff6f1a:0xffcf45).multiplyScalar((red?1+1.5*pulse:1.4+2.6*pulse)*domeLampBrightness);
+        lamp.material.color.setHex(red?0xff6f1a:0xffcf45).multiplyScalar((.6+.4*pulse)*domeLampBrightness);
       }
     }
     const doorDt=lastDoorTime===undefined?0:Math.max(0,Math.min(.1,rotorTime-lastDoorTime));lastDoorTime=rotorTime;
@@ -767,16 +782,16 @@ window.createMovieEnterpriseRenderer=()=>{
     else if(m.phase){
       const range=Math.hypot(m.x,m.y,m.z-110);
       const wantOpen=m.phase==='docking'||m.phase==='flight'&&(range<3||(m.clock||0)<6)||m.phase==='landed'&&(m.clock||0)<6;
-      setBayDoorOpen(bayDoorOpen+Math.sign((wantOpen?1:0)-bayDoorOpen)*Math.min(Math.abs((wantOpen?1:0)-bayDoorOpen),doorDt/2.4));
+      setBayDoorOpen(advanceHangarDoor(bayDoorOpen,wantOpen?1:0,doorDt));
     }
     const navigationFlash=((rotorTime%2)+2)%2<.5;
     const navigationPulse=.5-.5*Math.cos(rotorTime*Math.PI*2/3);
     for(const {lens,on,off,fade,onColor,offColor} of navigationLights){
-      if(fade){lens.material.color.copy(offColor).lerp(onColor,navigationPulse);lens.material.emissive.copy(lens.material.color);lens.material.emissiveIntensity=.8*navigationPulse;}
+      if(fade){lens.material.color.copy(offColor).lerp(onColor,navigationPulse);lens.material.emissive?.copy(lens.material.color);if(lens.material.emissive)lens.material.emissiveIntensity=.8*navigationPulse;}
       else{const color=navigationFlash?on:off;lens.material.color.setHex(color);lens.material.emissive?.setHex(color);}
     }
-    const rw=Math.min(1920,Math.round(w)),rh=Math.round(h*rw/w);
-    if(lastW!==rw||lastH!==rh){renderer.setSize(rw,rh,false);lastW=rw;lastH=rh;}
+    if(updateOnly)return null;
+    SimPerformance.resize(renderer,w,h);
     const zoom=Math.max(.5,Math.min(8,s.cameraZoom||1));
     camera.near=Math.max(.005,Math.min(10,Math.hypot(m.x,m.y,m.z-110)*.01));
     camera.fov=2*Math.atan(h/(2*w*.65*zoom))*180/Math.PI;camera.aspect=w/h;camera.updateProjectionMatrix();
@@ -788,11 +803,13 @@ window.createMovieEnterpriseRenderer=()=>{
     return {x:(bay.x+1)*w/2,y:(1-bay.y)*h/2,visible:bay.z>=-1&&bay.z<=1};
   }
   const hullSurfaceDetail=createMovieHullSurfaceDetail(T,Math.min(8,renderer.capabilities.getMaxAnisotropy()));
-  for(const material of new Set([hull,hullDouble,bayDoorPaint,pylonMetal,upperHousing.material]))hullSurfaceDetail.apply(material,0);
-  hullSurfaceDetail.apply(saucerMat,1);hullSurfaceDetail.apply(bottomSaucerMat,1);
-  hullSurfaceDetail.apply(saucer.material[1],4);hullSurfaceDetail.apply(secondaryHull.material[0],2);hullSurfaceDetail.apply(nacelleMetal,3);
+  for(const material of new Set([hull,hullDouble,ridgeMaterial,bayDoorPaint,upperHousing.material]))hullSurfaceDetail.apply(material,0);
+  hullSurfaceDetail.apply(pylonMetal,0,{bareMetal:true,physical:true});
+  hullSurfaceDetail.apply(saucerMat,1);hullSurfaceDetail.apply(bottomSaucerMat,1,{paintUnderlay:true});
+  hullSurfaceDetail.apply(saucer.material[1],4);hullSurfaceDetail.apply(secondaryHull.material[0],2,{paintUnderlay:'underside',paintOpacity:.65});hullSurfaceDetail.apply(nacelleMetal,3,{paintUnderlay:'engine-front-brown'});
   hullSurfaceDetail.apply(bayFairing.material,5);
-  hullSurfaceDetail.prepare(model);
+  resizeAftEngineFins(T,model,1.8);addEngineInboardPanels(T,model,{surfaceDetail:hullSurfaceDetail});addEngineCouplingPatches(T,model,{surfaceDetail:hullSurfaceDetail});addEngineCouplingPatches(T,model,{inboard:true,surfaceDetail:hullSurfaceDetail});hullSurfaceDetail.prepare(model);
   model.userData.variant='movie';
-  return trackEnterpriseResources({draw,renderer,scene,model,camera,setBayDoorOpen,ready:Promise.all([details.ready,hullSurfaceDetail.ready])},details);
+  applyGlassLightLenses(T,model);
+  return trackEnterpriseResources({draw,renderer,scene,model,camera,setBayDoorOpen,ready:Promise.all([details.ready,hullSurfaceDetail.ready,bridgeDockingPort.ready])},details);
 };

@@ -5,7 +5,7 @@ const {createServer}=require('./server.cjs');
  browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
  const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.STCommand?.games.every(g=>g.isBooted));
- for(const model of ['movie','original']){
+ for(const model of ['movie','original','third']){
   await page.locator('#enterprise-model').selectOption(model);
   const result=await page.evaluate(async()=>{
    const a=STCommand,s=a.state,m=a.away.state;a.reset();s.throttle=0;s.speed=0;a.away.launchShuttle();s.paused=true;
@@ -37,7 +37,7 @@ const {createServer}=require('./server.cjs');
    m.cameraView='excursion';m.departureCameraFade=fade;
    a.away.tick(.02);
    const midpoint=m.cameraView;
-   const entry=ShuttleBayFlight.cockpitEntryPose(),referencePose=Math.abs(m.x-entry.x)<1e-8&&Math.abs(m.y-entry.y)<1e-8&&Math.abs(m.z-entry.z)<1e-8&&s.heading===180&&s.pitch===0;
+   const entry=ShuttleBayFlight.cockpitEntryPose(),referencePose=Math.abs(m.x-entry.x)<1e-8&&Math.abs(m.y-entry.y)<1e-8&&Math.abs(m.z-entry.z)<1e-8&&Math.abs(entry.y-(ShuttleBayFlight.dimensions().rear-.0137))<1e-8&&s.heading===180&&s.pitch===0;
    const elapsed=m.departureCameraFade,snapshot=scene.departureSnapshot;
    m.departureCameraFade=null;a.away.render(scene,900,600);
    const context=scene.awayTexture.getContext(),live=context.getImageData(450,360,1,1).data,outgoing=snapshot.getContext('2d').getImageData(450,360,1,1).data;

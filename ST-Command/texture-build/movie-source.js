@@ -64,8 +64,13 @@ window.createMovieEnterpriseDetailing=T=>{
     for(let y=8;y<h;y+=8){c.beginPath();c.moveTo(3,y);c.lineTo(w-3,y);c.stroke();}
   });
   texture('secondaryServiceGrille',512,256,(c,w,h)=>{
-    c.fillStyle='#a9b5aa';c.fillRect(0,0,w,h);c.fillStyle='#849486';c.beginPath();c.roundRect(10,14,w-20,h-28,12);c.fill();
-    c.strokeStyle='#5d7563';c.lineWidth=3;for(let y=31;y<h-20;y+=22){c.beginPath();c.moveTo(26,y);c.lineTo(w-26,y);c.stroke();}
+      // Separate horizontal painted slits expose the gray mounting section.
+      // Their aft ends form the photo's slanted edge, without a boxed frame.
+      c.clearRect(0,0,w,h);c.fillStyle='#536459';
+      for(let row=0;row<15;row++){
+        const t=row/14,y=h*(.09+t*.82),left=w*(.25-.18*t),right=w*.965;
+        c.fillRect(left,y,right-left,h*.025);
+      }
   });
   texture('portPennant',2048,256,()=>{});
   texture('portRegistry',2048,256,()=>{});

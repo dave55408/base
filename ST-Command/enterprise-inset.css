@@ -1,7 +1,10 @@
 .tactical{position:relative}
 #enterprise-inset{--remote-helm-label:#ffe16b;position:absolute;z-index:5;right:9px;top:42px;width:52%;max-width:290px;min-width:175px;border:1px solid #766044;border-radius:4px;background:#070b10;box-shadow:0 5px 14px #000b;overflow:hidden;pointer-events:none;color:var(--remote-helm-label)}
 #enterprise-inset[hidden]{display:none}
-.enterprise-inset-title{padding:6px 8px;border-bottom:1px solid #504333;font-size:8px;letter-spacing:1px;background:#1c1812}
+.enterprise-inset-title{padding:6px 8px;border-bottom:1px solid #504333;font-size:8px;letter-spacing:1px;background:#1c1812;pointer-events:auto;cursor:grab;touch-action:none;user-select:none}
+.enterprise-inset-title:active{cursor:grabbing}
+#enterprise-inset[data-floating=true]{position:fixed;right:auto;min-width:0;max-width:calc(100vw - 12px);max-height:calc(100dvh - 12px);overflow-y:auto;z-index:50}
+#enterprise-inset[data-floating=true] .enterprise-inset-title{position:sticky;top:0;z-index:1}
 #enterprise-inset-canvas{position:static;display:block!important;width:100%!important;height:auto!important;border-radius:0}
 #enterprise-inset-readout{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:6px 8px;font-size:7px;line-height:1.5;color:var(--remote-helm-label);border-top:1px solid #382812}
 #enterprise-inset-readout span{display:flex;flex-direction:column;gap:2px}
@@ -9,5 +12,9 @@
 #enterprise-inset-readout [data-active=true] strong{color:#ffe6ac;text-shadow:0 0 5px #ffb44f66}
 #enterprise-inset-readout small{grid-column:1/-1;font-size:7px;color:var(--remote-helm-label)}
 .enterprise-inset-keys{padding:4px 6px 6px;font-size:7px;line-height:1.7;color:var(--remote-helm-label);border-top:1px solid #34302a}
+.enterprise-inset-power{pointer-events:auto;padding:6px 8px;border-top:1px solid #34302a}
+.enterprise-inset-power label{display:flex;justify-content:space-between;font-size:8px;letter-spacing:.4px}
+.enterprise-inset-power input{display:block;width:100%;margin:5px 0 2px;accent-color:#ffe16b;cursor:pointer;touch-action:pan-y}
+.enterprise-inset-power-scale{display:flex;justify-content:space-between;font-size:6px;color:var(--remote-helm-label)}
 @media(min-width:1600px) and (max-height:1250px){#enterprise-inset{top:34px;max-width:245px}}
 @media(max-width:650px){#enterprise-inset{top:42px;width:55%;min-width:160px}}

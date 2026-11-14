@@ -29,7 +29,7 @@ window.applyMovieMarkings=(T,maps)=>{
  }
  for(const side of [-1,1]){
   c.save();if(side>0){c.translate(1,0);c.scale(-1,1);}
-  path(c,[[.444,.926],[.480,.926],[.480,.972],[.405,.972],[.405,.946],[.444,.946]]);c.fillStyle=gold;c.fillRect(.396,.925,.007,.007);c.restore();
+  path(c,[[.444,.926],[.480,.926],[.480,.972],[.405,.972],[.405,.946],[.444,.946]],null,'rgba(38,52,45,.40)');c.fillStyle=gold;c.fillRect(.396,.925,.007,.007);c.restore();
  }
  for(const x of [.493,.507])path(c,[[x,.630],[x,.820]],null,red,.0014,false);
  // The aft ridge is modeled in 3D; a painted stand-in would remain visible
@@ -79,38 +79,58 @@ window.applyMovieMarkings=(T,maps)=>{
    shape([[337,48],[364,48],[364,56],[337,56]],'#829086',null);
    for(const y of [49.5,52,54.5])shape([[338,y],[363,y],[363,y+.6],[338,y+.6]],'#66796b',null);
    // Small paired maintenance stencils above and below the hatch centerline.
-   for(const [x,y,flip] of [[157,27,1],[157,76,-1],[240,12,1],[239,89,-1]]){
+   for(const [x,y,flip] of maps.engineeringMaintenanceMarks===false?[]:[[157,27,1],[157,76,-1],[240,12,1],[239,89,-1]]){
     shape([[x-2,y],[x+2,y],[x+2,y+1],[x+.5,y+1],[x+.5,y+flip*5],[x-.5,y+flip*5],[x-.5,y+1],[x-2,y+1]],'#65736a',null);
    }
    maps.ventralMarkingReference='secondary hull underside close-up';
   }
  }
- function pennant(c){
-  // Supplied close-up: straight parallel stripes, one diagonal separator,
-  // and a curved yellow insignia painted over the forward red panel.
-  path(c,[[.010,.46],[.024,.36],[.315,.36],[.326,.23],[.682,.23],[.661,.72],[.313,.72],[.319,.57],[.010,.57]],red,null);
-  // Stop the sloping red edge before the opaque grille decal so the
-  // diagonal remains visible at the red-to-gray transition.
-  path(c,[[.697,.23],[.787,.23],[.762,.72],[.676,.72]],red,null);
-  for(const y of [.40,.56])path(c,[[.321,y],[.642,y]],null,base,.020,false);
-  c.save();c.translate(-.040,0);
-  c.beginPath();c.moveTo(.765,.12);
-  c.bezierCurveTo(.779,.10,.785,.27,.799,.39);
-  c.bezierCurveTo(.810,.49,.797,.62,.778,.78);
-  c.bezierCurveTo(.768,.86,.752,.82,.759,.72);
-  c.bezierCurveTo(.776,.51,.777,.45,.762,.27);
-  c.bezierCurveTo(.753,.18,.755,.13,.765,.12);
-  c.fillStyle='#f2dc45';c.fill();c.restore();
+ // Supplied body pennant, drawn for port and reversed for starboard.
+ const pennantRed='#c51d24',pennantGold='#eed32e';
+ function bodyPennant(c){
+  path(c,[[.020,.28],[.177,.28],[.210,.72],[.052,.72]],pennantRed,null);
+  // The diagonal stem joins three parallel bars; the middle bar carries the tail.
+  path(c,[[.193,.28],[.214,.28],[.247,.72],[.226,.72]],pennantRed,null);
+  path(c,[[.193,.28],[.600,.28],[.608,.37],[.200,.37]],pennantRed,null);
+  path(c,[[.205,.46],[.980,.46],[.987,.54],[.211,.54]],pennantRed,null);
+  path(c,[[.218,.63],[.600,.63],[.608,.72],[.226,.72]],pennantRed,null);
+  c.beginPath();c.moveTo(.112,.095);
+  c.bezierCurveTo(.091,.11,.065,.36,.068,.51);
+  c.bezierCurveTo(.071,.70,.094,.88,.112,.88);
+  c.bezierCurveTo(.128,.87,.107,.67,.103,.53);
+  c.bezierCurveTo(.099,.37,.130,.12,.112,.095);
+  c.fillStyle=pennantGold;c.fill();
  }
- c=ctx('pennant',true);pennant(c);
- c=ctx('portPennant',true);c.translate(1,0);c.scale(-1,1);c.drawImage(maps.pennant.image,0,0,1,1);
- const sideStencil=ENTERPRISE_1444_STENCILS.side,center=(724+sideStencil.bounds[0]+sideStencil.bounds[2]/2-655)/295;
+ c=ctx('portPennant',true);bodyPennant(c);
+ c=ctx('pennant',true);c.translate(1,0);c.scale(-1,1);c.drawImage(maps.portPennant.image,0,0,1,1);
+ const center=.355;
  function engineRegistry(c,reverse){
-  c.save();if(reverse){c.translate(1,0);c.scale(-1,1);}
-  drawEnterpriseReferencePaint(c,'engineRed',red,1.45);drawEnterpriseReferencePaint(c,'engineGold','#d6bb45',1.45);c.restore();
-  const labelCenter=reverse?1-center:center;
-  c.clearRect(labelCenter-.14,0,.28,1);
-  text(c,labelCenter,.51,.268,0,15.86);
+  if(reverse){
+   // Align the supplied left-engine artwork to the existing registry bounds.
+   // Its forward bar is wider, with a curved gold crescent and slanted break.
+   path(c,[[.020,.355],[.088,.355],[.103,.665],[.036,.665]],pennantRed,null);
+   path(c,[[.096,.355],[.503,.355],[.503,.665],[.111,.665]],pennantRed,null);
+   path(c,[[.787,.465],[.977,.465],[.986,.665],[.787,.665]],pennantRed,null);
+   c.beginPath();c.moveTo(.055,.235);
+   c.bezierCurveTo(.043,.250,.033,.425,.035,.515);
+   c.bezierCurveTo(.036,.650,.046,.777,.055,.785);
+   c.bezierCurveTo(.064,.786,.057,.668,.053,.565);
+   c.bezierCurveTo(.050,.452,.063,.267,.055,.235);
+   c.fillStyle=pennantGold;c.fill();
+   text(c,1-center,.51,.268,0,15.86);return;
+  }
+  // Right-engine reference: narrow aft stripe, wider forward stripe and a
+  // right-facing gold crescent, registered against the same text bounds.
+  path(c,[[.014,.60],[.023,.40],[.209,.40],[.209,.60]],pennantRed,null);
+  path(c,[[.501,.43],[.904,.43],[.889,.74],[.501,.74]],pennantRed,null);
+  path(c,[[.912,.43],[.980,.43],[.964,.74],[.897,.74]],pennantRed,null);
+  c.beginPath();c.moveTo(.945,.335);
+  c.bezierCurveTo(.957,.350,.967,.525,.965,.615);
+  c.bezierCurveTo(.964,.750,.954,.877,.945,.885);
+  c.bezierCurveTo(.936,.886,.943,.768,.947,.665);
+  c.bezierCurveTo(.950,.552,.937,.367,.945,.335);
+  c.fillStyle=pennantGold;c.fill();
+  text(c,center,.51,.268,0,15.86);
  }
  c=ctx('registry',true);engineRegistry(c,false);c=ctx('portRegistry',true);engineRegistry(c,true);
  for(const c of contexts){c.setTransform(1,0,0,1,0,0);}

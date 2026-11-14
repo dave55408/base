@@ -48,7 +48,7 @@ const {createServer}=require('./server.cjs');
   label('PORT NACELLE REGISTRY / READABLE TEXT, MIRRORED PENNANT',948);art(maps.portRegistry.image,0,963,1800,103);
   label('STARBOARD ENGINEERING PENNANT / SUPPLIED CLOSE-UP',1110);art(maps.pennant.image,0,1125,1800,190);
   label('PORT ENGINEERING PENNANT / MIRRORED',1360);art(maps.portPennant.image,0,1375,1800,190);
-  return {referenceFeatureCount,restoredWindows,image:atlas.toDataURL('image/jpeg',.96),maxRGB,maxAlpha,aa,overlap,paint,labels,components,cachedTextures,detailMeshes,reference:maps.markingReference,shipName:maps.shipName,registryText:maps.registryText,marked:maps.paintedMarkings,zA:-.874+.563*(.5-uA),zB:-.874+.563*(uB-.5),
+  return {referenceFeatureCount,restoredWindows,image:atlas.toDataURL('image/jpeg',.96),maxRGB,maxAlpha,aa,overlap,paint,labels,components,cachedTextures,detailMeshes,reference:maps.markingReference,shipName:maps.shipName,registryText:maps.registryText,marked:maps.paintedMarkings,zA:-.430-(.563/.85)*uA,zB:-.430-(.563/.85)*(1-uB),
    materials:ship.model.getObjectByName('port-secondary-pennant').material.map===maps.portPennant&&ship.model.getObjectByName('starboard-secondary-pennant').material.map===maps.pennant};
  });
  assert(result.referenceFeatureCount>100,'compact window and stencil groups survive source extraction');for(const name of ['secondary','neck','rim'])assert(result.restoredWindows[name].lit>20&&result.restoredWindows[name].dark>20,name+' retains lit and dark reference windows after cleanup');assert(result.restoredWindows.deck.dark>20,'deck retains its dark reference windows');

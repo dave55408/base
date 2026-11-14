@@ -17,7 +17,7 @@
     {id:'starbase',name:'Starbase 74',x:465,y:760,color:0x83d5ec,type:'FEDERATION OUTPOST'}
   ];
   systems.forEach((system,i)=>system.z=[0,75,-65,35,110,135,-125,-80,55,165,-100][i]);
-  const state = {x:430,y:580,z:0,pitch:0,pitchTurn:0,heading:90,throttle:14,drive:'impulse',speed:.56,paused:false,autopilot:false,target:systems[1],trail:[],distance:0,time:0,turn:0,arrived:false};
+  const state = {x:430,y:580,z:0,pitch:0,pitchTurn:0,heading:90,throttle:0,drive:'impulse',speed:0,paused:false,autopilot:false,target:systems[1],trail:[],distance:0,time:0,turn:0,arrived:false};
   const keys = new Set();
   let lastTelemetry = 0, trailTimer = 0;
   const games = [];
@@ -40,7 +40,7 @@
     if(state.throttle<=0)state.throttle=65;
     say(`Navigation engaged. Setting course for ${state.target.name}.`);telemetry();
   }
-  function reset(){away.reset();lastTelemetry=0;trailTimer=0;Object.assign(state,{x:430,y:580,z:0,pitch:0,pitchTurn:0,heading:90,throttle:14,drive:'impulse',speed:.56,paused:false,autopilot:false,target:systems[1],trail:[],distance:0,time:0,turn:0,arrived:false});keys.clear();$('destination').value='vulcan';$('waypoint-option')?.remove();say('Simulation reset. Enterprise is at Sol at 14% impulse power. Conn ready.');telemetry();}
+  function reset(){away.reset();lastTelemetry=0;trailTimer=0;Object.assign(state,{x:430,y:580,z:0,pitch:0,pitchTurn:0,heading:90,throttle:0,drive:'impulse',speed:0,paused:false,autopilot:false,target:systems[1],trail:[],distance:0,time:0,turn:0,arrived:false});keys.clear();$('destination').value='vulcan';$('waypoint-option')?.remove();say('Simulation reset. Enterprise is stopped at Sol. Conn ready.');telemetry();}
   function tick(dt){
     if(state.paused){state.turn=0;state.pitchTurn=0;return;}
     state.time+=dt;
@@ -74,6 +74,7 @@
     if(state.time-lastTelemetry>.09){lastTelemetry=state.time;telemetry();}
   }
   function telemetry(){
+    window.SimPerformance?.invalidate();
     window.STCommandAudio?.setSimulationPaused(state.paused);
     const dist=distanceTo(state.target),bearing=bearingTo(state.target),speed=state.paused?0:state.speed;
     $('heading-output').textContent=Math.round(state.heading).toString().padStart(3,'0')+'°';
@@ -124,7 +125,7 @@
   window.addEventListener('keydown',event=>{
     const key=event.key.length===1?event.key.toLowerCase():event.key;
     if(enterpriseKeys.has(event.code)&&away.state.freeSpace&&away.active()&&!event.ctrlKey&&!event.altKey&&!event.metaKey){
-      if(editable(event.target)&&!event.target.matches('.helm input[type="range"]'))return;
+      if(editable(event.target)&&!event.target.matches('.helm input[type="range"],#enterprise-inset-power'))return;
       event.preventDefault();if(event.code==='Numpad8')away.stopEnterprise();if(event.code==='NumpadSubtract'&&!event.repeat)away.neutralEnterprise();keys.add(event.code);return;
     }
     if(key==='1'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&(!editable(event.target)||event.target?.matches('.helm input[type="range"]'))){
@@ -229,9 +230,9 @@
   const MapScene=createGalaxyScene({state,systems,selectTarget,line});
   for(const [parent,Scene] of [['main-view',ForwardScene],['tactical-view',TacticalScene],['map-view',MapScene]]){
     const host=$(parent);
-    const game=new Phaser.Game({type:Phaser.CANVAS,parent,width:host.clientWidth,height:host.clientHeight,backgroundColor:'#07101a',scene:Scene,render:{antialias:true},fps:{target:60},audio:{noAudio:true},banner:false});
-    games.push(game);const observer=new ResizeObserver(()=>{if(game.isBooted&&game.canvas&&host.clientWidth&&host.clientHeight)game.scale.resize(host.clientWidth,host.clientHeight);});observer.observe(host);
+    const game=new Phaser.Game({type:Phaser.CANVAS,parent,width:host.clientWidth,height:host.clientHeight,backgroundColor:'#07101a',scene:Scene,render:{antialias:true},fps:{target:60,limit:SimPerformance.frameLimit},audio:{noAudio:true},banner:false});
+    games.push(game);const observer=new ResizeObserver(()=>{if(game.isBooted&&game.canvas&&host.clientWidth&&host.clientHeight){game.scale.resize(host.clientWidth,host.clientHeight);SimPerformance.invalidate();}});observer.observe(host);
   }
   // Readable state is available for inspection and smoke checks.
-  window.STCommand={state,systems,games,away,selectTarget,engage,stop,pause,reset,tick};telemetry();
+  window.STCommand={state,systems,games,away,selectTarget,engage,stop,pause,reset,tick};SimPerformance.bindGames(games,state);telemetry();
 })();

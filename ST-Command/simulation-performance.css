@@ -1,0 +1,9 @@
+#performance-open{padding:4px 7px;border:1px solid #775524;border-radius:3px;background:#1e140d;color:#ffe0ac;font:9px Consolas,monospace;white-space:nowrap}
+#performance-settings{box-sizing:border-box;width:min(440px,calc(100vw - 24px));max-height:calc(100dvh - 32px);overflow:auto;padding:20px;border:1px solid #a77a44;border-radius:10px;background:#1c1510;color:#fae7c6;font:13px/1.5 Consolas,monospace}
+#performance-settings::backdrop{background:#0008}
+.performance-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.performance-heading h2{margin:0;color:#ffd08a;font-size:19px;font-weight:500}
+#performance-settings label{display:block;margin:15px 0 6px}#performance-settings select{box-sizing:border-box;width:100%;padding:9px;border:1px solid #8a693f;border-radius:4px;background:#120e0b;color:#fae7c6;font:12px Consolas,monospace}
+#performance-settings p{font-size:11px;color:#c7b395}#performance-settings button{padding:7px 10px;background:#50331b;color:#ffdfad;border:1px solid #a77a44;border-radius:3px;font:11px Consolas,monospace}
+#performance-readout{display:block;white-space:pre-line;margin-top:18px;padding:12px;background:#100d0a;border:1px solid #71502e;color:#ffe0ac;font-size:12px;font-variant-numeric:tabular-nums}
+#performance-settings :focus-visible,#performance-open:focus-visible{outline:2px solid #ffd47c;outline-offset:2px}
+@media(max-width:700px){#performance-open{font-size:8px;padding:4px}}

@@ -9,7 +9,7 @@ window.applyThirdPhotoDetails=(T,model,maps,options)=>{
  function patch(id,sample,key,{round=false,cols=8,rows=4,uv=(u,v)=>[u,1-v],...data}={}){
   // Current appearance uses Model Two's paint and no small window meshes.
   // Top pylon panels are supplied by the base renderer, without extra slots.
-  if(['engineering','neck','bridge','rim','bowl','pylon','pennant'].includes(data.region))return;
+  if(['engineering','neck','bridge','rim','bowl','pylon','pennant','stencil'].includes(data.region))return;
   if(round){cols=24;rows=3;}
   let batch=batches.get(key);if(!batch)batches.set(key,batch={positions:[],uv:[],indices:[]});const start=batch.positions.length/3;
   for(let row=0;row<=rows;row++)for(let col=0;col<=cols;col++){
@@ -121,19 +121,20 @@ window.applyThirdPhotoDetails=(T,model,maps,options)=>{
  function roof(x,z){const level=(z+.032)/.85;return [x,shape.upAt(level,x)+.00045,z+.032];}
  for(const side of [-1,1])patch('engineering-spine-red-line-'+side,(u,v)=>roof(side*.008+(u-.5)*.0008,-.12-v*.51),'paint',{region:'spine'});
  for(const z of [-.12,-.63])patch('engineering-spine-red-end-'+z,(u,v)=>roof((u-.5)*.016,z+(v-.5)*.0008),'paint',{region:'spine'});
- for(const z of [-.101,-.131])patch('engineering-roof-green-'+z,(u,v)=>roof((u-.5)*.003,z+(v-.5)*.003),'green',{round:true,region:'roof'});
- function post(name,x,y,z,color,r=.002,height=.004){
-  const mesh=new T.Mesh(new T.SphereGeometry(r,16,12),materials[color]);mesh.scale.y=height/(2*r);mesh.position.set(x,y,z);mesh.name=name;group.add(mesh);records.push({id:name,region:'beacon',lit:true,material:color});
+ function post(name,x,y,z,color,r=.002,height=.004,blink=false){
+  const mesh=new T.Mesh(new T.SphereGeometry(r,16,12),blink?new T.MeshBasicMaterial({color:materials[color].color,toneMapped:false}):materials[color]);mesh.scale.y=height/(2*r);mesh.position.set(x,y,z);mesh.name=name;group.add(mesh);records.push({id:name,region:'beacon',lit:true,material:color});
+  if(blink&&options?.navigationLights){const on=mesh.material.color.getHex(),off=new T.Color(on).multiplyScalar(.035).getHex();options.navigationLights.push({lens:mesh,on,off});}
  }
- post('engineering-roof-red-beacon',0,shape.upAt((-.116+.032)/.85,0)+.003,-.116+.032,'red');
+ for(const z of [-.101,-.131])post('engineering-roof-green-'+z,0,shape.upAt((z+.032)/.85,0)+.00255,z+.032,'green',.0034,.0051,true);
+ post('engineering-roof-red-beacon',0,shape.upAt((-.116+.032)/.85,0)+.003,-.116+.032,'red',.004,.006,true);
  const bridgePost=new T.Vector3(0,.534,-1.590);primary.localToWorld(bridgePost);model.worldToLocal(bridgePost);post('bridge-front-red-beacon',...bridgePost.toArray(),'red',.0018,.004);
  const lowerPost=new T.Vector3(0,.220,-1.530);primary.localToWorld(lowerPost);model.worldToLocal(lowerPost);post('lower-sensor-red-beacon',...lowerPost.toArray(),'red',.0015,.003);
  for(const side of ['port','starboard']){
   const vertical=model.getObjectByName(side+'-hangar-yellow-light'),horizontal=model.getObjectByName(side+'-hangar-red-light');
-  vertical.material=materials.red;vertical.name=side+'-hangar-red-vertical-light';horizontal.material=materials.red;
+  vertical.material=materials.red;horizontal.material=materials.red;
  }
- model.getObjectByName('hangar-upper-yellow-light').material=materials.warm;
- const beacon=model.getObjectByName('shuttle-bay-green-light');beacon.material=beacon.material.clone();beacon.material.color.setHex(0x35a97c);beacon.material.emissive.setHex(0x168c50);beacon.material.emissiveIntensity=.65;
+ // Preserve the shared amber lens and its real under-lip light.
+ // The roof beacon keeps its shared green lens and real illumination.
  for(const [key,batch]of batches){
   const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(batch.positions,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(batch.uv,2));geometry.setIndex(batch.indices);geometry.computeVertexNormals();
   const mesh=new T.Mesh(geometry,materials[key]);mesh.name='photo-'+key+'-details';mesh.renderOrder=3;mesh.castShadow=false;mesh.receiveShadow=false;group.add(mesh);

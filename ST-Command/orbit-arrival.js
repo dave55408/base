@@ -41,7 +41,8 @@
   projected=position(far);const midX=(Math.max(...projected.map(p=>p.x))+Math.min(...projected.map(p=>p.x)))/2,midY=(Math.max(...projected.map(p=>p.y))+Math.min(...projected.map(p=>p.y)))/2;
   const targetX=2*(ox+cx*refW)/w-1,targetY=1-2*(oy+cy*refH)/h;
   camera.setViewOffset(w,h,(midX-targetX)*w/2,(targetY-midY)*h/2,w,h);
-  ship.draw(a.sink,w,h,{x:2.4,y:2.7,z:109.65,phase:'bridge',bank:0},{heading:0,pitch:0,time,bayDoorOpen:0});
+  ship.draw(a.sink,w,h,{x:2.4,y:2.7,z:109.65,phase:'bridge',bank:0},{heading:0,pitch:0,time,bayDoorOpen:0},true);
+  SimPerformance.resize(ship.renderer,w,h);
   ship.renderer.render(ship.scene,camera);ctx.drawImage(ship.renderer.domElement,0,0,w,h);a.renders++;
   projected=corners.map(p=>p.clone().project(camera));const xs=projected.map(p=>(p.x+1)*w/2),ys=projected.map(p=>(1-p.y)*h/2);
   return {x:Math.min(...xs),y:Math.min(...ys),width:Math.max(...xs)-Math.min(...xs),height:Math.max(...ys)-Math.min(...ys)};

@@ -13,13 +13,18 @@ window.createGalaxyScene=({state,systems,selectTarget,line})=>class GalaxyScene 
     this.input.on('pointermove',p=>{if(!this.drag||!p.isDown)return;const dx=p.x-this.drag.x,dy=p.y-this.drag.y;if(Math.hypot(dx,dy)>5)this.drag.moved=true;if(this.drag.moved){this.yaw=this.drag.yaw+dx*.4;this.tilt=Phaser.Math.Clamp(this.drag.tilt+dy*.3,-82,82);}});
     this.input.on('pointerup',p=>{const drag=this.drag;this.drag=null;if(drag&&!drag.moved)this.selectAt(p.x,p.y);});
     this.input.on('pointerupoutside',()=>{this.drag=null;});
-    this.input.on('wheel',(_p,_objects,_x,dy)=>this.setZoom(this.zoom-dy*.001));
-    document.getElementById('map-zoom-in').onclick=()=>this.setZoom(this.zoom+.15);
-    document.getElementById('map-zoom-out').onclick=()=>this.setZoom(this.zoom-.15);
-    document.getElementById('map-home').onclick=()=>{this.yaw=-25;this.tilt=52;this.zoom=1;};
+    this.input.on('wheel',(_p,_objects,_x,dy)=>this.setZoom(this.currentZoom()-dy*.001));
+    document.getElementById('map-zoom-in').onclick=()=>this.setZoom(this.currentZoom()+.15);
+    document.getElementById('map-zoom-out').onclick=()=>this.setZoom(this.currentZoom()-.15);
+    document.getElementById('map-home').onclick=()=>{this.yaw=-25;this.tilt=52;this.zoom=1;this.shuttleApproachZoom=null;};
     this.game.canvas.style.touchAction='none';
   }
-  setZoom(value){this.zoom=Phaser.Math.Clamp(value,.65,1.8);}
+  currentZoom(){return this.shuttleMapTelemetry?.zoom??this.zoom;}
+  setZoom(value){
+    const map=this.shuttleMapTelemetry;
+    if(map){this.shuttleApproachZoom=value>=map.maxZoom-1e-6?null:Phaser.Math.Clamp(value,.1,map.maxZoom);return;}
+    this.zoom=Phaser.Math.Clamp(value,.65,1.8);
+  }
   selectAt(x,y){
     if(window.STCommand?.away.active())return;
     const camera=this.camera(),nearest=systems.map(p=>({system:p,point:camera.project(p)})).sort((a,b)=>Math.hypot(a.point.x-x,a.point.y-y)-Math.hypot(b.point.x-x,b.point.y-y))[0];

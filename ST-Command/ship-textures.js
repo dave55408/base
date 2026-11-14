@@ -49,10 +49,9 @@
   const add=value=>{if(value?.dispose)resources.add(value);};
   Object.values(maps).forEach(add);
   const surface=window.enterpriseHullSurfaceDetail;
-  if(['movie','third'].includes(ship.model.userData.variant))add(surface?.texture);
   const collect=()=>ship.scene.traverse(object=>{
    add(object.geometry);if(object.shadow)add(object.shadow);
-   for(const material of (Array.isArray(object.material)?object.material:[object.material]))if(material){add(material);Object.values(material).forEach(value=>{if(value?.isTexture)add(value);});}
+   for(const material of (Array.isArray(object.material)?object.material:[object.material]))if(material){add(material);if(material.userData.hullSurfaceDetail)add(surface?.texture);Object.values(material).forEach(value=>{if(value?.isTexture)add(value);});}
   });
   collect();for(const resource of resources)owners.set(resource,(owners.get(resource)||0)+1);
   let disposed=false;

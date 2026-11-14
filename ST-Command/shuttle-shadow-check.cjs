@@ -7,7 +7,7 @@ const {createServer}=require('./server.cjs');
   browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
   const page=await browser.newPage({viewport:{width:1800,height:1100}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.STCommand?.games.every(g=>g.isBooted));
-  await page.locator('#stop').click();await page.locator('#launch-shuttle').click();
+  await page.locator('#stop').click();await page.locator('#launch-shuttle').click();await page.waitForFunction(()=>STCommand.away.state.phase==='flight',null,{timeout:180000});
   const result=await page.evaluate(async()=>{
    const a=STCommand,m=a.away.state,s=a.state,scene=a.games[0].scene.getScene('Forward'),out=[];s.paused=true;
    for(const model of ['movie','original']){

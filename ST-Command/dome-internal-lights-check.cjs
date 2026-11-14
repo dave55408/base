@@ -24,7 +24,7 @@ try{
   ship.draw(scratch,2,2,{x:0,y:-2,z:110.49},{heading:180,pitch:0,time:1});const spin=[rotor.rotation.z,ship.model.getObjectByName('starboard-cap-lines').rotation.z];
   const bladeMaterial=rotor.children[0].material,bladeTexture=bladeMaterial.map.image,bladePixel=bladeTexture.getContext('2d');const feather=[bladePixel.getImageData(0,4,1,1).data[3],bladePixel.getImageData(64,4,1,1).data[3]];
   const bp=rotor.children[0].geometry.attributes.position;let bladeFront=Infinity,bladeBack=-Infinity;for(let i=0;i<bp.count;i++){const z=rotor.position.z+bp.getZ(i)*rotor.scale.z;bladeFront=Math.min(bladeFront,z);bladeBack=Math.max(bladeBack,z);}
-  for(let i=0;i<98;i++){const r=Math.hypot(bp.getX(i),bp.getY(i)),z=rotor.position.z+bp.getZ(i)*rotor.scale.z,theta=Math.atan2(r,-bp.getZ(i)),glassZ=cap.position.z-.087*Math.cos(theta)*cap.scale.z,gap=Math.hypot(.087*Math.sin(theta)-r,z-glassZ);if(gap>.003||gap<.0001)throw new Error('Every curved blade section must follow the globe contour with a narrow safe gap');}
+  for(let i=0;i<98;i++){const r=Math.hypot(bp.getX(i),bp.getY(i)),z=rotor.position.z+bp.getZ(i)*rotor.scale.z,theta=Math.atan2(r,-bp.getZ(i)),glassZ=cap.position.z-.087*Math.cos(theta)*cap.scale.z,gap=Math.hypot(.087*Math.sin(theta)-r,z-glassZ);if(gap>.0041||gap<.0001)throw new Error('Curved blades must follow the globe with extra clearance at the retaining lip');}
   const firstLamp=groups[0].children[0],lp=firstLamp.geometry.attributes.position;let lampFront=Infinity;for(let i=0;i<lp.count;i++)lampFront=Math.min(lampFront,groups[0].position.z+firstLamp.position.z+lp.getZ(i)*firstLamp.scale.z);
   const diffuser=ship.model.getObjectByName('port-dome-inner-backing');
   const redGlow=ship.model.getObjectByName('port-dome-red-glow');

@@ -1,0 +1,40 @@
+/* Low-light console surfaces, including the fullscreen viewscreen bezel. */
+body.night-mode{color-scheme:dark;--bg:#010203;--panel:#030507;--line:#172127;--text:#9eacb5;--muted:#75858f;--cyan:#799aaa;--gold:#a4947e;--shuttle-label:#a4947e;background:#010203;color:var(--text)}
+body.night-mode :is(.display,.helm,.forward,.helm-body,.display-title,.forward>.display-title,.instrument-strip,.display-footer,.viewscreen-shell){background:#030507;border-color:#172127;box-shadow:inset 0 1px 1px #ffffff02,0 4px 12px #000b}
+body.night-mode .viewscreen-shell{background:linear-gradient(90deg,#020304,#080d10 3%,#030608 9%,#030608 91%,#080d10 97%,#020304)}
+body.night-mode .viewscreen-shell::before,body.night-mode .viewscreen-shell::after{background:repeating-linear-gradient(0deg,#030506 0 17px,#11191e 18px,#090f13 20px);border-color:#1b252c;box-shadow:none}
+body.night-mode .screen-glass{border-color:#27343c;background:#000;box-shadow:0 0 0 6px #030506,0 0 0 8px #172126,inset 0 0 20px #000}
+body.night-mode .screen-glass::after{background:radial-gradient(ellipse at 50% 50%,transparent 60%,#0006);box-shadow:inset 0 0 20px #0008}
+body.night-mode .screen-light.top,body.night-mode .screen-light.bottom{background:#202c33;box-shadow:none}
+body.night-mode .bridge-rail{background:#04080b;border-color:#162128;box-shadow:none}
+body.night-mode .canvas-host{border-color:#010203;background:#000}
+body.night-mode :is(.display-title h2,.display-title h2 span,.display-title>span,.view-overlay,.view-overlay span:last-child,.instrument-strip strong,.instrument-strip>div:last-child strong){color:var(--text);text-shadow:none}
+body.night-mode :is(button,select,.enterprise-model-picker select,#project-notes-open,#night-mode-toggle,.camera-controls button,.map-tools button){background:#04080b;border-color:#293941;color:#a7b7c1;box-shadow:inset 0 1px #ffffff03,0 1px 2px #000;text-shadow:none}
+body.night-mode button:hover:not(:disabled){background:#111d24;border-color:#536c79;color:#b7c9d2}
+body.night-mode :is(button.selected,.engage,#night-mode-toggle[aria-pressed=true]){background:#10212a;border:1px solid #486572;color:#acc4d0;box-shadow:none}
+body.night-mode .stop{background:#1b0f14;border-color:#4f323b;color:#bf939f}
+body.night-mode :is(select option,#project-notes-text){background:#04080b;color:var(--text);border-color:var(--line)}
+body.night-mode input[type=range]{background:#060c10;border-color:#25353e;accent-color:#799aaa;box-shadow:none}
+body.night-mode input[type=range]::-webkit-slider-thumb{background:#5b7787;border-color:#829ba9;box-shadow:none}
+body.night-mode input[type=range]::-moz-range-thumb{background:#5b7787;border-color:#829ba9;box-shadow:none}
+body.night-mode :is(.compass,.power-dial){filter:brightness(.48)}
+body.night-mode :is(#enterprise-inset,.audio-panel,#project-notes,#shuttle-choice,#controls-help){background:#04080b;border-color:#25353e;color:var(--text);box-shadow:0 8px 24px #000b}
+body.night-mode :is(.enterprise-inset-title,.audio-title){background:#080f14;color:var(--text);border-color:var(--line)}
+body.night-mode #enterprise-inset{--remote-helm-label:#a4947e}
+body.night-mode #enterprise-inset-readout strong{color:#92b2c3;text-shadow:none}
+body.night-mode #enterprise-inset-readout [data-active=true] strong{color:#acc4d0;text-shadow:none}
+body.night-mode .camera-controls{color:#7c929f}
+body.night-mode :is(button,select,input,textarea):focus-visible{outline:2px solid #92b2c3;outline-offset:3px}
+/* Suppress bright secondary instruments and warm dialog accents at night. */
+body.night-mode :is(#tactical-view canvas,#map-view canvas,#enterprise-inset-canvas){filter:brightness(.62) saturate(.75)}
+body.night-mode .warp-readout{filter:brightness(.62)}
+body.night-mode :is(label,.section-label,.section-label span,.control-hint,.heading-control small,.warp-readout span,.destination-data span,.course-solution span,.display-footer,#audio-status,.audio-source,.notes-footer,#mission-hint){color:var(--muted);text-shadow:none}
+body.night-mode :is(output,.warp-readout strong,.destination-data strong,.course-solution strong,#control-hints,#help-link,.message,#mission-status){color:#8fa5b2;text-shadow:none}
+body.night-mode :is(.divider,.course-solution){background:#080e12;border-color:var(--line);box-shadow:none}
+body.night-mode #performance-settings{background:#04080b;border-color:#25353e;color:var(--text);box-shadow:0 8px 24px #000d}
+body.night-mode :is(#controls-help,#performance-settings,#project-notes,#shuttle-choice)::backdrop{background:#000d}
+body.night-mode :is(.help-heading h2,.help-grid h3,.help-grid dt,.performance-heading h2,.notes-heading h2,#shuttle-choice-title){color:#aabcc7;text-shadow:none;border-color:#25353e}
+body.night-mode :is(.help-intro,.help-grid dd,#performance-settings p,#shuttle-choice-description){color:#92a2ad}
+body.night-mode #performance-readout{background:#020507;border-color:#1c2a33;color:#95afbe}
+body.night-mode :is(.live i,.dot){filter:brightness(.55);box-shadow:none}
+body.night-mode :is(.display,.helm,.viewscreen-shell)::before,body.night-mode :is(.display,.helm)::after{opacity:.25}

@@ -1,0 +1,57 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {chromium}=require(require.resolve('playwright',{paths:[__dirname,path.resolve(__dirname,'../elf-adventure')]}));
+const {createServer}=require('./server.cjs');
+(async()=>{
+ const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
+ try{
+  browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
+  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&/shader|WebGLProgram/i.test(m.text()))errors.push(m.text());});
+  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.STCommand?.games.every(g=>g.isBooted));
+  assert.deepEqual(await page.evaluate(()=>[SimPerformance.quality,SimPerformance.frameLimit,ShipTextures.quality]),['balanced',60,'low']);
+  await page.locator('#performance-open').click();await page.locator('#frame-limit').selectOption('30');
+  assert(await page.evaluate(()=>STCommand.games.every(g=>g.loop.hasFpsLimit&&g.loop.fpsLimit===30&&Math.abs(g.loop._limitRate-1000/30)<1e-8)));
+  await page.locator('#render-quality').selectOption('economy');await page.locator('#performance-close').click();
+  await page.locator('#stop').click();await page.locator('#launch-shuttle').click();await page.waitForFunction(()=>STCommand.away.state.phase==='flight',null,{timeout:180000});
+  await page.waitForFunction(()=>STCommand.games[0].scene.getScene('Forward').enterpriseRenderer);
+  await page.evaluate(async()=>{await STCommand.games[0].scene.getScene('Forward').enterpriseRenderer.ready;STCommand.pause();});
+  await page.waitForFunction(()=>STCommand.games.every(g=>!g.loop.running));
+  const held=await page.evaluate(()=>({time:STCommand.state.time,frames:SimPerformance.stats.frames,renders:SimPerformance.stats.renders}));
+  await page.waitForTimeout(250);
+  assert.deepEqual(await page.evaluate(()=>({time:STCommand.state.time,frames:SimPerformance.stats.frames,renders:SimPerformance.stats.renders})),held,'pause must stop all redraws and simulation time');
+  await page.locator('#performance-open').click();await page.locator('#render-quality').selectOption('balanced');await page.locator('#performance-close').click();
+  await page.waitForFunction(frames=>SimPerformance.stats.frames>frames&&STCommand.games.every(g=>!g.loop.running),held.frames);
+  const size=await page.evaluate(()=>{const scene=STCommand.games[0].scene.getScene('Forward'),r=scene.enterpriseRenderer.renderer;return {actual:[r.domElement.width,r.domElement.height],expected:SimPerformance.size(scene.scale.width,scene.scale.height)};});
+  assert.deepEqual(size.actual,[size.expected.width,size.expected.height],'paused quality changes must redraw at the selected resolution');
+  await page.setViewportSize({width:1250,height:900});await page.waitForFunction(()=>{const scene=STCommand.games[0].scene.getScene('Forward');return scene.enterpriseRenderer.renderer.domElement.width===SimPerformance.size(scene.scale.width,scene.scale.height).width&&STCommand.games.every(g=>!g.loop.running);});
+  await page.keyboard.press('h');await page.waitForFunction(()=>STCommand.games[0].scene.getScene('Forward').enterpriseRenderer.model.getObjectByName('aft-bridge-docking-port').userData.hatchOpen===1);
+  await page.waitForFunction(()=>STCommand.games.every(g=>!g.loop.running));
+  const heldTime=await page.evaluate(()=>STCommand.state.time);await page.keyboard.press('p');await page.waitForFunction(t=>STCommand.state.time>t,heldTime);
+  const checks=await page.evaluate(async()=>{
+   for(const game of STCommand.games)game.loop.stop();const scene=STCommand.games[0].scene.getScene('Forward'),ship=scene.enterpriseRenderer,T=AlpineThree,ctx=document.createElement('canvas').getContext('2d');
+   const pose={phase:'flight',freeSpace:true,cameraView:'excursion',clock:20,x:.25,y:.8,z:110.3,garageDoorOpen:0},state={heading:0,pitch:0,time:20,bayDoorOpen:0};
+   let renders=SimPerformance.stats.renders;ship.draw(ctx,1000,600,pose,state);const exteriorPasses=SimPerformance.stats.renders-renders;
+   const room=ship.model.getObjectByName('reference-bay-interior'),garage=room.getObjectByName('bay-forward-arched-lift');garage.setOpen(1);ship.model.updateWorldMatrix(true,true);
+   const craft=garage.getObjectByName('stored-type-f-shuttle-1'),oldDetailed=craft.storageDetail.visible,oldDistant=craft.storageDistant.visible,visibleDuring=[];
+   const probe=room.getObjectByName('bay-reference-landing-pad'),before=probe.onBeforeRender;
+   probe.onBeforeRender=function(){visibleDuring.push([craft.storageDetail.visible,craft.storageDistant.visible]);};
+   const camera=new T.PerspectiveCamera(50,1,.001,20);camera.position.copy(room.localToWorld(new T.Vector3(0,.009,.4)));camera.lookAt(room.localToWorld(new T.Vector3(0,.009,-.4)));camera.updateWorldMatrix(true,false);ship.setBayDoorOpen(1);
+   SimPerformance.quality='economy';SimPerformance.resize(ship.renderer,400,400);ship.renderer.render(ship.scene,camera);
+   const distantUsed=visibleDuring.some(([detail,distant])=>!detail&&distant);
+   visibleDuring.length=0;camera.position.copy(room.localToWorld(new T.Vector3(0,.009,-.17)));camera.lookAt(room.localToWorld(new T.Vector3(0,.009,-.4)));camera.updateWorldMatrix(true,false);SimPerformance.resize(ship.renderer,1200,900);ship.renderer.render(ship.scene,camera);
+   const nearDetailed=visibleDuring.some(([detail,distant])=>detail&&!distant);
+   probe.onBeforeRender=before;
+   const restored=craft.storageDetail.visible===oldDetailed&&craft.storageDistant.visible===oldDistant&&room.visible;
+   SimPerformance.quality='balanced';const normalShadow=ship.scene.getObjectByName('space-key').shadow;ship.renderer.render(ship.scene,camera);
+   return {exteriorPasses,distantUsed,nearDetailed,restored,shadowSize:normalShadow.mapSize.x,glError:ship.renderer.getContext().getError()};
+  });
+  assert.equal(checks.exteriorPasses,1,'exterior views must draw once');assert(checks.distantUsed&&checks.nearDetailed&&checks.restored,'LOD must simplify distant craft and preserve close views without changing stored visibility');assert.equal(checks.shadowSize,2048);assert.equal(checks.glError,0);
+  await page.reload();await page.waitForFunction(()=>window.STCommand?.games.every(g=>g.isBooted));assert.deepEqual(await page.evaluate(()=>[SimPerformance.quality,SimPerformance.frameLimit]),['balanced',30]);
+  const frameStart=await page.evaluate(()=>SimPerformance.stats.frames);await page.waitForTimeout(550);const limitedFrames=await page.evaluate(start=>SimPerformance.stats.frames-start,frameStart);assert(limitedFrames>0&&limitedFrames<=20,'30 FPS must cap actual display updates');
+  await page.setViewportSize({width:390,height:844});await page.locator('#performance-open').click();
+  const layout=await page.evaluate(()=>{const dialog=document.getElementById('performance-settings').getBoundingClientRect();return {left:dialog.left,right:dialog.right,width:innerWidth,pageWidth:document.documentElement.scrollWidth};});
+  assert(layout.left>=0&&layout.right<=layout.width&&layout.pageWidth<=layout.width+1,'performance controls must fit mobile screens');
+  await page.screenshot({path:path.join(require('node:os').tmpdir(),'st-command-performance-mobile.png')});
+  assert.deepEqual(errors,[]);console.log(JSON.stringify(checks));console.log('Passed: quality and FPS settings, saved preferences, paused sleep/redraw/resize/resume, one exterior pass, distant/near shuttle detail, shadow quality, and mobile controls.');
+ }finally{await browser?.close();await new Promise(r=>server.close(r));}
+})().catch(error=>{console.error(error);process.exitCode=1;});

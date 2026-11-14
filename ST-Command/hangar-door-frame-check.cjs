@@ -20,9 +20,9 @@ for(const scaleY of [1,.128/.162]){
  assert(Math.abs(profile.floor*scaleY+.102*(1-scaleY)-profile.baseThickness+profile.bellyDepth)<1e-8,'underside meets the base without a sloped extra apron');
  assert.equal(profile.ry,.112);
  const p=frame.rim.attributes.position;for(let i=0;i<profile.inner.length;i++)assert(Math.abs(p.getZ(386+i)-profile.roofFront)<1e-8,'whole ring stays upright behind the clamshell');
- assert(profile.roofFront<profile.hingeDepth,'ring clears the dome at the crown');
+ assert(profile.hingeDepth<profile.roofFront,'door hinge is recessed behind the ring');
  assert(Math.abs(profile.sideCut[0]-.0325)<1e-6&&profile.sideCut[48]<.005&&profile.sideCut[96]<1e-8,'brim projects half as far while preserving its curved fringe');
- const beacon=createHangarRoofBeacon(AlpineThree,scaleY),dome=beacon.getObjectByName('shuttle-bay-green-light');assert.equal(dome.geometry.parameters.thetaLength,Math.PI/2);assert(dome.material.emissiveIntensity>0);assert((beacon.position.y+dome.position.y)*scaleY+.102*(1-scaleY)>.102,'dome light sits on top of the roof');
+ const beacon=createHangarRoofBeacon(AlpineThree,scaleY),dome=beacon.getObjectByName('shuttle-bay-green-light');const lensPoints=dome.geometry.attributes.position;let lensTop=0;for(let i=0;i<lensPoints.count;i++)lensTop=Math.max(lensTop,lensPoints.getY(i)*scaleY);assert(Math.abs(lensTop-beacon.userData.roofBeacon.lensHeight)<1e-8,'current low-profile beacon has its specified lens height');assert(dome.material.emissiveIntensity>0);assert((beacon.position.y+dome.position.y)*scaleY+.102*(1-scaleY)>.102,'dome light sits on top of the roof');
  closedSurface(frame.rim);closedSurface(frame.seal);closedSurface(frame.base);
 }
 console.log('Passed: narrow door arch, thick reference base, supported floor return, planar front face and watertight surround on both models.');

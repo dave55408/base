@@ -6,15 +6,19 @@ window.attachExcursionCamera=ship=>{
  const camera=new T.PerspectiveCamera(45,1,.02,100000);ship.excursionCamera=camera;
  // Broad reflected light from the planet below/port, separate from the sun.
  const planetBounce=new T.DirectionalLight(0xffffff,0);planetBounce.name='planet-bounce';planetBounce.position.set(-4,-3,2);ship.scene.add(planetBounce);
- const sun=ship.scene.getObjectByName('space-key'),sunDirection=sun?.position.clone().normalize();
+ const sun=ship.scene.getObjectByName('space-key'),sunDirection=sun?.position.clone().normalize(),bayLight=ship.model.getObjectByName('bay-interior-key'),archFill=ship.model.getObjectByName('bay-arch-fill');
  if(sun){
   sun.shadow.intensity=.5;
-  const shadowSize=Math.min(4096,ship.renderer.capabilities.maxTextureSize);
+  const shadowSize=Math.min(SimPerformance.shadowSize,ship.renderer.capabilities.maxTextureSize);
   sun.castShadow=true;sun.shadow.mapSize.set(shadowSize,shadowSize);sun.shadow.camera.left=sun.shadow.camera.bottom=-2.2;sun.shadow.camera.right=sun.shadow.camera.top=2.2;sun.shadow.camera.near=.01;sun.shadow.camera.far=30;sun.shadow.bias=-.0001;sun.shadow.normalBias=.0015;sun.shadow.radius=2;
   ship.scene.add(sun.target);ship.renderer.shadowMap.type=T.PCFSoftShadowMap;
   ship.model.traverse(o=>{if(o.isMesh){const materials=Array.isArray(o.material)?o.material:[o.material];o.castShadow=materials.some(mat=>!mat.transparent||mat.opacity>=.9);o.receiveShadow=true;}});
  }
  let craft=null,enterpriseCorners=null,enterpriseSurface=null,planetFrame=null,bayFrame=null,lastExteriorPose=null;
+ ship.prepareExcursionShuttle=()=>{
+  if(!craft){craft=createClassFShuttle(T);craft.name='excursion-class-f-shuttle';craft.scale.setScalar(.162/3/3.20);craft.traverse(o=>{if(o.isMesh){const materials=Array.isArray(o.material)?o.material:[o.material];o.castShadow=materials.some(mat=>!mat.transparent||mat.opacity>=.9);o.receiveShadow=true;}});craft.visible=false;ship.scene.add(craft);ship.excursionShuttle=craft;window.enterpriseHullSurfaceDetail?.prepare(craft);}
+  return craft;
+ };
  let starSeed=1701;const random=()=>{starSeed=(Math.imul(starSeed,1664525)+1013904223)>>>0;return starSeed/4294967296;};
  const stars=Array.from({length:1000},()=>{const y=random()*2-1,a=random()*Math.PI*2,r=Math.sqrt(1-y*y);return new T.Vector3(Math.sin(a)*r,y,Math.cos(a)*r);});
  function boxCorners(min,max){const out=[];for(const x of [min[0],max[0]])for(const y of [min[1],max[1]])for(const z of [min[2],max[2]])out.push(new T.Vector3(x,y,z));return out;}
@@ -44,12 +48,16 @@ window.attachExcursionCamera=ship=>{
   camera.rotateY(-(m.lookYaw||0)*Math.PI/180);camera.rotateX((m.lookPitch||0)*Math.PI/180);camera.updateWorldMatrix(true,false);
   ship.planetExcursionFraming={...planetFrame.rect,liveModel:true};
  }
- ship.draw=(ctx,w,h,m,s)=>{
+ ship.draw=(ctx,w,h,m,s,updateOnly=false)=>{
   const landing=!!m.landing&&!m.landing.inside&&(m.phase==='docking'||m.phase==='cockpitfade'&&m.clock<.6);
   const external=m.cameraView==='excursion'&&['flight','docking','landed','powerdown'].includes(m.phase)&&(m.freeSpace||m.z>95);
   if(!external){bayFrame=null;lastExteriorPose=null;}
-  const exteriorShadows=!!sun&&(external||landing||m.phase==='bridge');
-  ship.renderer.shadowMap.enabled=exteriorShadows||(m.garageDoorOpen||0)>.001;
+  const bayBounds=ShuttleBayFlight.dimensions(),insideHangar=m.phase!=='bridge'&&Math.abs(m.x)<.15&&m.y>bayBounds.rear-.04&&m.y<bayBounds.mouth+.10&&m.z>bayBounds.floor-.02&&m.z<bayBounds.ceiling+.05;
+  ship.launchRendering=ship.launchOptimizationEnabled!==false&&external&&insideHangar&&!!m.departureCameraPending;
+  const exteriorShadows=!!sun&&!ship.launchRendering&&(external||landing||m.phase==='bridge');
+  if(bayLight)bayLight.visible=insideHangar;
+  if(archFill)archFill.visible=insideHangar;
+  ship.renderer.shadowMap.enabled=exteriorShadows||insideHangar||(m.garageDoorOpen||0)>.001;
   if(sun)sun.castShadow=exteriorShadows;
   if(exteriorShadows)focusShadow(new T.Vector3(0,.4,-.85),2.2);
   planetBounce.intensity=external&&!m.freeSpace&&m.planet?.color!=null?1.05:0;
@@ -59,10 +67,10 @@ window.attachExcursionCamera=ship=>{
   const berthCockpit=!external&&m.cockpitFromBerth;
   const blend=m.landing?.inside&&m.phase==='docking'?Math.max(0,Math.min(1,m.clock/m.landing.duration)):1,eye=m.landing?.inside&&m.phase==='docking'?m.landing.eyeAtStart+(1-m.landing.eyeAtStart)*blend*blend*(3-2*blend):1;
   const heading=s.heading*Math.PI/180,pilot=berthCockpit?{...m,x:m.x+Math.sin(heading)*.043*eye,y:m.y-Math.cos(heading)*.043*eye,z:m.z+.024*eye}:m;
-  const bay=baseDraw(external||landing?sink:ctx,w,h,pilot,s);if(!external&&!landing)return bay;
-  if(!craft){craft=createClassFShuttle(T);craft.name='excursion-class-f-shuttle';craft.scale.setScalar(.162/3/3.20);craft.traverse(o=>{if(o.isMesh){const materials=Array.isArray(o.material)?o.material:[o.material];o.castShadow=materials.some(mat=>!mat.transparent||mat.opacity>=.9);o.receiveShadow=true;}});ship.scene.add(craft);ship.excursionShuttle=craft;window.enterpriseHullSurfaceDetail?.prepare(craft);}
+  const bay=baseDraw(external||landing?sink:ctx,w,h,pilot,s,updateOnly||external||landing);if(updateOnly||!external&&!landing)return bay;
+  ship.prepareExcursionShuttle();
   craft.visible=true;craft.position.set(m.x,m.z-110,m.y);craft.rotation.set(-((s.shuttlePitch??s.pitch)*Math.PI/180+(m.pitchBob||0)),Math.PI-(s.shuttleHeading??s.heading)*Math.PI/180,m.bank||0,'YXZ');
-  if(external&&m.freeSpace)focusShadow(craft.position,.35);
+  if(exteriorShadows&&external&&m.freeSpace)focusShadow(craft.position,.35);
   const insideBay=external&&ShuttleBayFlight.inside(m);
   const departing=external&&(m.departureCameraPending||m.departureCameraFade!=null||m.landingChoicePending||m.landing?.keepLaunchCamera);
   if(!insideBay&&!m.entranceCameraPose)bayFrame=null;
@@ -98,7 +106,7 @@ window.attachExcursionCamera=ship=>{
    camera.position.copy(bayFrame.position);camera.quaternion.copy(bayFrame.quaternion);camera.fov=bayFrame.fov;
    }
    camera.updateProjectionMatrix();camera.updateWorldMatrix(true,false);
-   ctx.fillStyle='#01050e';ctx.fillRect(0,0,w,h);const rw=Math.min(1920,Math.round(w));ship.renderer.setSize(rw,Math.round(h*rw/w),false);ship.renderer.render(ship.scene,camera);ctx.drawImage(ship.renderer.domElement,0,0,w,h);
+   ctx.fillStyle='#01050e';ctx.fillRect(0,0,w,h);SimPerformance.resize(ship.renderer,w,h);ship.renderer.render(ship.scene,camera);ctx.drawImage(ship.renderer.domElement,0,0,w,h);
    craft.updateWorldMatrix(true,true);const corners=boxCorners([-1.625,0,-createClassFShuttle.aftExtent-.02],[1.625,2.36*.80,3.40]).map(v=>craft.localToWorld(v).project(camera).toArray());
    ship.excursionFraming={enterprise:[],shuttle:corners,fixedBayCamera:true,departureCamera:departing};ship.landingTelemetry={progress:m.phase==='docking'?Math.min(1,m.clock/m.landing.duration):1,position:craft.position.toArray(),camera:camera.position.toArray(),touchdown:m.phase==='landed',fixedBayCamera:true};
    const p=new T.Vector3(0,b.floor-110+.02,b.padY).project(camera);return {x:(p.x+1)*w/2,y:(1-p.y)*h/2,visible:p.z>=-1&&p.z<=1};
@@ -112,7 +120,7 @@ window.attachExcursionCamera=ship=>{
    const center=craft.position.clone().add(new T.Vector3(0,.016,0));
    camera.aspect=w/h;camera.fov=40;camera.near=.02;camera.far=Math.max(100,craft.position.length()*4+10);camera.up.set(0,1,0);
    camera.position.set(craft.position.x-.030,craft.position.y+.04,Math.max(craft.position.z+.16,m.clock>=duration-4?.018:-Infinity));camera.lookAt(center);camera.updateProjectionMatrix();camera.updateWorldMatrix(true,false);
-   ctx.fillStyle='#01050e';ctx.fillRect(0,0,w,h);const rw=Math.min(1920,Math.round(w));ship.renderer.setSize(rw,Math.round(h*rw/w),false);ship.renderer.render(ship.scene,camera);ctx.drawImage(ship.renderer.domElement,0,0,w,h);
+   ctx.fillStyle='#01050e';ctx.fillRect(0,0,w,h);SimPerformance.resize(ship.renderer,w,h);ship.renderer.render(ship.scene,camera);ctx.drawImage(ship.renderer.domElement,0,0,w,h);
    ship.landingTelemetry={progress:t,position:craft.position.toArray(),camera:camera.position.toArray(),touchdown:t===1};
    return {...bay,visible:false,landing:true};
   }
@@ -125,16 +133,27 @@ window.attachExcursionCamera=ship=>{
    ship.model.traverse(o=>{if(!o.isMesh)return;const p=o.geometry.attributes.position,stride=Math.max(1,Math.ceil(p.count/128));for(let i=0;i<p.count;i+=stride)enterpriseSurface.push(new T.Vector3().fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld));});
   }
   if(!m.freeSpace){
-   planetCamera(w,h,m);const rw=Math.min(1920,Math.round(w));ship.renderer.setSize(rw,Math.round(h*rw/w),false);ship.renderer.render(ship.scene,camera);ctx.drawImage(ship.renderer.domElement,0,0,w,h);
+   planetCamera(w,h,m);SimPerformance.resize(ship.renderer,w,h);ship.renderer.render(ship.scene,camera);ctx.drawImage(ship.renderer.domElement,0,0,w,h);
    const projected=enterpriseCorners.map(v=>v.clone().project(camera));ship.excursionFraming={enterprise:projected.map(v=>v.toArray()),shuttle:[]};
    ctx.fillStyle='#b5e9ff';ctx.font='12px Consolas';ctx.fillText('EXCURSION CAMERA',18,28);const p=new T.Vector3().project(camera);return {x:(p.x+1)*w/2,y:(1-p.y)*h/2,visible:p.z>=-1&&p.z<=1};
   }
   ship.planetExcursionFraming=null;camera.clearViewOffset();
   // Preserve the shuttle's forward viewpoint, including mouse look, rather
   // than aiming the camera at Enterprise independently of the helm.
-  const yaw=s.heading*Math.PI/180,pitch=s.pitch*Math.PI/180;
+  const rad=Math.PI/180,lookYaw=m.lookYaw||0,lookPitch=m.lookPitch||0;
+  const yaw=(s.shuttleHeading??s.heading-lookYaw)*rad,pitch=(s.shuttlePitch??s.pitch-lookPitch)*rad;
   const forward=new T.Vector3(Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch));
-  const up=new T.Vector3(-Math.sin(yaw)*Math.sin(pitch),Math.cos(pitch),Math.cos(yaw)*Math.sin(pitch));
+  // Enterprise motion changes the shuttle's carrier-relative heading and bank.
+  // Level the chase camera in inertial space, then convert back into the
+  // Enterprise rendering frame so it stays with the shuttle through that motion.
+  const carrierPose=new T.Group(),carrier=m.carrier;
+  if(carrier)carrierPose.rotation.set((carrier.pitch||0)*rad,-(carrier.heading||0)*rad,-(carrier.roll||0),'YXZ');
+  forward.applyQuaternion(carrierPose.quaternion);
+  const worldYaw=Math.atan2(forward.x,-forward.z)+lookYaw*rad;
+  const worldPitch=Math.max(-89*rad,Math.min(89*rad,Math.asin(Math.max(-1,Math.min(1,forward.y)))+lookPitch*rad));
+  forward.set(Math.sin(worldYaw)*Math.cos(worldPitch),Math.sin(worldPitch),-Math.cos(worldYaw)*Math.cos(worldPitch));
+  const up=new T.Vector3(-Math.sin(worldYaw)*Math.sin(worldPitch),Math.cos(worldPitch),Math.cos(worldYaw)*Math.sin(worldPitch));
+  const inverseCarrier=carrierPose.quaternion.clone().invert();forward.applyQuaternion(inverseCarrier);up.applyQuaternion(inverseCarrier);
   // Keep the exterior camera level; only the shuttle mesh follows its bank/roll.
   const center=craft.localToWorld(new T.Vector3(0,.944,-.10));
   const craftCorners=boxCorners([-1.625,0,-createClassFShuttle.aftExtent-.02],[1.625,2.36*.80,3.40]).map(v=>craft.localToWorld(v)),points=[...enterpriseCorners,...craftCorners];
@@ -160,9 +179,11 @@ window.attachExcursionCamera=ship=>{
   positionCamera(backoff,height);const projected=points.map(v=>v.clone().project(camera));
   if(m.freeSpace){
    ctx.fillStyle='#01050e';ctx.fillRect(0,0,w,h);ctx.fillStyle='#c3d8e7';
-   for(const star of stars){const p=star.clone().multiplyScalar(10).add(camera.position).project(camera);if(p.z> -1&&p.z<1&&Math.abs(p.x)<1&&Math.abs(p.y)<1)ctx.fillRect((p.x+1)*w/2,(1-p.y)*h/2,1,1);}
+   // Star directions are inertial. Convert them into the same carrier-relative
+   // frame as the camera so Enterprise's attitude cannot drag the sky around.
+   for(const star of stars){const p=star.clone().applyQuaternion(inverseCarrier).multiplyScalar(10).add(camera.position).project(camera);if(p.z> -1&&p.z<1&&Math.abs(p.x)<1&&Math.abs(p.y)<1)ctx.fillRect((p.x+1)*w/2,(1-p.y)*h/2,1,1);}
   }
-  const rw=Math.min(1920,Math.round(w));ship.renderer.setSize(rw,Math.round(h*rw/w),false);ship.renderer.render(ship.scene,camera);ctx.drawImage(ship.renderer.domElement,0,0,w,h);
+  SimPerformance.resize(ship.renderer,w,h);ship.renderer.render(ship.scene,camera);ctx.drawImage(ship.renderer.domElement,0,0,w,h);
   ship.excursionFraming={enterprise:projected.slice(0,8).map(v=>v.toArray()),shuttle:projected.slice(8).map(v=>v.toArray())};
   lastExteriorPose={position:camera.position.clone(),quaternion:camera.quaternion.clone(),fov:camera.fov};
   const p=new T.Vector3(0,0,0).project(camera);ctx.fillStyle='#b5e9ff';ctx.font='12px Consolas';ctx.fillText('EXCURSION CAMERA',18,28);

@@ -7,11 +7,15 @@ const {createServer}=require('./server.cjs');
     browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
     const page=await browser.newPage({viewport:{width:2048,height:1152},deviceScaleFactor:1.25}),errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.STCommand?.games.every(g=>g.isBooted));
-    assert.equal(await page.evaluate(()=>STCommand.state.throttle),14,'startup engine power is fourteen percent');assert(await page.locator('#launch-shuttle').isVisible(),'launch is available at startup power');
+    assert.equal(await page.evaluate(()=>STCommand.state.throttle),0,'startup engine power is zero percent');assert(await page.locator('#launch-shuttle').isVisible(),'launch is available at startup power');
     await page.locator('#stop').click();assert(await page.locator('#launch-shuttle').isVisible());
     const saved=await page.evaluate(()=>({x:STCommand.state.x,y:STCommand.state.y,z:STCommand.state.z,heading:STCommand.state.heading,pitch:STCommand.state.pitch,target:STCommand.state.target.id}));
     const checkFit=async()=>{const helm=await page.locator('.helm').boundingBox();for(const id of ['#launch-shuttle','#land-bay','#power-down','#engage','#manual']){const el=page.locator(id);if(await el.isVisible()){const b=await el.boundingBox();assert(b.y+b.height<helm.y+helm.height-1,id+' remains visible at 125%');}}};
-    await checkFit();await page.locator('#launch-shuttle').click();
+    await checkFit();
+    // Sample liftoff before an animation frame can advance it. Rendering speed
+    // must not change the measured starting height of this deterministic trace.
+    await page.evaluate(()=>{for(const game of STCommand.games)game.loop.sleep();});
+    await page.locator('#launch-shuttle').click();await page.waitForFunction(()=>STCommand.away.state.phase==='flight',null,{timeout:180000});
     const departure=await page.evaluate(()=>{
       const sim=STCommand,m=sim.away.state,s=sim.state;
       const start={x:m.x,y:m.y,z:m.z,heading:s.heading,pitch:s.pitch,speed:s.speed},speeds=[];
@@ -28,8 +32,9 @@ const {createServer}=require('./server.cjs');
     assert(departure.speeds.every((v,i)=>i===0||v>=departure.speeds[i-1]-1e-6),'departure speed increases smoothly');
     assert.equal(departure.start.heading,180,'launch faces astern');assert.equal(departure.start.pitch,0);
     assert(departure.end.y>.05,'departure carries the shuttle out of the rear of the ship');
-    assert(Math.abs(departure.end.x-departure.start.x)<.0001&&Math.abs(departure.end.z-departure.start.z-.025)<.0001,'departure stays aligned with its bay exit lane after lifting');
+    assert(Math.abs(departure.end.x-departure.start.x)<.0001&&Math.abs(departure.end.z-departure.start.z-.0253)<.0001,'departure stays aligned with its bay exit lane at the cockpit entry height');
     assert(Math.abs(departure.start.x)+1.625*(.162/3/3.20)<.081,'larger engines clear both side walls in the departure lane');
+    await page.evaluate(()=>{for(const game of STCommand.games){game.loop.resetDelta();game.loop.wake(true);}});
     await page.locator('#stop').click();
     assert(await page.evaluate(()=>STCommand.away.state.freeSpace));assert.equal(await page.locator('#destination option').count(),1);assert(await page.locator('#warp').isDisabled());assert(await page.locator('#retrieve-beacon').isHidden());assert(await page.locator('#land-bay').isDisabled(),'manual touchdown is unavailable outside the bay');
     await page.waitForFunction(()=>STCommand.games[0].scene.getScene('Forward').enterpriseRenderer);
@@ -71,19 +76,22 @@ const {createServer}=require('./server.cjs');
     await page.evaluate(()=>{Object.assign(STCommand.away.state,{x:-1.5,y:100,z:110.5,returnLeg:1,approach:false});Object.assign(STCommand.state,{heading:90,pitch:0});});
     await page.locator('#engage').click();
     const approach=await page.evaluate(()=>{for(let i=0;i<20000&&STCommand.state.autopilot;i++)STCommand.tick(.05);return {range:STCommand.away.range(),phase:STCommand.away.state.phase};});assert(approach.range<.65,JSON.stringify(approach));assert.equal(approach.phase,'flight');
-    await checkFit();assert(await page.locator('#land-bay').isDisabled());await page.evaluate(()=>{const a=STCommand;Object.assign(a.away.state,{x:.03,y:-.17,z:110-(EnterpriseModels.selected==='original'?.04645:.01530),bank:0,roll:0});Object.assign(a.state,{heading:180,pitch:0,speed:0,throttle:0,autopilot:false});a.away.updateUI();});await page.locator('#land-bay').click();assert.equal(await page.evaluate(()=>STCommand.away.state.phase),'landed');
+    await checkFit();assert(await page.locator('#land-bay').isDisabled());await page.evaluate(()=>{const a=STCommand;Object.assign(a.away.state,{x:.03,y:-.17,z:ShuttleBayFlight.dimensions().floor,bank:0,roll:0});Object.assign(a.state,{heading:180,pitch:0,speed:0,throttle:0,autopilot:false});a.away.updateUI();});await page.locator('#land-bay').click();assert.equal(await page.evaluate(()=>STCommand.away.state.phase),'landed');
     await page.locator('#power-down').click();await page.evaluate(()=>{for(let i=0;i<70;i++)STCommand.tick(.05);});
     assert.equal(await page.evaluate(()=>STCommand.away.state.phase),'bridge');assert.deepEqual(await page.evaluate(()=>({x:STCommand.state.x,y:STCommand.state.y,z:STCommand.state.z,heading:STCommand.state.heading,pitch:STCommand.state.pitch,target:STCommand.state.target.id})),saved,'returns to the stopped main ship with its course intact');
     assert.equal(await page.evaluate(()=>STCommand.state.throttle),0);assert.equal(await page.locator('#destination option').count(),11);assert(await page.locator('#launch-shuttle').isVisible());
-    await page.locator('#launch-shuttle').click();await page.keyboard.press('r');assert.equal(await page.evaluate(()=>STCommand.away.state.phase),'bridge');assert.equal(await page.evaluate(()=>STCommand.away.state.freeSpace),false);
+    await page.locator('#launch-shuttle').click();await page.waitForFunction(()=>STCommand.away.state.phase==='flight',null,{timeout:180000});await page.keyboard.press('r');assert.equal(await page.evaluate(()=>STCommand.away.state.phase),'bridge');assert.equal(await page.evaluate(()=>STCommand.away.state.freeSpace),false);
     await page.evaluate(()=>{Object.assign(STCommand.state,{paused:true,throttle:15,speed:.6,heading:90,pitch:0,autopilot:false});STCommand.away.updateUI();STCommand.away.launchShuttle();});
     assert.equal(await page.evaluate(()=>STCommand.away.state.phase),'bridge','15% does not allow launch');
     assert(await page.locator('#launch-shuttle').isHidden());
     await page.evaluate(()=>{STCommand.state.throttle=14.9;STCommand.away.updateUI();});
     assert(await page.locator('#launch-shuttle').isVisible(),'launch is available below 15% while underway');
-    await page.locator('#launch-shuttle').click();
+    await page.locator('#launch-shuttle').click();await page.waitForFunction(()=>STCommand.away.state.phase==='flight',null,{timeout:180000});
     const cruise=await page.evaluate(()=>{
       const sim=STCommand,m=sim.away.state,s=sim.state,start={...m.bridgeState};
+      // This trace measures inertial free flight, after the attached launch
+      // sequence has cleared the bay, rather than a shuttle still on its pad.
+      Object.assign(m,{launchAttached:false,launchLiftRemaining:0,launchStage:null,departureCameraPending:false,departureCameraFade:null,x:0,y:.2,z:110.02});
       s.throttle=0;s.speed=0;for(let i=0;i<1200;i++)sim.tick(.05);s.paused=true;
       return {start,bridge:{...m.bridgeState},carrier:{...m.carrier},range:sim.away.range()};
     });
@@ -95,7 +103,7 @@ const {createServer}=require('./server.cjs');
     assert(cruise.range>3,'stationary shuttle sees Enterprise move away');
     const recovery=await page.evaluate(()=>{
       const sim=STCommand;sim.away.engage();for(let i=0;i<20000&&sim.state.autopilot;i++)sim.tick(.05);
-      const range=sim.away.range(),matchedSpeed=sim.state.speed;Object.assign(sim.away.state,{x:.03,y:-.17,z:110-(EnterpriseModels.selected==='original'?.04645:.01530),bank:0,roll:0});Object.assign(sim.state,{heading:180,pitch:0,speed:0,throttle:0,autopilot:false});sim.away.dock();const docking=sim.away.state.phase;
+      const range=sim.away.range(),matchedSpeed=sim.state.speed;Object.assign(sim.away.state,{x:.03,y:-.17,z:ShuttleBayFlight.dimensions().floor,bank:0,roll:0});Object.assign(sim.state,{heading:180,pitch:0,speed:0,throttle:0,autopilot:false});sim.away.dock();const docking=sim.away.state.phase;
       for(let i=0;i<130;i++)sim.tick(.05);sim.away.powerDown();for(let i=0;i<61;i++)sim.tick(.05);
       sim.state.paused=true;return {range,matchedSpeed,docking,phase:sim.away.state.phase,speed:sim.state.speed,power:sim.state.throttle,heading:sim.state.heading};
     });
