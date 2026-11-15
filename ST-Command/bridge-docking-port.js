@@ -40,7 +40,8 @@ window.createBridgeDockingPort=(T,{centerY,hull,dome})=>{
  reflection.fillStyle=gradient;reflection.fillRect(0,0,128,64);const reflectionMap=new T.CanvasTexture(reflectionCanvas);reflectionMap.colorSpace=T.SRGBColorSpace;reflectionMap.mapping=303;
  for(const material of [door,rim]){material.envMap=reflectionMap;material.envMapIntensity=1.1;material.userData.externalReflection=true;}
  // Match the silver hatch with a subtly darker panel directly behind it.
- const surround=door.clone();surround.color.multiplyScalar(.88);surround.map=null;
+ const surround=door.clone();surround.color.multiplyScalar(.88);surround.map=null;surround.side=T.DoubleSide;
+ door.side=rim.side=T.DoubleSide;
  delete surround.userData.hatchLettering;
  const add=(geometry,material,name,x=0,y=0,z=0)=>{const mesh=new T.Mesh(geometry,material);mesh.name=name;mesh.position.set(x,y,z);port.add(mesh);return mesh;};
  const box=(name,x,y,z,w,h,d,mat)=>add(new T.BoxGeometry(w,h,d),mat,name,x,y,z);
@@ -56,6 +57,13 @@ window.createBridgeDockingPort=(T,{centerY,hull,dome})=>{
  for(const a of angles){const c=Math.cos(a),s=Math.sin(a),r=Math.min(.0105/Math.max(1e-12,Math.abs(c)),.0155/Math.max(1e-12,Math.abs(s)));framePositions.push(c*opening,s*opening,faceZ,c*r,s*r,faceZ);}
  for(let i=0;i<angles.length-1;i++){const j=i*2;frameIndices.push(j,j+1,j+3,j,j+3,j+2);}
  add(geometry(framePositions,frameIndices),surround,'docking-block-aft-face');
+ // Close the back of the hatch wall around its aperture, so the corridor sees
+ // a finished gray bulkhead rather than the reverse of an exterior-only face.
+ const innerFrame=[],innerIndices=[],frameCount=framePositions.length/3,bulkheadThickness=.0003;
+ for(const z of [doorZ-.0004,doorZ-.0004+bulkheadThickness])for(let i=0;i<frameCount;i++)innerFrame.push(framePositions[i*3],framePositions[i*3+1],z);
+ for(let i=0;i<frameIndices.length;i+=3){const [a,b,c]=frameIndices.slice(i,i+3);innerIndices.push(a,c,b,a+frameCount,b+frameCount,c+frameCount);}
+ for(let i=0;i<angles.length-1;i++)for(const edge of [0,1]){const a=i*2+edge,b=(i+1)*2+edge;innerIndices.push(a,b,b+frameCount,a,b+frameCount,a+frameCount);}
+ const insideFace=add(geometry(innerFrame,innerIndices),new T.MeshStandardMaterial({color:0x303236,roughness:1,metalness:0,side:T.DoubleSide}),'docking-block-interior-face');insideFace.userData.wallThickness=bulkheadThickness;
  function ring(name,inner,outerRadius,z,mat){
   const p=[],indices=[];for(let i=0;i<=96;i++){const a=i*Math.PI/48;for(const r of [inner,outerRadius])p.push(Math.cos(a)*r,Math.sin(a)*r,z);}
   for(let i=0;i<96;i++){const j=i*2;indices.push(j,j+1,j+3,j,j+3,j+2);}return add(geometry(p,indices),mat,name);
@@ -66,7 +74,7 @@ window.createBridgeDockingPort=(T,{centerY,hull,dome})=>{
  }
  // Silver jambs open into the room; there is no solid backing behind the doors.
  wall('docking-raised-circle-edge',outer,faceZ,raisedZ,rim);
- wall('docking-recess-inner-wall',opening,doorZ-.00035,raisedZ,rim,true);
+ wall('docking-recess-inner-wall',opening,doorZ-.0004,raisedZ,rim,true);
  ring('docking-port-metal-rim',opening,outer,raisedZ,rim);
  // Extend the meeting edges across the center, with the left leaf in front.
  // A shallow lap and depth bias prevent a dark gap or coplanar flicker.
@@ -109,21 +117,34 @@ window.createBridgeDockingPort=(T,{centerY,hull,dome})=>{
   const a=(i+.5)*Math.PI/6,head=add(new T.SphereGeometry(.000166,16,8),bolt,'docking-rim-fastener',Math.cos(a)*.008625,Math.sin(a)*.008625,raisedZ+.000014);
   head.scale.z=.24;
  }
- const interior=createBridgeHatchRoom(T,{dome,centerY});port.add(interior);port.ready=interior.ready;
- // Seal the closed hatch's seam and perimeter against the scene background.
- // Clear the backing as the doors open so the room remains visible through them.
- const closedBacking=ring('docking-closed-hatch-black-backing',0,opening+.0002,doorZ-.0004,new T.MeshBasicMaterial({color:0x000000,side:T.DoubleSide,toneMapped:false}));
- let open=0,lastTime;
+ // A continuous entrance leads into the circular room inside the bridge dome.
+ const interior=createBridgeHatchRoom(T,{dome,centerY,portZ:port.position.z,doorZ:doorZ-.0004});port.add(interior);
+ // Only the portion outside the room belongs to the exterior airlock housing.
+ // Its old forward edge protruded inside as two free-standing plated slabs.
+ const layout=interior.userData.circularRoom,bp=block.geometry.attributes.position;
+ for(let i=0;i<bp.count;i++){const join=layout.centerZ+Math.sqrt(Math.max(0,layout.radius**2-bp.getX(i)**2))+.00002;if(bp.getZ(i)<join)bp.setZ(i,join);}
+ bp.needsUpdate=true;block.geometry.computeBoundingBox();block.geometry.computeBoundingSphere();
+ block.userData.trimmedAtBridgeWall=true;
+ port.ready=interior.ready;
+ let open=0,lastTime,interiorView=false;
+ port.setInteriorView=active=>{interiorView=!!active;interior.visible=open>0||interiorView;};
+ port.isInteriorPoint=point=>{
+  port.updateWorldMatrix(true,false);const p=port.worldToLocal(point.clone()),layout=interior.userData.circularRoom,pit=interior.getObjectByName('bridge-room-sunken-room').userData.sunkenRoom,roof=interior.getObjectByName('bridge-room-ceiling').userData.domeCeiling;
+  const inRoom=Math.hypot(p.x,p.z-layout.centerZ)<=layout.radius+.001&&p.y>=pit.floorY-centerY-.001&&p.y<=roof.apexY-centerY+.001;
+  const inCorridor=Math.abs(p.x)<=.0106&&p.z>=layout.entranceZ-.001&&p.z<=raisedZ+.001&&p.y>=layout.floorY-centerY-.001&&p.y<=.0105;
+  return inRoom||inCorridor;
+ };
  port.setHatchOpen=value=>{
   open=Math.max(0,Math.min(1,value));const eased=open*open*(3-2*open);slide.value=(opening+.0001)*eased*.90;
   for(const {leaf,side}of leaves)leaf.position.x=side*slide.value;
-  interior.visible=open>.001;closedBacking.visible=!interior.visible;port.userData.hatchOpen=open;
+  port.userData.hatchOpen=open;
+  interior.visible=open>0||interiorView;
  };
  port.updateHatch=(time=performance.now()/1000)=>{
   if(!Number.isFinite(time))return;const dt=lastTime===undefined?0:Math.max(0,Math.min(.1,time-lastTime));lastTime=time;
   const target=BridgeHatch.open?1:0;port.setHatchOpen(open+Math.sign(target-open)*Math.min(Math.abs(target-open),dt/1.2));
  };
  port.setHatchOpen(0);
- port.userData.dockingPort={floorY:centerY-.0155,width:.021,height:.031,depth:.035,faceZ,doorZ,raisedZ,facing:'aft',usesExistingApproach:true};
+ port.userData.dockingPort={floorY:centerY-.0155,width:.021,height:.031,depth:.035,faceZ,doorZ,raisedZ,facing:'aft',usesExistingApproach:true,interiorRoom:true};
  return port;
 };

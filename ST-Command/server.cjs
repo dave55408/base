@@ -4,7 +4,9 @@ const path = require('node:path');
 const root = __dirname;
 const types = {'.html':'text/html; charset=utf-8','.css':'text/css','.svg':'image/svg+xml','.js':'text/javascript','.json':'application/json','.png':'image/png','.m4a':'audio/mp4','.mp3':'audio/mpeg','.ogg':'audio/ogg','.wav':'audio/wav'};
 const {notesDocument,readNotesDocument}=require('./project-notes-format.js');
-function createServer({notesFile=path.join(root,'project-notes.html'),legacyNotesFile=path.join(path.dirname(notesFile),'project-notes.txt')}={}){
+const {createVersionTracker}=require('./app-version.cjs');
+function createServer({notesFile=path.join(root,'project-notes.html'),legacyNotesFile=path.join(path.dirname(notesFile),'project-notes.txt'),versionRoot=root}={}){
+  const versions=createVersionTracker(versionRoot);
   const htmlNotes=path.extname(notesFile).toLowerCase()==='.html',notesName=path.basename(notesFile);
   async function writeNotes(notes){const temp=notesFile+'.tmp';await fs.promises.writeFile(temp,htmlNotes?notesDocument(notes):notes,'utf8');await fs.promises.rename(temp,notesFile);}
   async function readNotes(){
@@ -18,6 +20,15 @@ function createServer({notesFile=path.join(root,'project-notes.html'),legacyNote
   }
   let notesWrites=Promise.resolve();
   return http.createServer((req,res)=>{
+    if(['/api/version','/app-version-data.js'].includes(req.url?.split('?')[0])){
+      const script=req.url.startsWith('/app-version-data.js');
+      res.setHeader('Cache-Control','no-store');
+      if(!['GET','HEAD'].includes(req.method)){res.setHeader('Allow','GET, HEAD');res.writeHead(405).end();return;}
+      versions.current().then(value=>{
+        const body=script?'window.ST_COMMAND_VERSION='+JSON.stringify(value)+';\n':JSON.stringify(value);
+        res.writeHead(200,{'Content-Type':script?'text/javascript; charset=utf-8':'application/json; charset=utf-8'});res.end(req.method==='HEAD'?undefined:body);
+      }).catch(()=>res.writeHead(500).end());return;
+    }
     if(req.url==='/api/project-notes'){
       const reply=(code,value)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(value));};
       if(req.method==='GET'){

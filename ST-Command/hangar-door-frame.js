@@ -123,7 +123,7 @@ window.createHangarUplights=(T,profile)=>{
  return group;
 };
 window.createHangarRoofBeacon=(T,scaleY=1,hullMaterial=null,scaleZ=1)=>{
- const beacon=new T.Group();beacon.name='shuttle-bay-roof-beacon';beacon.position.set(0,.101,.010);beacon.scale.z=1/scaleZ;
+ const sizeScale=.85,beacon=new T.Group();beacon.name='shuttle-bay-roof-beacon';beacon.position.set(0,.101,.010);beacon.scale.set(sizeScale,sizeScale,sizeScale/scaleZ);
  const metal=new T.MeshStandardMaterial({color:0x6a7770,roughness:.52,metalness:.4});
  const mount=new T.Mesh(new T.CylinderGeometry(.0128,.014,.0032/scaleY,48),metal);mount.name='shuttle-bay-beacon-mount';mount.position.y=.0016/scaleY;beacon.add(mount);
  const collar=new T.Mesh(new T.CylinderGeometry(.0123,.0128,.0007/scaleY,48),new T.MeshStandardMaterial({color:0x4f6055,roughness:.5,metalness:.3}));collar.name='shuttle-bay-beacon-collar';collar.position.y=.00335/scaleY;beacon.add(collar);
@@ -132,7 +132,7 @@ window.createHangarRoofBeacon=(T,scaleY=1,hullMaterial=null,scaleZ=1)=>{
  const geometry=new T.SphereGeometry(.012,64,32,0,Math.PI*2,0,Math.PI/2);geometry.scale(1,1/scaleY,1);
  const dome=new T.Mesh(geometry,new T.MeshStandardMaterial({color:0x69d596,emissive:0x45ba73,emissiveIntensity:.85,roughness:.30,metalness:.04}));dome.name='shuttle-bay-green-light';dome.position.y=.0037/scaleY;beacon.add(dome);
  const light=new T.Light(0x69d596,.000025);light.isPointLight=true;light.type='PointLight';light.distance=.12;light.decay=2;light.name='shuttle-bay-roof-green-emitter';light.position.set(0,.010/scaleY,.003);beacon.add(light);
- beacon.userData.roofBeacon={lensHeight:.012,lensRadius:.012,color:0x69d596};return beacon;
+ beacon.userData.roofBeacon={lensHeight:.012*sizeScale,lensRadius:.012*sizeScale,sizeScale,color:0x69d596};return beacon;
 };
 
 /* The small lamp beneath the canopy lip casts steady white light. */

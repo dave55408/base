@@ -1,0 +1,14 @@
+/* Soft reflected theme light on physical console surfaces and readout panels. */
+body{--console-wash-rgb:214,153,78;--console-wash-opacity:.075;--console-wash-base:#0d0908;--console-wash-header:#100c09}
+body.shuttle-mode{--console-wash-rgb:84,161,214;--console-wash-opacity:.075;--console-wash-base:#081521;--console-wash-header:#08121c}
+body.night-mode{--console-wash-rgb:79,113,132;--console-wash-opacity:.035;--console-wash-base:#030507;--console-wash-header:#030507}
+body .helm .helm-body,body:is(.shuttle-mode,.night-mode) .helm .helm-body{
+ background:radial-gradient(ellipse at 35% 0%,rgba(var(--console-wash-rgb),var(--console-wash-opacity)),transparent 75%),linear-gradient(120deg,rgba(var(--console-wash-rgb),.018),transparent 48%),var(--console-wash-base);
+}
+body .console .display-title,body:is(.shuttle-mode,.night-mode) .console .display-title,
+body .console .display-footer,body:is(.shuttle-mode,.night-mode) .console .display-footer{
+ background:linear-gradient(110deg,rgba(var(--console-wash-rgb),var(--console-wash-opacity)),transparent 78%),var(--console-wash-header);
+}
+body .helm :is(.course-solution,.warp-readout,.mission-console),body:is(.shuttle-mode,.night-mode) .helm :is(.course-solution,.warp-readout,.mission-console){
+ background:linear-gradient(100deg,rgba(var(--console-wash-rgb),var(--console-wash-opacity)),transparent 82%);
+}

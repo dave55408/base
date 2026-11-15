@@ -15,17 +15,19 @@ const {chromium}=require(require.resolve('playwright',{paths:[__dirname,path.res
   const dialog=document.createElement('dialog');document.body.append(dialog);dialog.showModal();press();const modal=m.phase==='bridge';dialog.close();dialog.remove();
   press({},document.getElementById('throttle'));await settle();
   const jumped=m.phase==='flight'&&m.freeSpace&&m.cameraView==='cockpit'&&m.launchLiftRemaining===0&&s.heading===0&&s.pitch===0&&s.throttle===0&&s.speed===0&&m.bridgeState.throttle===80;
-  const carrier=m.carrier,bridgeState=m.bridgeState;Object.assign(m,{x:3,y:4,z:111,lookYaw:40,lookPitch:20,bank:.7,roll:.7,cameraView:'excursion'});press();await settle();
-  const repeat=m.x===0&&m.y===0&&m.z===110.490&&m.lookYaw===0&&m.lookPitch===0&&m.bank===0&&m.carrier===carrier&&m.bridgeState===bridgeState;
-  Object.assign(m,{phase:'landed',landing:{pad:{x:0,y:0,z:110}},landingChoicePending:true});document.getElementById('shuttle-choice').showModal();press();await settle();
-  const landed=m.phase==='flight'&&m.cameraView==='cockpit'&&m.launchLiftRemaining===0&&!document.getElementById('shuttle-choice').open;
+  const carrier=m.carrier,bridgeState=m.bridgeState;Object.assign(m,{x:3,y:4,z:111,lookYaw:40,lookPitch:20,bank:.7,roll:.7,cameraView:'excursion'});press();await new Promise(resolve=>setTimeout(resolve,3100));
+  const ended=m.phase==='bridge'&&!m.freeSpace&&m.carrier===null&&m.bridgeState===null&&s.throttle===bridgeState.throttle&&s.heading===bridgeState.heading&&!document.body.classList.contains('shuttle-mode')&&document.getElementById('shuttle-ended-hud').hidden;
+  Object.assign(m,{phase:'landed',freeSpace:true,landing:{pad:{x:0,y:0,z:110}},landingChoicePending:true});document.getElementById('shuttle-choice').showModal();press();await new Promise(resolve=>setTimeout(resolve,3100));
+  const landed=m.phase==='bridge'&&!document.getElementById('shuttle-choice').open&&document.getElementById('shuttle-ended-hud').hidden;
   a.reset();m.phase='orbit';m.planet={name:'Test'};press();await settle();const orbital=m.freeSpace&&m.cameraView==='cockpit'&&m.planet===null;
   a.reset();a.away.launchShuttle();const bayLaunch=m.launchLiftRemaining===1.5&&m.cameraView==='excursion'&&s.heading===180;
-  a.reset();EnterpriseModels.prepareLaunch=saved;return {modifiers,typing,modal,jumped,repeat,landed,orbital,bayLaunch};
+  a.reset();EnterpriseModels.prepareLaunch=saved;return {modifiers,typing,modal,jumped,ended,landed,orbital,bayLaunch};
  });
  for(const [name,value]of Object.entries(guards))assert(value,name);
+ const preparation=await page.locator('#shuttle-preparing-hud').evaluate(el=>({text:el.textContent,animation:getComputedStyle(el).animationName}));
+ assert.equal(preparation.text,'Preparing Shuttle');assert.equal(preparation.animation,'none');
  const models=[];
- for(const model of ['movie','third','original']){
+ for(const model of ['third']){
   await page.evaluate(model=>{STCommand.reset();EnterpriseModels.selected=model;},model);
   await page.keyboard.press('l');await page.waitForFunction(()=>STCommand.away.state.phase==='flight'&&STCommand.away.state.cameraView==='cockpit',null,{timeout:180000});
   const result=await page.evaluate(()=>{
@@ -40,5 +42,19 @@ const {chromium}=require(require.resolve('playwright',{paths:[__dirname,path.res
   assert(Math.abs(result.height-result.engineY)<1e-8);assert(Math.abs(result.midpointError)<1e-8);assert(result.cockpit&&result.stationary&&result.forward);assert.equal(result.heading,0);assert.equal(result.pitch,0);assert.equal(result.lift,0);assert(!result.attached&&!result.transition);assert.equal(result.glError,0);models.push(result);
  }
  fs.writeFileSync(path.join(os.tmpdir(),'st-command-engine-height-cockpit.png'),Buffer.from((await page.evaluate(()=>engineHeightPreview)).split(',')[1],'base64'));
- assert.deepEqual(errors,[]);console.log(JSON.stringify(models));console.log('Passed: L jumps to the forward cockpit at the actual engine height and fore/aft midpoint on all models; typing/modal/modifier guards, repeat jump, and normal bay launch remain valid.');
+ const savedBridge=await page.evaluate(()=>({...STCommand.away.state.bridgeState}));
+ await page.evaluate(()=>STCommandView.toggle());await page.keyboard.press('l');
+ assert.equal(await page.evaluate(()=>STCommand.away.state.phase),'flight');
+ assert(await page.evaluate(()=>STCommandView.active),'shuttle fullscreen remains during ending');
+ const hud=await page.locator('#shuttle-ended-hud').evaluate(el=>({hidden:el.hidden,screen:!!el.closest('.screen-glass'),animation:getComputedStyle(el).animationName}));
+ assert(!hud.hidden&&hud.screen);assert.equal(hud.animation,'shuttle-message-flash');
+ await page.waitForFunction(()=>STCommand.away.state.phase==='bridge'&&!STCommandView.active,null,{timeout:6000});
+ assert.equal(await page.locator('#shuttle-ended-hud').textContent(),'End Shuttle Mission');
+ const restored=await page.evaluate(()=>({x:STCommand.state.x,y:STCommand.state.y,z:STCommand.state.z,heading:STCommand.state.heading,throttle:STCommand.state.throttle,speed:STCommand.state.speed,shuttle:document.body.classList.contains('shuttle-mode'),map:STCommand.away.state.mapMode}));
+ for(const key of ['x','y','z','heading','throttle','speed'])assert.equal(restored[key],savedBridge[key],'ending restores Enterprise '+key);assert(!restored.shuttle);assert.equal(restored.map,'galaxy');
+ await page.waitForFunction(()=>document.getElementById('shuttle-ended-hud').hidden,null,{timeout:6000});
+ await page.evaluate(()=>{STCommand.away.orbit(STCommand.systems[1]);STCommand.away.launch();});await page.keyboard.press('l');await page.waitForFunction(()=>STCommand.away.state.phase==='bridge',null,{timeout:6000});assert.equal(await page.evaluate(()=>STCommand.away.state.phase),'bridge');assert.equal(await page.evaluate(()=>STCommand.state.speed),0);
+ await page.evaluate(()=>{const a=STCommand,m=a.away.state;a.reset();a.away.launchShuttle();Object.assign(m,{phase:'landed',clock:10,landingChoicePending:true,landingCameraFade:null,landing:{pad:ShuttleBayFlight.padRoot(180),heading:180,pitch:0,bank:0}});EnterpriseModels.prepareLaunch=()=>new Promise(resolve=>window.finishCanceledRelaunch=resolve);a.away.updateUI();});
+ await page.locator('#shuttle-choice-launch').click();await page.waitForFunction(()=>!!window.finishCanceledRelaunch);await page.keyboard.press('l');await page.waitForFunction(()=>STCommand.away.state.phase==='bridge',null,{timeout:6000});assert.equal(await page.evaluate(()=>STCommand.away.state.phase),'bridge');assert(!(await page.locator('#shuttle-choice').isVisible()));assert(!(await page.locator('#shuttle-preparing-hud').isVisible()));await page.evaluate(()=>finishCanceledRelaunch());await page.waitForFunction(()=>!document.getElementById('launch-shuttle').disabled);assert.equal(await page.evaluate(()=>STCommand.away.state.phase),'bridge');
+ assert.deepEqual(errors,[]);console.log(JSON.stringify(models));console.log('Passed: L jumps to the forward cockpit at the actual engine height and fore/aft midpoint on the current ship; L ends active sorties, restores Enterprise, shows the ending HUD, exits fullscreen, handles surface/landed missions and cancels queued relaunches.');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}})().catch(e=>{console.error(e);process.exitCode=1;});

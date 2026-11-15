@@ -1,10 +1,15 @@
 body.viewscreen-mode{overflow:hidden}
+.preparing-hud{position:absolute;inset:0;z-index:5;display:grid;place-items:center;pointer-events:none;background:transparent;color:var(--text);opacity:.8;font:clamp(12px,1.5vw,23px)/1.4 Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;text-shadow:0 2px 5px #000,0 0 16px #ffffff25}
+#shuttle-ended-hud{animation:shuttle-message-flash 1s steps(1,end) infinite}
+@keyframes shuttle-message-flash{0%,100%{opacity:.8}50%{opacity:0}}
+.preparing-hud[hidden]{display:none}
 .camera-controls{position:absolute;right:18px;bottom:38px;z-index:4;display:flex;align-items:center;gap:10px;color:#b9c7cf;font-size:8px;letter-spacing:.6px}
+.viewscreen-controls{max-width:calc(100% - 36px);flex-wrap:wrap;justify-content:flex-end}
+.viewscreen-controls>.camera-controls{position:static;flex-wrap:wrap;justify-content:flex-end}
 .camera-controls[hidden]{display:none}
 .camera-controls button{background:#12202ccc;border:1px solid #778d9e;color:#e6d3ad;padding:6px 9px;font-size:8px}
 #main-view.space-look{cursor:grab;touch-action:none}
 #main-view.space-look.looking{cursor:grabbing}
-#main-view.space-look.mouse-look-active{cursor:none}
 @media(max-width:650px){.camera-controls{right:12px;bottom:28px;gap:6px;font-size:6px}.camera-controls span{display:none}.camera-controls button{font-size:7px;padding:6px}}
 body.viewscreen-mode main{width:100%;max-width:none;height:100dvh;padding:0;display:block}
 body.viewscreen-mode .console{display:block;height:100%}

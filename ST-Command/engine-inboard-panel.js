@@ -84,16 +84,35 @@ window.addEngineInboardPanels=(T,model,{handleLength=null,rearPanelWidth=null,su
    const corners=[[-halfHeight,front],[halfHeight,front],[halfHeight,rear],[-halfHeight,rear]],points=[];
    for(let edge=0;edge<4;edge++)for(let n=0;n<32;n++){const a=corners[edge],b=corners[(edge+1)%4],t=n/32,dy=a[0]+(b[0]-a[0])*t,z=a[1]+(b[1]-a[1])*t,r=radius===null?Math.sqrt(face*face-dy*dy)+.0001:radius;points.push([x+inboard*r,y+dy,z]);}return points;
   }
-  const frameContours=[contour(mouthHalfHeight,mouthFront,mouthRear,null),contour(mouthHalfHeight,mouthFront,mouthRear,frameRadius),contour(insertHeight/2,insertFront,insertRear,frameRadius),contour(roomHeight/2,insertFront+insertBorder,insertRear-insertBorder,frameRadius),contour(roomHeight/2,insertFront+insertBorder,insertRear-insertBorder,meshRadius-.0002)];
+  // End the return exactly at the room mouth. Extending it into the room
+  // overlaps the floor and walls with coplanar faces that flicker from below.
+  const frameContours=[contour(mouthHalfHeight,mouthFront,mouthRear,null),contour(mouthHalfHeight,mouthFront,mouthRear,frameRadius),contour(insertHeight/2,insertFront,insertRear,frameRadius),contour(roomHeight/2,insertFront+insertBorder,insertRear-insertBorder,frameRadius),contour(roomHeight/2,insertFront+insertBorder,insertRear-insertBorder,meshRadius)];
   const framePositions=[],frameIndices=[],frameGroups=[];
   for(let band=0;band<frameContours.length-1;band++){const start=frameIndices.length,a=frameContours[band],b=frameContours[band+1];for(let n=0;n<a.length;n++){const next=(n+1)%a.length,base=framePositions.length/3;framePositions.push(...a[n],...a[next],...b[n],...b[next]);frameIndices.push(base,base+1,base+2,base+1,base+3,base+2);}frameGroups.push({start,count:frameIndices.length-start,materialIndex:band<2?0:1});}
   const frameGeometry=new T.BufferGeometry();frameGeometry.setAttribute('position',new T.Float32BufferAttribute(framePositions,3));frameGeometry.setIndex(frameIndices);frameGeometry.computeVertexNormals();for(const g of frameGroups)frameGeometry.addGroup(g.start,g.count,g.materialIndex);
   const frame=add(frameGeometry,[housingMetal,insertRimMaterial],'-inboard-raised-insert-frame');frame.material[1].side=T.DoubleSide;frame.userData.continuousSurround=true;
   const engineRoom=new T.Group();engineRoom.name=prefix+'-engine-room';engineRoom.userData={label:'Engine room',depth:roomDepth};group.add(engineRoom);
-  const backWall=box('-inboard-insert-room-back',roomBack-.00015,0,insertCenter,.0003,roomHeight,roomLength,roomPaint);backWall.receiveShadow=true;
-  engineRoom.add(backWall);
-  for(const dy of [-1,1])engineRoom.add(box('-inboard-insert-room-'+(dy<0?'lower':'upper')+'-wall',roomBack+roomDepth/2,dy*(roomHeight+.0006)/2,insertCenter,roomDepth,.0006,roomLength,roomWall));
-  for(const [name,z] of [['front',insertFront+insertBorder-.0003],['rear',insertRear-insertBorder+.0003]])engineRoom.add(box('-inboard-insert-room-'+name+'-wall',roomBack+roomDepth/2,0,z,roomDepth,roomHeight+.0012,.0006,roomWall));
+  // A quarter-circle cove joins the back wall to the floor, ceiling and sides.
+  // Matching spherical corner patches keep the four curved transitions continuous.
+  const coveRadius=Math.min(roomHeight*.18,roomDepth*.25,roomLength*.1),coveSteps=16,cornerSteps=8;
+  const backWall=box('-inboard-insert-room-back',roomBack-.00015,0,insertCenter,.0003,roomHeight-2*coveRadius,roomLength-2*coveRadius,roomPaint);backWall.receiveShadow=true;
+  engineRoom.add(backWall);engineRoom.userData.coveRadius=coveRadius;
+  const cornerCenters=[[1,1],[-1,1],[-1,-1],[1,-1]];
+  for(const [wallIndex,name]of ['upper','front','lower','rear'].entries()){
+    const section=[];
+    for(const [corner,start,end]of [[wallIndex,Math.PI/4,Math.PI/2],[(wallIndex+1)%4,0,Math.PI/4]]){
+      const [sz,sy]=cornerCenters[corner];
+      for(let i=0;i<=cornerSteps;i++)section.push({cy:sy*(roomHeight/2-coveRadius),cz:sz*(roomLength/2-coveRadius),angle:corner*Math.PI/2+start+(end-start)*i/cornerSteps});
+    }
+    const positions=[],normals=[],uv=[],indices=[],columns=section.length;
+    for(let row=0;row<=coveSteps+1;row++){
+      const angle=Math.min(row,coveSteps)/coveSteps*Math.PI/2,depth=row>coveSteps?roomDepth:coveRadius*(1-Math.cos(angle)),radius=coveRadius*Math.sin(angle);
+      for(const point of section){const sn=Math.sin(point.angle),cs=Math.cos(point.angle);positions.push(inboard*depth,point.cy+radius*sn,point.cz+radius*cs);normals.push(inboard*Math.cos(angle),-Math.sin(angle)*sn,-Math.sin(angle)*cs);uv.push(0,0);}
+    }
+    for(let row=0;row<=coveSteps;row++)for(let col=0;col<columns-1;col++){const a=row*columns+col,b=a+columns;if(inboard>0)indices.push(a,a+1,b,a+1,b+1,b);else indices.push(a,b,a+1,a+1,b,b+1);}
+    const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new T.Float32BufferAttribute(normals,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geometry.setIndex(indices);
+    const wall=add(geometry,roomWall,'-inboard-insert-room-'+name+'-wall');wall.position.set(x+inboard*roomBack,y,insertCenter);wall.receiveShadow=true;wall.userData.backWallCove={radius:coveRadius,steps:coveSteps,sphericalCorners:true};engineRoom.add(wall);
+  }
   const grid=new T.Group();grid.name=prefix+'-inboard-gold-grid';group.add(grid);
   const gridRadius=meshRadius-roomDepth*.2,gridLength=roomLength;
   const gridBottom=y-roomHeight/2,gridTop=y+roomHeight/2,gridHeight=gridTop-gridBottom,gridY=(gridTop+gridBottom)/2;
@@ -101,38 +120,45 @@ window.addEngineInboardPanels=(T,model,{handleLength=null,rearPanelWidth=null,su
   // each direction so the finer mesh still takes only two draw calls.
   const verticalWidth=impulseVertical?.geometry.parameters.width??.00048,horizontalHeight=impulseHorizontal?.geometry.parameters.height??.00045,barDepth=impulseVertical?.geometry.parameters.depth??.00065;
   const verticalPitch=(impulseHorizontal?.geometry.parameters.width??.059)/13,horizontalPitch=(impulseVertical?.geometry.parameters.height??.025)/6;
-  const verticalCount=Math.max(2,Math.round(gridLength/verticalPitch)),horizontalCount=Math.max(2,Math.round(gridHeight/horizontalPitch)),shadowBars=[];
+  const verticalCount=Math.max(2,Math.round(gridLength/verticalPitch)),horizontalCount=Math.max(2,Math.round(gridHeight/horizontalPitch));
   const horizontalGeometry=new T.BoxGeometry(barDepth,horizontalHeight,gridLength),verticalGeometry=new T.BoxGeometry(barDepth,gridHeight+.0006,verticalWidth);
   const horizontals=new T.InstancedMesh(horizontalGeometry,grilleMaterial,horizontalCount),verticals=new T.InstancedMesh(verticalGeometry,grilleMaterial,verticalCount),matrix=grid.matrix.clone();
   horizontals.name=prefix+'-impulse-mesh-horizontal';verticals.name=prefix+'-impulse-mesh-vertical';
   for(let row=0;row<horizontalCount;row++){
-   const dy=gridBottom+(row+.5)*gridHeight/horizontalCount;matrix.makeTranslation(x+inboard*(gridRadius+.0003),dy,insertCenter);horizontals.setMatrixAt(row,matrix);shadowBars.push({horizontal:true,y:dy,z:insertCenter,width:horizontalHeight});
+   const dy=gridBottom+(row+.5)*gridHeight/horizontalCount;matrix.makeTranslation(x+inboard*(gridRadius+.0003),dy,insertCenter);horizontals.setMatrixAt(row,matrix);
   }
   for(let col=0;col<verticalCount;col++){
-   const z=insertCenter-gridLength/2+(col+.5)*gridLength/verticalCount;matrix.makeTranslation(x+inboard*gridRadius,gridY,z);verticals.setMatrixAt(col,matrix);shadowBars.push({horizontal:false,y:gridY,z,width:verticalWidth});
+   const z=insertCenter-gridLength/2+(col+.5)*gridLength/verticalCount;matrix.makeTranslation(x+inboard*gridRadius,gridY,z);verticals.setMatrixAt(col,matrix);
   }
   horizontals.instanceMatrix.needsUpdate=verticals.instanceMatrix.needsUpdate=true;grid.add(horizontals,verticals);
   grid.userData={roundBars:false,impulseMesh:true,horizontalBars:horizontalCount,verticalBars:verticalCount,setbackFraction:.2,radius:gridRadius,top:gridTop,bottom:gridBottom,verticalWidth,horizontalHeight,barDepth,sealedRodEnds:true};
-  // Soft projected bar shadows and edge occlusion remain stable even when
-  // the room is too small for the exterior shadow map to resolve its rods.
-  const shade=document.createElement('canvas');shade.width=1024;shade.height=256;const sc=shade.getContext('2d');sc.fillStyle='#ffffff';sc.fillRect(0,0,shade.width,shade.height);
-  const shadowZ=(gridRadius-roomBack)*.20,shadowY=-(gridRadius-roomBack)*.15;
-  const px=z=>(z-(insertFront+insertBorder))/roomLength*shade.width,py=dy=>(roomHeight/2-dy)/roomHeight*shade.height;
-  sc.strokeStyle='rgba(0,0,0,.23)';sc.shadowColor='rgba(0,0,0,.32)';sc.shadowBlur=8;
-  for(const rod of shadowBars){sc.beginPath();if(rod.horizontal){sc.lineWidth=rod.width/roomHeight*shade.height;const sy=py(rod.y-y+shadowY);sc.moveTo(px(insertCenter-gridLength/2+shadowZ),sy);sc.lineTo(px(insertCenter+gridLength/2+shadowZ),sy);}else{sc.lineWidth=rod.width/roomLength*shade.width;const sx=px(rod.z+shadowZ);sc.moveTo(sx,py(gridBottom-y+shadowY));sc.lineTo(sx,py(gridTop-y+shadowY));}sc.stroke();}
-  sc.shadowBlur=0;
-  for(const [horizontal,reverse]of [[true,false],[true,true],[false,false],[false,true]]){const extent=horizontal?shade.height:shade.width,depth=extent*(horizontal?.18:.06),start=reverse?extent:0,end=reverse?extent-depth:depth,g=sc.createLinearGradient(horizontal?0:start,horizontal?start:0,horizontal?0:end,horizontal?end:0);g.addColorStop(0,'rgba(0,0,0,.42)');g.addColorStop(1,'rgba(0,0,0,0)');sc.fillStyle=g;if(horizontal)sc.fillRect(0,Math.min(start,end),shade.width,depth);else sc.fillRect(Math.min(start,end),0,depth,shade.height);}
-  const shadowMap=new T.CanvasTexture(shade);shadowMap.colorSpace=T.SRGBColorSpace;shadowMap.anisotropy=4;roomPaint.map=shadowMap;
-  // Faint white emission covers the entire back wall, with soft grid shadows
-  // and edge occlusion retaining the depth of the matte engine room.
-  const glowCanvas=document.createElement('canvas');glowCanvas.width=512;glowCanvas.height=128;const glowContext=glowCanvas.getContext('2d');
-  glowContext.fillStyle='#ffffff';glowContext.fillRect(0,0,512,128);
-  glowContext.globalCompositeOperation='multiply';glowContext.drawImage(shade,0,0,512,128);glowContext.globalCompositeOperation='source-over';
-  const glowMap=new T.CanvasTexture(glowCanvas);glowMap.colorSpace=T.SRGBColorSpace;glowMap.anisotropy=4;
-  roomPaint.emissive.setHex(0xffffff);roomPaint.emissiveIntensity=.045;roomPaint.emissiveMap=glowMap;backWall.userData.faintWhiteGlow=true;
-  const backPositions=backWall.geometry.attributes.position,backUV=backWall.geometry.attributes.uv;
-  for(let i=0;i<backPositions.count;i++)backUV.setXY(i,.5+backPositions.getZ(i)/roomLength,.5+backPositions.getY(i)/roomHeight);backUV.needsUpdate=true;
-  backWall.userData.softBarShadows=true;
+  // Uniform white emission: no painted shadows in the wall or its glow.
+  roomPaint.emissive.setHex(0xffffff);roomPaint.emissiveIntensity=.12;backWall.userData.faintWhiteGlow=true;
+  // Match the back-wall emission at the seam, then feather by surface distance
+  // around the coves and along the walls. The smooth falloff has no hard edge.
+  const bounceCanvas=document.createElement('canvas');bounceCanvas.width=512;bounceCanvas.height=1;
+  const bounceContext=bounceCanvas.getContext('2d'),bouncePixels=bounceContext.createImageData(512,1);
+  for(let i=0;i<512;i++){
+   const t=i/511,smooth=t*t*(3-2*t),linear=1-.9*smooth;
+   const shade=Math.round(255*(linear<=.0031308?linear*12.92:1.055*Math.pow(linear,1/2.4)-.055));
+   bouncePixels.data.set([shade,shade,shade,255],i*4);
+  }
+  bounceContext.putImageData(bouncePixels,0,0);
+  const bounceMap=new T.CanvasTexture(bounceCanvas);bounceMap.colorSpace=T.SRGBColorSpace;bounceMap.anisotropy=4;
+  roomWall.emissive.setHex(0xffffff);roomWall.emissiveIntensity=roomPaint.emissiveIntensity;roomWall.emissiveMap=bounceMap;
+  const coveArc=coveRadius*Math.PI/2,glowTravel=coveArc+roomDepth-coveRadius;
+  for(const wall of engineRoom.children){
+   if(wall===backWall)continue;
+   const positions=wall.geometry.attributes.position,uv=wall.geometry.attributes.uv;
+   for(let i=0;i<positions.count;i++){
+    const depth=Math.max(0,Math.min(roomDepth,(wall.position.x+positions.getX(i)-x)*inboard-roomBack));
+    const travel=depth<coveRadius?coveRadius*Math.acos(Math.max(0,Math.min(1,1-depth/coveRadius))):coveArc+depth-coveRadius;
+    uv.setXY(i,travel/glowTravel,.5);
+   }
+   uv.needsUpdate=true;wall.userData.diffuseWhiteBounce=true;wall.userData.featheredBackWallGlow=true;
+  }
+  engineRoom.userData.glow={color:0xffffff,pulsing:false,wholeBackWall:true,diffuseWallBounce:true,featheredCorners:true};
+
   // The bracket's underside sits at the casing radius, without a stand-off.
   box('-inboard-handle-end-plate',.0894,0,front-.004,.0048,.0348,.036,bracket);
   // Keep the recessed chamber, grid and frame planar. The surrounding service

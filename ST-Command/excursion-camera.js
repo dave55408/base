@@ -90,7 +90,7 @@ window.attachExcursionCamera=ship=>{
      const entry=m.entranceCameraPose,yaw=entry.heading*Math.PI/180,p=entry.pitch*Math.PI/180;
      camera.position.set(entry.x,entry.z-110,entry.y);camera.up.set(0,1,0);
      const forward=new T.Vector3(Math.sin(yaw)*Math.cos(p),Math.sin(p),-Math.cos(yaw)*Math.cos(p));
-     camera.lookAt(camera.position.clone().add(forward));camera.rotateZ(-entry.bank);
+     camera.rotation.set(p,-yaw,-entry.bank,'YXZ');
      const up=new T.Vector3(0,1,0).applyQuaternion(camera.quaternion);
      camera.position.addScaledVector(forward,-.14).addScaledVector(up,.030);
      camera.fov=2*Math.atan(h/(2*w*.65*entry.zoom))*180/Math.PI;

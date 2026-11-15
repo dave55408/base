@@ -476,8 +476,9 @@ window.createMovieEnterpriseRenderer=()=>{
   const mount=lathe([[0,-1.205],[.019,-1.205],[.016,-1.211],[.009,-1.216],[.009,-1.226],[0,-1.226]],darkBronze,0,0,0,'z',64);mount.name='deflector-mount';
   const dishFront=[[0,-1.240],[.014,-1.240],[.024,-1.243],[.043,-1.249],[.065,-1.257],[.084,-1.264],[.097,-1.269]];
   const dishProfile=[...dishFront.map(([r,z])=>[r,z+.003]),...dishFront.slice().reverse()];
-  const dish=lathe(dishProfile,copper,0,0,0,'z');dish.name='deflector-dish';dish.material=[copperBack,copper,copperRim];dish.geometry.clearGroups();
-  for(let j=0;j<dishProfile.length-1;j++)dish.geometry.addGroup(j*96*6,96*6,j<6?0:j===6?2:1);
+  const dishSegments=256;
+  const dish=lathe(dishProfile,copper,0,0,0,'z',dishSegments);dish.name='deflector-dish';dish.material=[copperBack,copper,copperRim];dish.geometry.clearGroups();
+  for(let j=0;j<dishProfile.length-1;j++)dish.geometry.addGroup(j*dishSegments*6,dishSegments*6,j<6?0:j===6?2:1);
   // Reference finish: a pale copper center grading into warmer copper at the lip.
   // Vertex color keeps the finish smooth at shuttle viewing distances.
   const dishColors=[],dishVertices=dish.geometry.attributes.position;
@@ -797,7 +798,7 @@ window.createMovieEnterpriseRenderer=()=>{
     camera.fov=2*Math.atan(h/(2*w*.65*zoom))*180/Math.PI;camera.aspect=w/h;camera.updateProjectionMatrix();
     camera.position.set(m.x,m.z-110,m.y);const heading=s.heading*Math.PI/180,pitch=s.pitch*Math.PI/180;
     // Match the shuttle's physical up vector and the remote attitude monitor.
-    camera.up.set(0,1,0);camera.lookAt(camera.position.x+Math.sin(heading)*Math.cos(pitch),camera.position.y+Math.sin(pitch),camera.position.z-Math.cos(heading)*Math.cos(pitch));camera.rotateZ(-(m.bank||0));
+    camera.rotation.set(pitch,-heading,-(m.bank||0),'YXZ');
     renderer.render(scene,camera);ctx.drawImage(renderer.domElement,0,0,w,h);
     const bay=new T.Vector3(0,0,0).project(camera);
     return {x:(bay.x+1)*w/2,y:(1-bay.y)*h/2,visible:bay.z>=-1&&bay.z<=1};

@@ -1,8 +1,7 @@
-﻿/* Two independent model factories; changing appearance never resets flight. */
+﻿/* Third Model is the sole Enterprise model; migrate retired model preferences. */
 (()=>{
-  const factories={original:()=>createEnterpriseRenderer(),movie:()=>createMovieEnterpriseRenderer(),third:()=>createThirdEnterpriseRenderer()};
-  let selected='movie';try{const saved=localStorage.getItem('st-command-enterprise-model');if(Object.hasOwn(factories,saved))selected=saved;}catch{}
-  const selector=document.getElementById('enterprise-model');
+  const factories={third:()=>createThirdEnterpriseRenderer()};
+  let selected='third';try{const saved=localStorage.getItem('st-command-enterprise-model');if(Object.hasOwn(factories,saved))selected=saved;}catch{}
   const qualitySelector=document.getElementById('texture-quality'),scenes=new Set();
   function release(scene){
     for(const ship of Object.values(scene.enterpriseRenderers||{})){if(ship)ship.launchDisposed=true;ship?.dispose();}
@@ -27,7 +26,7 @@
   }
   const api={
     get selected(){return selected;},
-    set selected(value){const next=Object.hasOwn(factories,value)?value:'movie';if(next!==selected){scenes.forEach(release);selected=next;}selector.value=selected;try{localStorage.setItem('st-command-enterprise-model',selected);}catch{}},
+    set selected(value){const next=Object.hasOwn(factories,value)?value:'third';if(next!==selected){scenes.forEach(release);selected=next;}try{localStorage.setItem('st-command-enterprise-model',selected);}catch{}},
     async prepareLaunch(scene,w,h){
       const ship=api.rendererFor(scene);if(!ship)return null; // Preserve the 2D fallback when WebGL is unavailable.
       const key=[SimPerformance.quality,ShipTextures.quality,NightMode.enabled,w,h].join('/');
@@ -64,7 +63,7 @@
       return scene.enterpriseRenderers[selected];
     }
   };
-  selector.value=selected;selector.addEventListener('change',()=>{api.selected=selector.value;selector.blur();});
+  try{localStorage.setItem('st-command-enterprise-model',selected);}catch{}
   qualitySelector.value=ShipTextures.quality;
   qualitySelector.addEventListener('change',()=>{
     scenes.forEach(release);ShipTextures.quality=qualitySelector.value;qualitySelector.blur();

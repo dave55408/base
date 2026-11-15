@@ -48,14 +48,14 @@
     let turn=(keys.has('ArrowRight')||keys.has('d')?1:0)-(keys.has('ArrowLeft')||keys.has('a')?1:0);
     if(turn){manual();state.heading=wrap(state.heading+turn*42*dt);}
     const oldPitch=state.pitch;
-    const tilt=(keys.has('ArrowUp')||keys.has('q')?1:0)-(keys.has('ArrowDown')||keys.has('e')?1:0);
+    const tilt=(keys.has('ArrowUp')?1:0)-(keys.has('ArrowDown')?1:0);
     if(tilt){manual();state.pitch=Phaser.Math.Clamp(state.pitch+tilt*30*dt,-85,85);}
     const power=(keys.has('w')?1:0)-(keys.has('s')?1:0);
     if(power){state.throttle=Math.max(-100,Math.min(100,state.throttle+power*30*dt));if(state.throttle<0)manual();}
     if(state.autopilot){const diff=deltaAngle(state.heading,bearingTo(state.target));const step=Math.min(Math.abs(diff),48*dt)*Math.sign(diff);state.heading=wrap(state.heading+step);turn=step/(48*dt||1);const pitchDiff=pitchTo(state.target)-state.pitch;state.pitch+=Math.sign(pitchDiff)*Math.min(Math.abs(pitchDiff),30*dt);}
     state.turn=turn;
     state.pitchTurn=(state.pitch-oldPitch)/Math.max(dt,.001)/30;
-    state.speed=SpaceMath.poweredSpeed(state.speed,state.throttle,state.drive==='warp'?56:4,dt);
+    state.speed=SpaceMath.poweredSpeed(state.speed,state.throttle,state.drive==='warp'?112:8,dt);
     if(state.autopilot){
       state.speed*=Math.max(0,SpaceMath.alignment(state.heading,state.pitch,bearingTo(state.target),pitchTo(state.target)));
       state.speed=Math.min(state.speed,Math.max(0,distanceTo(state.target)-(state.target.type?.includes('OUTPOST')||state.target.id==='waypoint'?1.5:.5))/dt);
@@ -120,27 +120,34 @@
   $('starboard').onclick=()=>{manual('Coming to starboard, 15 degrees.');state.heading=wrap(state.heading+15);telemetry();};
   ['impulse','warp'].forEach(drive=>$(drive).onclick=()=>{if(away.active()&&drive==='warp')return;state.drive=drive;say(drive==='warp'?'Warp drive selected. Set power or engage a course.':'Impulse drive selected. Precision helm control.');telemetry();});
   $('stop').onclick=stop;$('engage').onclick=engage;$('manual').onclick=()=>{manual('Autopilot disengaged. You have the conn.');telemetry();};
-  const editable=el=>el&&['INPUT','SELECT','TEXTAREA'].includes(el.tagName);
-  const enterpriseKeys=new Set(['Numpad1','Numpad2','Numpad3','Numpad5','Numpad7','Numpad4','Numpad8','Numpad0','NumpadDecimal','NumpadSubtract']);
+  const editable=el=>el&&(el.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(el.tagName));
+  const enterpriseKeys=new Set(['Numpad1','Numpad2','Numpad3','Numpad5','Numpad7','Numpad8','Numpad9','NumpadDivide','NumpadSubtract','NumpadAdd','NumpadEnter','Numpad0','NumpadDecimal','PageUp','PageDown','Home','End']);
   window.addEventListener('keydown',event=>{
     const key=event.key.length===1?event.key.toLowerCase():event.key;
-    if(enterpriseKeys.has(event.code)&&away.state.freeSpace&&away.active()&&!event.ctrlKey&&!event.altKey&&!event.metaKey){
+    if(event.code?.startsWith('Numpad')||enterpriseKeys.has(event.code)){
+      if(!away.state.freeSpace||!away.active()||event.ctrlKey||event.altKey||event.metaKey)return;
       if(editable(event.target)&&!event.target.matches('.helm input[type="range"],#enterprise-inset-power'))return;
-      event.preventDefault();if(event.code==='Numpad8')away.stopEnterprise();if(event.code==='NumpadSubtract'&&!event.repeat)away.neutralEnterprise();keys.add(event.code);return;
+      event.preventDefault();
+      if(!enterpriseKeys.has(event.code))return;
+      if(event.code==='Home'){if(!event.repeat)away.stopEnterprise();return;}
+      if(event.code==='End'){if(!event.repeat)away.slowEnterprise();return;}
+      if(event.code==='NumpadEnter'){if(!event.repeat)away.neutralEnterprise();return;}
+      keys.add(event.code);return;
     }
     if(key==='1'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&(!editable(event.target)||event.target?.matches('.helm input[type="range"]'))){
       event.preventDefault();
       if(!event.repeat)away.state.targetSquareHidden=!away.state.targetSquareHidden;
       return;
     }
-    const helmFlightKey=['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','w','a','s','d','q','e','z','x',' ','p','r','Enter'].includes(key)&&event.target?.matches('.helm input[type="range"]');
+    const helmFlightKey=['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','w','a','s','d','c',' ','p','r','Enter'].includes(key)&&event.target?.matches('.helm input[type="range"]');
     if(editable(event.target)&&!helmFlightKey)return;
+    if(key==='c'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&away.state.phase==='flight'){event.preventDefault();if(!event.repeat)away.neutralShuttle();return;}
     if(event.target?.tagName==='BUTTON'&&event.key==='Enter')return;
-    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','w','a','s','d','q','e','z','x',' ','p','r','Enter'].includes(key))event.preventDefault();
+    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','w','a','s','d','c',' ','p','r','Enter'].includes(key))event.preventDefault();
     if(!event.repeat){if(key===' ')stop();if(key==='p')pause();if(key==='r')reset();if(key==='Enter')state.paused?pause():engage();}
     keys.add(key);
   });
-  window.addEventListener('keyup',e=>{if(enterpriseKeys.has(e.code)&&(keys.has(e.code)||away.state.freeSpace&&away.active())){keys.delete(e.code);return;}keys.delete(e.key.length===1?e.key.toLowerCase():e.key);});window.addEventListener('blur',()=>keys.clear());
+  window.addEventListener('keyup',e=>{if(e.code?.startsWith('Numpad')||enterpriseKeys.has(e.code)){keys.delete(e.code);return;}keys.delete(e.key.length===1?e.key.toLowerCase():e.key);});window.addEventListener('blur',()=>keys.clear());
   function seeded(seed){return ()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};}
   const line=(g,x1,y1,x2,y2,color,alpha=1,width=1)=>{g.lineStyle(width,color,alpha);g.lineBetween(x1,y1,x2,y2);};
   function ship(g,x,y,angle,size=12){

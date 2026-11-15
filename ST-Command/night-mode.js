@@ -1,8 +1,8 @@
 /* Dim outside illumination at render time without changing onboard lighting. */
 (()=>{
- const button=document.getElementById('night-mode-toggle'),attached=new WeakSet(),factor=.025;
+ const buttons=document.querySelectorAll('#night-mode-toggle,#viewscreen-night-mode-toggle'),attached=new WeakSet(),factor=.025;
  let enabled=false;try{enabled=localStorage.getItem('st-command-night-mode')==='true';}catch{}
- function sync(){button.setAttribute('aria-pressed',String(enabled));document.body.classList.toggle('night-mode',enabled);button.title=enabled?'Restore normal external lighting':'Dim external lighting; keep stars and onboard illumination';}
+ function sync(){for(const button of buttons){button.setAttribute('aria-pressed',String(enabled));button.setAttribute('aria-description',enabled?'Restore normal external lighting':'Dim external lighting; keep stars and onboard illumination');}document.body.classList.toggle('night-mode',enabled);}
  function belongsTo(light,root){for(let node=light;node;node=node.parent)if(node===root)return true;return false;}
  function outsideLight(light,ship){
   if(light.isDirectionalLight||light.isHemisphereLight||light.isAmbientLight)return true;
@@ -32,7 +32,9 @@
    return ship;
   }
  };
- button.addEventListener('click',()=>{api.enabled=!enabled;button.blur();});
- button.addEventListener('keydown',event=>{if(event.key===' '||event.key==='Enter')event.stopPropagation();});
+ for(const button of buttons){
+  button.addEventListener('click',()=>{api.enabled=!enabled;button.blur();});
+  button.addEventListener('keydown',event=>{if(event.key===' '||event.key==='Enter')event.stopPropagation();});
+ }
  window.NightMode=api;sync();
 })();

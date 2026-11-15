@@ -9,4 +9,16 @@
 .help-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px 26px}
 .help-grid h3{margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #71502e;color:#ffd08a;font-size:14px;font-weight:500}
 .help-grid dl{margin:0}.help-grid dt{color:#ffe3b8;margin-top:9px;font-weight:bold}.help-grid dd{margin:2px 0 0;color:#cdbb9f}
+.help-control-diagrams{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 26px;margin:18px 0;padding-bottom:18px;border-bottom:1px solid var(--line);align-items:start}
+.help-control-diagrams figure{margin:0}.help-control-diagrams figure figcaption{margin:0 0 12px;color:var(--text);font-size:14px;font-weight:bold}.help-control-diagrams p{font-size:11px;line-height:1.5;color:var(--muted)}
+.shuttle-letter-layout,.shuttle-arrow-layout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.shuttle-arrow-layout{max-width:260px;margin:12px auto}.arrow-up{grid-column:2}.arrow-left{grid-column:1;grid-row:2}.arrow-down{grid-column:2;grid-row:2}.arrow-right{grid-column:3;grid-row:2}
+.shuttle-action-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.control-diagram-note{grid-column:1/-1;margin:0}
+.numpad-help{margin:0}.numpad-help figcaption{margin:0 0 10px;color:var(--text);font-size:11px}.numpad-help p{font-size:11px;color:var(--muted)}
+.numpad-layout{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.remote-power-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:12px}
+.numpad-key,.control-key{min-height:52px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;padding:5px 2px;border:1px solid var(--muted);border-radius:5px;background:var(--panel);color:var(--text);text-align:center;box-shadow:0 2px 0 #0008}
+.numpad-key kbd,.control-key kbd{font:16px/1.2 Consolas,monospace}.numpad-key span,.control-key span{font-size:9px;line-height:1.25}.numpad-key.unused{opacity:.4}.tall-plus{grid-column:4;grid-row:2/span 2}.tall-enter{grid-column:4;grid-row:4/span 2}.wide-zero{grid-column:1/span 2}
+@media(max-width:650px){.help-control-diagrams{grid-template-columns:1fr}.help-control-diagrams figure{width:100%;max-width:360px;margin:auto}}
 @media(max-width:650px){#controls-help{padding:16px}.help-grid{grid-template-columns:1fr}.help-heading h2{font-size:17px}}
+
+.shuttle-letter-layout>.power-up,.shuttle-letter-layout>.neutral{grid-column:2}.shuttle-letter-layout>.roll-left{grid-column:1}

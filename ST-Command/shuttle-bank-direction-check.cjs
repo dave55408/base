@@ -8,7 +8,7 @@ try{
  await page.evaluate(()=>{STCommand.stop();STCommand.away.launchShuttle();STCommand.state.paused=true;for(const game of STCommand.games)game.loop.stop();});
  for(const model of ['movie','original']){
   await page.locator('#enterprise-model').selectOption(model);
-  for(const [key,sign] of [['ArrowLeft',-1],['ArrowRight',1],['z',-1],['x',1]]){
+  for(const [key,sign] of [['ArrowLeft',-1],['ArrowRight',1],['a',-1],['d',1]]){
    await page.evaluate(model=>{const a=STCommand,m=a.away.state;Object.assign(a.state,{paused:true,heading:model==='movie'?0:180,pitch:0,throttle:0,speed:0,autopilot:false});Object.assign(m,{phase:'flight',x:.3,y:1,z:110.3,roll:0,bank:0,turnBank:0,pitchBob:0,lastVisualPitch:0,departureRamp:false,launchAttached:false,launchStage:null,launchLiftRemaining:0,departureCameraPending:false,departureCameraFade:null,entranceCameraPose:null,entranceCameraFade:null,landingChoicePending:false,lookYaw:0,lookPitch:0,cameraZoom:1});Object.assign(m.carrier,{manual:true,heading:0,pitch:0,roll:0,manualRoll:0,turnBank:0,returningNeutral:false,speed:0,moving:false});Object.assign(m.bridgeState,{throttle:0,speed:0});},model);
    await page.dispatchEvent('body','keydown',{key,code:key.length===1?'Key'+key.toUpperCase():key});await page.evaluate(()=>{for(let i=0;i<10;i++)STCommand.away.tick(.05);});await page.dispatchEvent('body','keyup',{key,code:key.length===1?'Key'+key.toUpperCase():key});
    const result=await page.evaluate(async()=>{

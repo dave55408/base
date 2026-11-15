@@ -7,7 +7,7 @@ window.applyThirdPhotoDetails=(T,model,maps,options)=>{
  function mapped(map){return new T.MeshStandardMaterial({color:0xffffff,map,transparent:true,depthWrite:false,roughness:.65,side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3});}
  materials.pennant=mapped(maps.pennant);materials.portPennant=mapped(maps.portPennant);materials.serial=mapped(maps.hullStencils);
  function patch(id,sample,key,{round=false,cols=8,rows=4,uv=(u,v)=>[u,1-v],...data}={}){
-  // Current appearance uses Model Two's paint and no small window meshes.
+  // Cabin windows come from enterprise-window-layer.js, not these old rows.
   // Top pylon panels are supplied by the base renderer, without extra slots.
   if(['engineering','neck','bridge','rim','bowl','pylon','pennant','stencil'].includes(data.region))return;
   if(round){cols=24;rows=3;}
@@ -125,8 +125,9 @@ window.applyThirdPhotoDetails=(T,model,maps,options)=>{
   const mesh=new T.Mesh(new T.SphereGeometry(r,16,12),blink?new T.MeshBasicMaterial({color:materials[color].color,toneMapped:false}):materials[color]);mesh.scale.y=height/(2*r);mesh.position.set(x,y,z);mesh.name=name;group.add(mesh);records.push({id:name,region:'beacon',lit:true,material:color});
   if(blink&&options?.navigationLights){const on=mesh.material.color.getHex(),off=new T.Color(on).multiplyScalar(.035).getHex();options.navigationLights.push({lens:mesh,on,off});}
  }
- for(const z of [-.101,-.131])post('engineering-roof-green-'+z,0,shape.upAt((z+.032)/.85,0)+.00255,z+.032,'green',.0034,.0051,true);
- post('engineering-roof-red-beacon',0,shape.upAt((-.116+.032)/.85,0)+.003,-.116+.032,'red',.004,.006,true);
+ // Bury 40% of each lens: center at 10% of its full height above the skin.
+ for(const z of [-.101,-.131])post('engineering-roof-green-'+z,0,shape.upAt((z+.032)/.85,0)+.0051*.1,z+.032,'green',.0034,.0051,true);
+ post('engineering-roof-red-beacon',0,shape.upAt((-.116+.032)/.85,0)+.006*.1,-.116+.032,'red',.004,.006,true);
  const bridgePost=new T.Vector3(0,.534,-1.590);primary.localToWorld(bridgePost);model.worldToLocal(bridgePost);post('bridge-front-red-beacon',...bridgePost.toArray(),'red',.0018,.004);
  const lowerPost=new T.Vector3(0,.220,-1.530);primary.localToWorld(lowerPost);model.worldToLocal(lowerPost);post('lower-sensor-red-beacon',...lowerPost.toArray(),'red',.0015,.003);
  for(const side of ['port','starboard']){

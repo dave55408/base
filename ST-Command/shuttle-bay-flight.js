@@ -17,7 +17,7 @@ window.ShuttleBayFlight={
  },
  cockpitView(m,s){
   const rad=Math.PI/180;
-  return {x:m.x,y:m.y,z:m.z,heading:s.heading+(m.lookYaw||0),pitch:Math.max(-89,Math.min(89,s.pitch+(m.lookPitch||0)+(m.pitchBob||0)/rad)),bank:m.bank||0,zoom:m.cameraZoom||1};
+  return {x:m.x,y:m.y,z:m.z,heading:s.heading+(m.lookYaw||0),pitch:s.pitch+(m.lookPitch||0)+(m.pitchBob||0)/rad,bank:m.bank||0,zoom:m.cameraZoom||1};
  },
  lipOutsideView(view,width,height,model=window.EnterpriseModels?.selected){
   const b=this.dimensions(model),T=AlpineThree,rad=Math.PI/180,movie=model!=='original';
@@ -27,7 +27,7 @@ window.ShuttleBayFlight={
   const camera=new T.PerspectiveCamera(2*Math.atan(height/(2*width*.65*view.zoom))/rad,width/height,.005,100);
   camera.position.set(view.x,view.z-110,view.y);
   const h=view.heading*rad,p=view.pitch*rad;
-  camera.lookAt(camera.position.clone().add(new T.Vector3(Math.sin(h)*Math.cos(p),Math.sin(p),-Math.cos(h)*Math.cos(p))));camera.rotateZ(-view.bank);camera.updateWorldMatrix(true,false);
+  camera.rotation.set(p,-h,-view.bank,'YXZ');camera.updateWorldMatrix(true,false);
   // If every viewport corner looks through the opening, none of its lip
   // remains on screen. The opening is convex, including the arched roof.
   for(const x of [-1,1])for(const y of [-1,1]){

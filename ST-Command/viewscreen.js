@@ -4,33 +4,6 @@
   const view=document.getElementById('main-view');
   let lookDrag=null,lastLookDrag=-Infinity;
   const canLook=()=>{const m=window.STCommand?.away.state;return m?.phase==='flight'&&(m.freeSpace||m.z>65)&&!(m.cameraView==='excursion'&&(ShuttleBayFlight.inside(m)||m.entranceCameraPose));};
-  const mouseButton=document.getElementById('mouse-look'),hint=document.getElementById('camera-hint');
-  let mouseWasLocked=false,lastMouseRelease=-Infinity;
-  const locked=()=>document.pointerLockElement===view;
-  function syncMouse(){
-    if(mouseWasLocked&&!locked())lastMouseRelease=performance.now();
-    mouseWasLocked=locked();view.classList.toggle('mouse-look-active',locked());
-    mouseButton.textContent=locked()?'RELEASE MOUSE':'MOUSE LOOK';mouseButton.setAttribute('aria-pressed',String(locked()));
-    hint.textContent=locked()?'MOVE MOUSE TO LOOK · ESC TO RELEASE':'CLICK VIEW FOR MOUSE LOOK';
-  }
-  async function captureMouse(){
-    if(!canLook()||locked())return;
-    if(!view.requestPointerLock){hint.textContent='DRAG VIEW TO LOOK';return;}
-    try{await view.requestPointerLock();}catch{hint.textContent='MOUSE CAPTURE UNAVAILABLE · DRAG TO LOOK';}
-  }
-  document.addEventListener('pointerlockchange',syncMouse);
-  document.addEventListener('pointerlockerror',()=>{hint.textContent='MOUSE CAPTURE UNAVAILABLE · DRAG TO LOOK';});
-  document.addEventListener('mousemove',event=>{
-    if(!locked())return;
-    if(!canLook()){document.exitPointerLock();return;}
-    const m=STCommand.away.state;
-    m.lookYaw=(((m.lookYaw||0)+event.movementX*.15+180)%360+360)%360-180;
-    m.lookPitch=Math.max(-85,Math.min(85,(m.lookPitch||0)-event.movementY*.15));
-  });
-  view.addEventListener('click',()=>{if(performance.now()-lastLookDrag>300)captureMouse();});
-  mouseButton.addEventListener('click',()=>{locked()?document.exitPointerLock():captureMouse();});
-  window.addEventListener('keydown',event=>{if(event.key==='Escape'&&locked()){event.preventDefault();event.stopImmediatePropagation();document.exitPointerLock();}},{capture:true});
-  window.addEventListener('blur',()=>{if(locked())document.exitPointerLock();});
   screen.addEventListener('wheel',event=>{
     if(!canLook()||event.ctrlKey||event.metaKey||event.altKey)return;
     event.preventDefault();event.stopPropagation();
@@ -39,7 +12,7 @@
     document.getElementById('camera-zoom').textContent=m.cameraZoom.toFixed(1)+'×';
   },{passive:false});
   view.addEventListener('pointerdown',event=>{
-    if(event.button!==0||!canLook()||locked())return;
+    if(event.button!==0||!canLook())return;
     const m=STCommand.away.state;lookDrag={id:event.pointerId,x:event.clientX,y:event.clientY,yaw:m.lookYaw||0,pitch:m.lookPitch||0,moved:false};
     view.setPointerCapture(event.pointerId);view.classList.add('looking');event.preventDefault();
   });
@@ -58,7 +31,7 @@
   let active=false,nativeOwned=false,transitioning=false,scrollPosition=0;
   function setMode(value){
     active=value;document.body.classList.toggle('viewscreen-mode',value);
-    screen.title=value?'Press F or double-click to return to Ops mode. Escape also returns.':'Press F or double-click for full-screen viewscreen.';
+    screen.setAttribute('aria-description',value?'Press F or double-click to return to Ops mode. Escape also returns.':'Press F or double-click for full-screen viewscreen.');
     if(!value)requestAnimationFrame(()=>window.scrollTo(0,scrollPosition));
   }
   async function toggle(){
@@ -87,9 +60,8 @@
       if(event.defaultPrevented||event.repeat||event.isComposing||event.ctrlKey||event.metaKey||event.altKey||event.target?.closest('input,select,textarea,[contenteditable]:not([contenteditable="false"])')||document.querySelector('dialog[open]'))return;
       event.preventDefault();toggle();return;
     }
-    if(event.key==='Escape'&&active&&performance.now()-lastMouseRelease>300){event.preventDefault();toggle();}
+    if(event.key==='Escape'&&active){event.preventDefault();toggle();}
   });
   window.STCommandView={get active(){return active;},toggle};
   setMode(false);
-  syncMouse();
 })();
