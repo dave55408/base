@@ -21,8 +21,27 @@
   <link rel="stylesheet" href="night-mode.css?v=deeper-night-console-2">
   <link rel="stylesheet" href="simulation-performance.css">
   <link rel="stylesheet" href="console-wash.css">
+  <link rel="stylesheet" href="welcome.css">
 </head>
 <body>
+  <dialog id="welcome-screen" aria-labelledby="welcome-title" aria-describedby="welcome-intro">
+    <p class="welcome-eyebrow">ST COMMAND</p>
+    <h1 id="welcome-title">Welcome!</h1>
+    <p id="welcome-intro">This is an open-ended simulator for folks who love the classic USS Enterprise.</p>
+    <ul>
+      <li>Launch and land a shuttle</li>
+      <li>Fly around the Enterprise</li>
+      <li>Check out the Bridge</li>
+      <li>Peek in the shuttle garage</li>
+      <li>Visit Vulcan (not fully done)</li>
+    </ul>
+    <p class="welcome-feedback">Let me know what you think at <a href="mailto:david.granholm@gmail.com">david.granholm@gmail.com</a>.</p>
+    <div class="welcome-actions">
+      <label for="welcome-dismiss"><input id="welcome-dismiss" type="checkbox"> Don't show me this again.</label>
+      <button id="welcome-close" type="button" autofocus>Close</button>
+    </div>
+  </dialog>
+  <script src="welcome.js"></script>
   <main>
     <div class="console">
       <section class="display forward">
