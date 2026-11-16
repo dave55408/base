@@ -12,7 +12,7 @@ window.attachExcursionCamera=ship=>{
   const shadowSize=Math.min(SimPerformance.shadowSize,ship.renderer.capabilities.maxTextureSize);
   sun.castShadow=true;sun.shadow.mapSize.set(shadowSize,shadowSize);sun.shadow.camera.left=sun.shadow.camera.bottom=-2.2;sun.shadow.camera.right=sun.shadow.camera.top=2.2;sun.shadow.camera.near=.01;sun.shadow.camera.far=30;sun.shadow.bias=-.0001;sun.shadow.normalBias=.0015;sun.shadow.radius=2;
   ship.scene.add(sun.target);ship.renderer.shadowMap.type=T.PCFSoftShadowMap;
-  ship.model.traverse(o=>{if(o.isMesh){const materials=Array.isArray(o.material)?o.material:[o.material];o.castShadow=materials.some(mat=>!mat.transparent||mat.opacity>=.9);o.receiveShadow=true;}});
+  ship.model.traverse(o=>{if(o.isMesh){const materials=Array.isArray(o.material)?o.material:[o.material];o.castShadow=materials.some(mat=>!mat.transparent||mat.opacity>=.9);o.receiveShadow=true;if(o.userData.bridgeNoShadows){o.castShadow=false;o.receiveShadow=false;}}});
  }
  let craft=null,enterpriseCorners=null,enterpriseSurface=null,planetFrame=null,bayFrame=null,lastExteriorPose=null;
  ship.prepareExcursionShuttle=()=>{

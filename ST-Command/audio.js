@@ -47,11 +47,11 @@
   audio.addEventListener('volumechange',()=>{volume.value=Math.round(audio.volume*100);document.getElementById('audio-volume-value').textContent=volume.value+'%';});
   window.addEventListener('keydown',event=>{
     if(event.repeat||event.ctrlKey||event.metaKey||event.altKey||['INPUT','SELECT','TEXTAREA'].includes(event.target?.tagName))return;
-    if(event.key.toLowerCase()==='b'){event.preventDefault();wanted?stop():start();}
+    if(event.key.toLowerCase()==='b'&&event.shiftKey){event.preventDefault();wanted?stop():start();}
   });
   document.getElementById('audio-close').addEventListener('click',stop);
   volume.addEventListener('input',()=>{audio.volume=+volume.value/100;document.getElementById('audio-volume-value').textContent=volume.value+'%';});
-  function unlockAudio(event){if(!event.isTrusted||!wanted||!awaitingGesture||simulationPaused||event.target.closest?.('#audio-panel')||event.key?.toLowerCase()==='b')return;awaitingGesture=false;start({reveal:false});}
+  function unlockAudio(event){if(!event.isTrusted||!wanted||!awaitingGesture||simulationPaused||event.target.closest?.('#audio-panel')||(event.key?.toLowerCase()==='b'&&event.shiftKey))return;awaitingGesture=false;start({reveal:false});}
   window.addEventListener('pointerdown',unlockAudio,{capture:true});window.addEventListener('keydown',unlockAudio,{capture:true});
   window.STCommandAudio={get wanted(){return wanted;},get awaitingGesture(){return awaitingGesture;},get ready(){return audio.readyState>=1;},get playing(){return !audio.paused&&!audio.ended&&audio.readyState>=2;},source:'assets/audio/bridge-ambience.m4a',stop,setSimulationPaused};
   start({reveal:false});

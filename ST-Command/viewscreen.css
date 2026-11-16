@@ -3,6 +3,7 @@ body.viewscreen-mode{overflow:hidden}
 #shuttle-ended-hud{animation:shuttle-message-flash 1s steps(1,end) infinite}
 @keyframes shuttle-message-flash{0%,100%{opacity:.8}50%{opacity:0}}
 .preparing-hud[hidden]{display:none}
+#door-status-hud{font-size:clamp(22px,3.6vw,60px);font-weight:bold;letter-spacing:.06em;white-space:pre-line;text-align:center;padding:20px;color:#ffe4ad;opacity:1;line-height:1.6}
 .camera-controls{position:absolute;right:18px;bottom:38px;z-index:4;display:flex;align-items:center;gap:10px;color:#b9c7cf;font-size:8px;letter-spacing:.6px}
 .viewscreen-controls{max-width:calc(100% - 36px);flex-wrap:wrap;justify-content:flex-end}
 .viewscreen-controls>.camera-controls{position:static;flex-wrap:wrap;justify-content:flex-end}

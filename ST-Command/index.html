@@ -3,17 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ST Command · Enterprise Navigation</title>
+  <title>ST Command &#xb7; Enterprise Navigation</title>
+  <script src="browser-guards.js?v=1"></script>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="console3d.css">
   <link rel="stylesheet" href="bridge.css">
   <link rel="stylesheet" href="screen-fit.css">
   <link rel="stylesheet" href="audio.css">
-  <link rel="stylesheet" href="viewscreen.css?v=steady-preparing-message-5">
+  <link rel="stylesheet" href="viewscreen.css?v=door-opening-messages-6">
   <link rel="stylesheet" href="mission.css">
   <link rel="stylesheet" href="help.css?v=shuttle-ad-roll-5">
   <link rel="stylesheet" href="console-slope.css">
-  <link rel="stylesheet" href="enterprise-inset.css?v=draggable-remote-helm-4">
+  <link rel="stylesheet" href="enterprise-inset.css?v=closable-remote-helm-5">
   <link rel="stylesheet" href="project-notes.css?v=plain-version-labels-4">
   <link rel="stylesheet" href="shuttle-choice.css">
   <link rel="stylesheet" href="shuttle-theme.css?v=find-enterprise-2">
@@ -32,10 +33,11 @@
             <div id="main-view" class="canvas-host" role="img" aria-label="Live panoramic forward starfield and destination bearing"></div>
             <div id="shuttle-preparing-hud" class="preparing-hud" role="status" aria-live="polite" aria-atomic="true" hidden>Preparing Shuttle</div>
             <div id="shuttle-ended-hud" class="preparing-hud" role="status" aria-live="polite" aria-atomic="true" hidden>End Shuttle Mission</div>
+            <div id="door-status-hud" class="preparing-hud" role="status" aria-live="polite" aria-atomic="true" hidden></div>
             <div class="view-overlay"><span id="view-label">SOL SYSTEM</span><span id="drive-label">IMPULSE DRIVE</span></div>
             <div class="camera-controls viewscreen-controls" role="group" aria-label="Viewscreen controls">
             <div id="bridge-camera-controls" class="camera-controls"><button id="enterprise-chase" type="button" aria-pressed="false">CHASE CAMERA</button></div>
-            <div id="camera-controls" class="camera-controls" hidden><span id="camera-hint">DRAG VIEW TO LOOK</span><output id="camera-zoom" aria-label="Camera zoom">1.0×</output><button id="look-forward" type="button">FORWARD VIEW</button><button id="excursion-view" type="button" aria-pressed="false" hidden>EXCURSION VIEW</button></div>
+            <div id="camera-controls" class="camera-controls" hidden><span id="camera-hint">DRAG VIEW TO LOOK</span><output id="camera-zoom" aria-label="Camera zoom">1.0&#xd7;</output><button id="look-forward" type="button">FORWARD VIEW</button><button id="excursion-view" type="button" aria-pressed="false" hidden>EXCURSION VIEW</button></div>
             <button id="viewscreen-night-mode-toggle" type="button" aria-pressed="false">NIGHT MODE</button>
             </div>
           </div>
@@ -48,11 +50,11 @@
         <div class="helm-body">
           <div class="flight-controls">
           <div class="section-label">3D FLIGHT VECTOR <span>YAW / PITCH</span></div>
-          <div class="heading-control"><button id="port" aria-label="Turn 15 degrees to port">↶<small>PORT</small></button><div class="compass" id="attitude-ball" title="Drag to steer heading and pitch"><span class="north">N</span><div class="attitude-window"><div id="attitude-horizon"></div></div><div id="compass-needle"></div><span class="compass-center"></span></div><button id="starboard" aria-label="Turn 15 degrees to starboard">↷<small>STBD</small></button></div>
+          <div class="heading-control"><button id="port" aria-label="Turn 15 degrees to port">&#x21b6;<small>PORT</small></button><div class="compass" id="attitude-ball" title="Drag to steer heading and pitch"><span class="north">N</span><div class="attitude-window"><div id="attitude-horizon"></div></div><div id="compass-needle"></div><span class="compass-center"></span></div><button id="starboard" aria-label="Turn 15 degrees to starboard">&#x21b7;<small>STBD</small></button></div>
           <p class="control-hint">DRAG THE SPHERE TO STEER IN 3D</p>
-          <label for="heading">SET HEADING <output id="heading-output">090°</output></label><input id="heading" type="range" min="0" max="359" value="90" aria-label="Set heading in degrees">
-          <label for="pitch" class="pitch-label">PITCH / ELEVATION <output id="pitch-output">+00°</output></label><input id="pitch" type="range" min="-85" max="85" value="0" aria-label="Set pitch in degrees">
-          <div class="pitch-actions"><button id="climb">CLIMB +10°</button><button id="level">LEVEL</button><button id="dive">DIVE −10°</button></div>
+          <label for="heading">SET HEADING <output id="heading-output">090&#xb0;</output></label><input id="heading" type="range" min="0" max="359" value="90" aria-label="Set heading in degrees">
+          <label for="pitch" class="pitch-label">PITCH / ELEVATION <output id="pitch-output">+00&#xb0;</output></label><input id="pitch" type="range" min="-85" max="85" value="0" aria-label="Set pitch in degrees">
+          <div class="pitch-actions"><button id="climb">CLIMB +10&#xb0;</button><button id="level">LEVEL</button><button id="dive">DIVE &#x2212;10&#xb0;</button></div>
           <div class="divider"></div>
           <label for="throttle">ENGINE POWER <output id="throttle-output">0%</output></label><input id="throttle" type="range" min="-100" max="100" value="0" title="Negative power brakes forward motion, then moves astern. Space / All Stop stops immediately.">
           <div class="drive-switch" role="group" aria-label="Drive mode"><button id="impulse" class="selected" aria-pressed="true">IMPULSE</button><button id="warp" aria-pressed="false">WARP</button></div>
@@ -66,25 +68,25 @@
           <div class="power-dial" id="power-dial" title="Drag up or down to adjust engine power"><div class="dial-ring"></div><div class="dial-core"><span>ENGINE POWER</span><strong id="power-dial-value">0%</strong><small id="power-dial-mode">IMPULSE</small></div></div>
           <p class="control-hint">DRAG THE DIAL TO SET ENGINE POWER</p>
           <label class="select-label" for="destination">DESTINATION</label><select id="destination"></select>
-          <div class="destination-data"><div><span>DISTANCE</span><strong id="distance">—</strong></div><div><span>ARRIVAL</span><strong id="eta">—</strong></div></div>
-          <div class="course-solution"><div><span>TARGET BEARING</span><strong id="target-bearing">000°</strong></div><div><span>TARGET PITCH</span><strong id="target-pitch">+00°</strong></div><div><span>ELEVATION</span><strong id="target-elevation">+0 LY</strong></div><div><span>CONTROL</span><strong id="flight-mode">MANUAL</strong></div></div>
-          <button id="engage" class="engage">ENGAGE COURSE <span>↗</span></button>
+          <div class="destination-data"><div><span>DISTANCE</span><strong id="distance">&#x2014;</strong></div><div><span>ARRIVAL</span><strong id="eta">&#x2014;</strong></div></div>
+          <div class="course-solution"><div><span>TARGET BEARING</span><strong id="target-bearing">000&#xb0;</strong></div><div><span>TARGET PITCH</span><strong id="target-pitch">+00&#xb0;</strong></div><div><span>ELEVATION</span><strong id="target-elevation">+0 LY</strong></div><div><span>CONTROL</span><strong id="flight-mode">MANUAL</strong></div></div>
+          <button id="engage" class="engage">ENGAGE COURSE <span>&#x2197;</span></button>
           <button id="manual" class="quiet manual">MANUAL OVERRIDE</button>
           </div>
         </div>
       </aside>
-      <section class="display tactical"><div class="display-title"><h2><span>02</span> TACTICAL DISPLAY</h2><span>LOCAL SPACE · 120 LY</span></div><div id="tactical-view" class="canvas-host" role="img" aria-label="Live tactical radar centered on the Enterprise"></div><div class="display-footer"><span><i class="dot cyan"></i> ENTERPRISE</span><span><i class="dot gold"></i> NAV TARGET</span><span id="contact-count">0 CONTACTS</span></div></section>
-      <section class="display galaxy"><div class="display-title"><h2><span>03</span> 3D GALAXY NAVIGATION</h2><span>SPATIAL HOLOGRAM</span></div><div class="galaxy-stage"><div id="map-view" class="canvas-host" role="img" aria-label="3D galaxy: drag to orbit, scroll to zoom, click a system to plot a course"></div><div class="map-tools" role="group" aria-label="Galaxy camera controls"><button id="map-zoom-in" aria-label="Zoom in">+</button><button id="map-zoom-out" aria-label="Zoom out">−</button><button id="map-home" aria-label="Reset galaxy camera">⌂</button></div></div><div class="display-footer"><span>DRAG ORBIT · CLICK PLOT · SCROLL ZOOM</span><span>GRID 100 LY</span></div></section>
+      <section class="display tactical"><div class="display-title"><h2><span>02</span> TACTICAL DISPLAY</h2><span>LOCAL SPACE &#xb7; 120 LY</span></div><div id="tactical-view" class="canvas-host" role="img" aria-label="Live tactical radar centered on the Enterprise"></div><div class="display-footer"><span><i class="dot cyan"></i> ENTERPRISE</span><span><i class="dot gold"></i> NAV TARGET</span><span id="contact-count">0 CONTACTS</span></div></section>
+      <section class="display galaxy"><div class="display-title"><h2><span>03</span> 3D GALAXY NAVIGATION</h2><span>SPATIAL HOLOGRAM</span></div><div class="galaxy-stage"><div id="map-view" class="canvas-host" role="img" aria-label="3D galaxy: drag to orbit, scroll to zoom, click a system to plot a course"></div><div class="map-tools" role="group" aria-label="Galaxy camera controls"><button id="map-zoom-in" aria-label="Zoom in">+</button><button id="map-zoom-out" aria-label="Zoom out">&#x2212;</button><button id="map-home" aria-label="Reset galaxy camera">&#x2302;</button></div></div><div class="display-footer"><span>DRAG ORBIT &#xb7; CLICK PLOT &#xb7; SCROLL ZOOM</span><span>GRID 100 LY</span></div></section>
     </div>
-    <footer><span class="message" id="message" role="status">Conn ready. Select a destination and engage, or take manual control.</span><span id="control-hints">← → YAW &nbsp; ↑ ↓ PITCH &nbsp; W / S POWER &nbsp; SPACE STOP &nbsp; P PAUSE &nbsp; R RESET &nbsp; B AUDIO</span></footer>
-    <p class="simulation-note">Fictional navigation simulation · distances and travel speeds compressed for exploration.</p>
+    <footer><span class="message" id="message" role="status">Conn ready. Select a destination and engage, or take manual control.</span><span id="control-hints">&#x2190; &#x2192; YAW &nbsp; &#x2191; &#x2193; PITCH &nbsp; W / S POWER &nbsp; SPACE STOP &nbsp; P PAUSE &nbsp; R RESET &nbsp; B BRIDGE &nbsp; SHIFT+B AUDIO</span></footer>
+    <p class="simulation-note">Fictional navigation simulation &#xb7; distances and travel speeds compressed for exploration.</p>
   </main>
   <aside id="audio-panel" class="audio-panel" aria-label="Bridge background audio" hidden>
-    <div class="audio-title"><span>BRIDGE AUDIO · LOOP</span><button id="audio-close" type="button" aria-label="Stop bridge audio and close player">×</button></div>
+    <div class="audio-title"><span>BRIDGE AUDIO &#xb7; LOOP</span><button id="audio-close" type="button" aria-label="Stop bridge audio and close player">&#xd7;</button></div>
     <audio id="bridge-ambience" src="assets/audio/bridge-ambience.m4a" controls loop preload="auto" aria-label="Local bridge ambience"></audio>
-    <p id="audio-status" role="status">Local bridge ambience · ready to play.</p>
+    <p id="audio-status" role="status">Local bridge ambience &#xb7; ready to play.</p>
     <div class="audio-settings"><label for="audio-volume">VOLUME <output id="audio-volume-value">30%</output></label><input id="audio-volume" type="range" min="0" max="100" value="30"></div>
-    <a class="audio-source" href="https://www.youtube.com/watch?v=MwBMf0mg_q0" target="_blank" rel="noopener noreferrer">Source recording ↗</a>
+    <a class="audio-source" href="https://www.youtube.com/watch?v=MwBMf0mg_q0" target="_blank" rel="noopener noreferrer">Source recording &#x2197;</a>
   </aside>
   <dialog id="controls-help" aria-labelledby="help-title">
     <div class="help-heading"><h2 id="help-title">ST Command controls</h2><button id="help-close" type="button" autofocus>Close</button></div>
@@ -123,10 +125,11 @@
         <dt>Performance</dt><dd>Choose Full, Balanced (75% resolution) or Economy (50%), and a 60 or 30 FPS limit. The panel also shows frame timing and rendering statistics. Settings apply immediately.</dd>
         <dt>Launch preparation</dt><dd>Launch and Launch Again prepare the 3D graphics before liftoff. A transparent Preparing Shuttle message appears on the main viewscreen while loading. Wait for preparation to finish; the lift then starts from the pad. Prepared graphics are reused when settings stay the same. Lower resolution reduces rendering work; Low Memory textures reduce memory use.</dd>
         <dt>Night Mode</dt><dd>Dim external lighting to emphasize stars and ship lights. Toggle again to restore normal lighting; the choice is remembered.</dd>
-        <dt>H</dt><dd>Open / close the aft bridge hatch.</dd>
+        <dt>H</dt><dd>Open / close the aft bridge hatch. The red split door at the bridge end of the corridor starts opening one second after the outer hatch. On closing, the red inner door shuts first, then the outer hatch starts closing after a two-second wait.</dd>
         <dt>F / double-click viewscreen</dt><dd>Toggle the main viewer fullscreen. F, another double-click or Escape returns.</dd>
         <dt>R</dt><dd>Reset to galaxy navigation at Sol, stopped with 0% impulse power.</dd>
-        <dt>B</dt><dd>Toggle bridge audio. Open its audio window to adjust volume.</dd>
+        <dt>B</dt><dd>Go to the bridge, facing the viewscreen.</dd>
+        <dt>Shift+B</dt><dd>Toggle bridge audio. Open its audio window to adjust volume.</dd>
         <dt>Version</dt><dd>The toolbar follows Semantic Versioning 2.0.0: MAJOR.MINOR.PATCH. Major versions indicate incompatible changes, minor versions add compatible features, and patch versions fix bugs. Build shows the automatically updated build ID alongside Version.</dd>
       </dl></section>
 
@@ -140,6 +143,7 @@
   </dialog>
   <script src="vendor/phaser.min.js"></script>
   <script src="space-math.js?v=inverted-pitch-3"></script>
+  <script src="space-starfield.js?v=soft-bridge-star-points-2"></script>
   <script src="galaxy3d.js?v=attitude-auto-fit-2"></script>
   <script src="planet-renderer.js"></script>
   <script src="vendor/alpine-three.js?v=spotlight-exports-2"></script>
@@ -150,10 +154,10 @@
   <script src="shuttle-garage.js?v=recessed-clearance-safe-lamps-28"></script>
   <script src="shuttle-bay-walls.js?v=trim-flush-with-last-jamb-top-50"></script>
   <script src="shuttle-bay-interior.js?v=red-line-and-gray-deck-pulled-back-25"></script>
-  <script src="hangar-door-frame.js?v=smaller-green-fantail-light-26"></script>
+  <script src="hangar-door-frame.js?v=shared-white-lamp-glass-27"></script>
   <script src="hangar-signal-lights.js?v=dark-lamp-bezels-4"></script>
-  <script src="bridge-hatch-room.js?v=shorter-bridge-steps-39"></script>
-  <script src="bridge-docking-port.js?v=trimmed-housing-solid-bulkhead-17"></script>
+  <script src="bridge-hatch-room.js?v=dimmer-dome-light-96"></script>
+  <script src="bridge-docking-port.js?v=live-bridge-view-update-29"></script>
   <script src="engine-outboard-patch.js?v=subtle-curved-paint-12"></script>
   <script src="engine-inboard-panel.js?v=flush-room-frame-32"></script>
   <script src="engine-aft-vent.js?v=twelve-cowling-ridges-4"></script>
@@ -169,23 +173,24 @@
   <script src="enterprise-third-geometry.js?v=rear-fittings-forward-7"></script>
   <script src="enterprise-third-detailing.js?v=photo-1"></script>
   <script src="enterprise-third-photo-details.js?v=recessed-roof-lenses-2"></script>
-  <script src="enterprise-window-data.js?v=forward-portholes-enlarged-20"></script>
+  <script src="enterprise-window-data.js?v=lower-saucer-dark-pairs-removed-21"></script>
   <script src="enterprise-window-appearance.js?v=recessed-glass-1"></script>
   <script src="enterprise-window-layer.js?v=recessed-glass-3"></script>
-  <script src="enterprise-third-renderer.js?v=bridge-interior-camera-84"></script>
+  <script src="enterprise-third-renderer.js?v=bridge-shortcut-entry-94"></script>
   <script src="shuttle-bay-flight.js?v=inverted-cockpit-9"></script>
-  <script src="excursion-camera.js?v=inverted-cockpit-19"></script>
+  <script src="excursion-camera.js?v=no-bridge-shadows-21"></script>
   <script src="night-mode.js?v=viewscreen-toggle-2"></script>
-  <script src="enterprise-models.js?v=third-model-only-4"></script>
+  <script src="enterprise-models.js?v=bridge-interior-query-5"></script>
   <script src="enterprise-chase-camera.js?v=centered-overlay-2"></script>
   <script src="orbit-arrival.js?v=3"></script>
   <script src="surface-world.js"></script>
   <script src="shuttle-map.js?v=both-ships-auto-fit-5"></script>
-  <script src="away-mission.js?v=drag-look-only-39"></script>
-  <script src="enterprise-inset.js?v=remote-stops-flat-turns-10"></script>
+  <script src="away-mission.js?v=bridge-key-shortcut-43"></script>
+  <script src="enterprise-inset.js?v=closable-helm-panel-12"></script>
   <script src="simulation.js?v=shuttle-ad-roll-9"></script>
-  <script src="audio.js"></script>
+  <script src="audio.js?v=shift-b-audio-2"></script>
   <script src="viewscreen.js?v=drag-look-only-2"></script>
+  <script src="door-status.js?v=hangar-garage-only-2"></script>
   <script src="help.js"></script>
   <script src="app-version-data.js"></script>
   <script src="app-version.js?v=labeled-version-build-3"></script>

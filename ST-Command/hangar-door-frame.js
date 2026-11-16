@@ -135,12 +135,17 @@ window.createHangarRoofBeacon=(T,scaleY=1,hullMaterial=null,scaleZ=1)=>{
  beacon.userData.roofBeacon={lensHeight:.012*sizeScale,lensRadius:.012*sizeScale,sizeScale,color:0x69d596};return beacon;
 };
 
-/* The small lamp beneath the canopy lip casts steady white light. */
-window.addHangarWhiteLamp=(T,lens)=>{
+/* Shared reflective glass finish for the ship's white lamp lenses. */
+window.createShipWhiteLampMaterial=T=>{
  const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const c=canvas.getContext('2d'),g=c.createLinearGradient(0,0,0,128);
  for(const [stop,color]of [[0,'#43515b'],[.18,'#b6c2ca'],[.43,'#edf2f5'],[.68,'#a4b5c0'],[1,'#35434d']])g.addColorStop(stop,color);c.fillStyle=g;c.fillRect(0,0,128,128);c.fillStyle='rgba(255,255,255,.55)';c.fillRect(5,18,118,5);
  const map=new T.CanvasTexture(canvas);map.colorSpace=T.SRGBColorSpace;
- lens.material=new T.MeshStandardMaterial({color:0xffffff,map,emissive:0xffffff,emissiveMap:map,emissiveIntensity:.7,roughness:.12,metalness:0});
+ const material=new T.MeshStandardMaterial({color:0xffffff,map,emissive:0xffffff,emissiveMap:map,emissiveIntensity:.7,roughness:.12,metalness:0});
+ material.userData.shipWhiteLampGlass=true;return material;
+};
+/* The small lamp beneath the canopy lip casts steady white light. */
+window.addHangarWhiteLamp=(T,lens)=>{
+ lens.material=createShipWhiteLampMaterial(T);
  const light=new T.Light(0xffffff,.000045);light.isPointLight=true;light.type='PointLight';light.distance=.28;light.decay=2;light.name='hangar-under-lip-white-emitter';light.position.set(0,-.001,.003);lens.add(light);
  // Offset, unshadowed emitters spread a soft wash across the lip and stern.
  for(const side of [-1,1]){const spill=new T.Light(0xffffff,.000018);spill.isPointLight=true;spill.type='PointLight';spill.distance=.28;spill.decay=2;spill.name='hangar-under-lip-white-spill-'+(side<0?'port':'starboard');spill.position.set(side*.006,-.0025,.004);lens.add(spill);}

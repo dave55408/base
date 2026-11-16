@@ -51,6 +51,10 @@
       })();
       try{await ship.launchWarmup;return ship;}finally{ship.launchWarmup=null;}
     },
+    isInsideBridge(pose){
+      for(const scene of scenes)if(scene.enterpriseRenderers?.[selected]?.isInsideBridge(pose))return true;
+      return false;
+    },
     rendererFor(scene){
       if(!scenes.has(scene)){
         scenes.add(scene);

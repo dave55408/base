@@ -4,23 +4,43 @@
  panel.innerHTML='<div class="enterprise-inset-title">ENTERPRISE · REMOTE HELM</div><canvas id="enterprise-inset-canvas" width="440" height="300" role="img" aria-label="Forward-facing Enterprise wireframe with three-dimensional yaw, pitch and roll reference rings"></canvas><output id="enterprise-inset-readout"></output><div class="enterprise-inset-keys">NUMPAD 1 / 3 YAW &middot; 5 / 2 PITCH<br>7 / 9 FLAT TURN &middot; 0 / . ROLL &middot; SLASH / 8 PITCH &middot; PAGE UP / DOWN POWER<br>&minus; / + Z UP / DOWN &middot; ENTER NEUTRAL<br>END SLOW STOP &middot; HOME FULL STOP</div>';
  panel.querySelector('#enterprise-inset-readout').insertAdjacentHTML('afterend','<div class="enterprise-inset-power"><label for="enterprise-inset-power">ENGINE POWER <output id="enterprise-inset-power-output">0%</output></label><input id="enterprise-inset-power" type="range" min="-100" max="100" step="1" value="0" title="Enterprise engine power: reverse to forward"><div class="enterprise-inset-power-scale"><span>REVERSE</span><span>0</span><span>FORWARD</span></div></div>');
  document.querySelector('.tactical').append(panel);
- const home=panel.parentElement,handle=panel.querySelector('.enterprise-inset-title');let dragging=null;
+ const home=panel.parentElement,handle=panel.querySelector('.enterprise-inset-title');let dragging=null,bridgePopupShown=false,dismissed=false;
+ const closeButton=document.createElement('button');closeButton.type='button';closeButton.className='enterprise-inset-close';closeButton.setAttribute('aria-label','Close helm panel');closeButton.title='Close helm panel';closeButton.innerHTML='&times;';handle.append(closeButton);
+ const reopenButton=document.createElement('button');reopenButton.type='button';reopenButton.id='enterprise-inset-open';reopenButton.textContent='HELM';reopenButton.setAttribute('aria-label','Open helm panel');reopenButton.setAttribute('aria-controls',panel.id);reopenButton.hidden=true;document.body.append(reopenButton);
+ closeButton.addEventListener('pointerdown',event=>event.stopPropagation());
+ closeButton.addEventListener('click',event=>{event.stopPropagation();dismissed=true;dragging=null;panel.hidden=true;reopenButton.hidden=false;syncFloatingHost();reopenButton.focus({preventScroll:true});});
+ for(const button of [closeButton,reopenButton])button.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' ')event.stopPropagation();});
+ reopenButton.addEventListener('click',()=>{
+  dismissed=false;const app=window.STCommand;if(!app)return;last=-Infinity;EnterpriseInset.render(app.away.state,app.state);
+  if(!panel.hidden&&!panel.dataset.floating){const width=Math.min(290,innerWidth-12);floatPanel(innerWidth-width-18,70,width);}
+  if(!panel.hidden)closeButton.focus({preventScroll:true});
+ });
  handle.title='Drag to move; double-click to return to the tactical display';
  function placePanel(left,top){
   const rect=panel.getBoundingClientRect(),margin=6;
   panel.style.left=Math.max(margin,Math.min(left,Math.max(margin,innerWidth-rect.width-margin)))+'px';
   panel.style.top=Math.max(margin,Math.min(top,Math.max(margin,innerHeight-rect.height-margin)))+'px';
  }
+ function floatPanel(left,top,width){
+  panel.dataset.floating='true';panel.style.width=width+'px';
+  (document.fullscreenElement||document.body).append(panel);placePanel(left,top);
+ }
+ function syncFloatingHost(){
+  const host=document.fullscreenElement||document.body;
+  if(reopenButton.parentElement!==host)host.append(reopenButton);
+  if(panel.dataset.floating&&panel.parentElement!==host){host.append(panel);placePanel(parseFloat(panel.style.left)||6,parseFloat(panel.style.top)||6);}
+ }
+ document.addEventListener('fullscreenchange',syncFloatingHost);
  handle.addEventListener('pointerdown',event=>{
-  if(event.button!==0)return;event.preventDefault();event.stopPropagation();
+  if(event.button!==0||event.target.closest('button'))return;event.preventDefault();event.stopPropagation();
   const rect=panel.getBoundingClientRect();
-  if(!panel.dataset.floating){panel.dataset.floating='true';panel.style.width=rect.width+'px';document.body.append(panel);placePanel(rect.left,rect.top);}
+  if(!panel.dataset.floating)floatPanel(rect.left,rect.top,rect.width);
   const current=panel.getBoundingClientRect();dragging={id:event.pointerId,x:event.clientX-current.left,y:event.clientY-current.top};handle.setPointerCapture(event.pointerId);
  });
  handle.addEventListener('pointermove',event=>{if(dragging?.id!==event.pointerId)return;event.preventDefault();event.stopPropagation();placePanel(event.clientX-dragging.x,event.clientY-dragging.y);});
  function endDrag(event){if(dragging?.id!==event.pointerId)return;dragging=null;if(handle.hasPointerCapture(event.pointerId))handle.releasePointerCapture(event.pointerId);event.stopPropagation();}
  handle.addEventListener('pointerup',endDrag);handle.addEventListener('pointercancel',endDrag);handle.addEventListener('lostpointercapture',()=>{dragging=null;});
- handle.addEventListener('dblclick',event=>{event.preventDefault();dragging=null;delete panel.dataset.floating;panel.removeAttribute('style');home.append(panel);});
+ handle.addEventListener('dblclick',event=>{if(event.target.closest('button'))return;event.preventDefault();dragging=null;delete panel.dataset.floating;panel.removeAttribute('style');home.append(panel);});
  addEventListener('resize',()=>{if(panel.dataset.floating&&!panel.hidden)placePanel(parseFloat(panel.style.left)||6,parseFloat(panel.style.top)||6);});
  const power=panel.querySelector('#enterprise-inset-power'),powerOutput=panel.querySelector('#enterprise-inset-power-output');
  power.addEventListener('input',()=>window.STCommand?.away.setEnterprisePower(Number(power.value)));
@@ -50,12 +70,22 @@
  function project(point,rotated=false){const p=new AlpineThree.Vector3(...point);if(rotated)p.multiplyScalar(1.15).applyQuaternion(pivot.quaternion);p.project(camera);return [(p.x+1)*canvas.width/2,(1-p.y)*canvas.height/2];}
  function stroke(points,color,width=1,rotated=false){ctx.beginPath();for(const [n,p]of points.entries()){const [x,y]=project(p,rotated);n?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();}
  window.EnterpriseInset={render(m,s){
-  const visible=!!m.freeSpace&&!!m.carrier&&!['bridge','orbit'].includes(m.phase),wasHidden=panel.hidden;panel.hidden=!visible;if(!visible){previous=null;return;}
+  const available=!!m.freeSpace&&!!m.carrier&&!['bridge','orbit'].includes(m.phase),visible=available&&!dismissed,wasHidden=panel.hidden;
+  panel.hidden=!visible;reopenButton.hidden=!available||!dismissed;syncFloatingHost();
+  if(!visible){previous=null;if(!available)bridgePopupShown=false;return;}
+  const insideBridge=window.EnterpriseModels?.isInsideBridge(m)===true,c=m.carrier,b=m.bridgeState;
+  if(!insideBridge)bridgePopupShown=false;
+  const moving=c.moving||Math.abs(c.speed||0)>.000001||Math.abs(b.speed||0)>.000001||Math.abs(b.turn||0)>.000001||Math.abs(b.pitchTurn||0)>.000001;
+  if(insideBridge&&moving&&!bridgePopupShown){
+   bridgePopupShown=true;
+   if(!panel.dataset.floating){const width=Math.min(290,innerWidth-12);floatPanel(innerWidth-width-18,70,width);}
+  }
+  syncFloatingHost();
   if(wasHidden&&panel.dataset.floating)placePanel(parseFloat(panel.style.left)||6,parseFloat(panel.style.top)||6);
   power.value=String(m.bridgeState.throttle);powerOutput.value=Math.round(m.bridgeState.throttle)+'%';
   power.setAttribute('aria-valuetext',Math.round(m.bridgeState.throttle)+' percent Enterprise engine power');
   const now=performance.now();if(now-last<50)return;last=now;
-  const c=m.carrier,b=m.bridgeState,T=AlpineThree,yaw=((c.heading+180)%360+360)%360-180,values={yaw,pitch:c.pitch,roll:c.roll/rad};
+  const T=AlpineThree,yaw=((c.heading+180)%360+360)%360-180,values={yaw,pitch:c.pitch,roll:c.roll/rad};
   readout.innerHTML=Object.entries(values).map(([axis,value])=>'<span data-axis="'+axis+'" data-active="'+(!!previous&&Math.abs(value-previous[axis])>.05)+'">'+axis.toUpperCase()+'<strong>'+signed(value,axis==='yaw'?3:2)+'</strong></span>').join('')+'<small>HDG '+Math.round(b.heading).toString().padStart(3,'0')+'° · '+(c.speed*1000).toFixed(0)+' M/S · '+Math.round(b.throttle)+'%</small>';
   previous=values;
   // Look straight ahead so zero pitch puts the compass horizon flat and

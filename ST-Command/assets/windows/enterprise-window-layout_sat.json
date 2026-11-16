@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "USS Enterprise · editable window plan",
-  "revision": "sat-pennant-window-aft-1",
+  "revision": "lower-saucer-dark-pairs-removed-21",
   "coordinateFrame": {
     "units": "schematic model units; saucer diameter 1.36",
     "x": "positive to starboard",
@@ -190,28 +190,12 @@
       "notes": "Mirrored from BU2 to match starboard by user request."
     },
     {
-      "id": "BU4",
-      "label": "Lower saucer · dark pair",
-      "surface": "bowl",
-      "side": "starboard",
-      "source": "image-1461",
-      "notes": "Two dark openings beside the visible upper bank; exact angle is uncertain."
-    },
-    {
       "id": "NAV",
       "label": "Navigation and landing lights",
       "surface": "beacon",
       "side": "both",
       "source": "image-1458",
       "notes": "Context only; not counted as cabin windows. Engine collectors and sensor domes are omitted."
-    },
-    {
-      "id": "BU5",
-      "label": "Lower saucer - dark pair - port",
-      "surface": "bowl",
-      "side": "port",
-      "source": "image-1461",
-      "notes": "Mirrored from BU4 to match starboard by user request."
     }
   ],
   "windows": [
@@ -2687,58 +2671,6 @@
       "notes": ""
     },
     {
-      "id": "BU4-01",
-      "group": "BU4",
-      "surface": "bowl",
-      "side": "starboard",
-      "position": [
-        0.24846,
-        0.307,
-        -1.58736
-      ],
-      "normal": [
-        0.97437,
-        -0.7,
-        -0.22495
-      ],
-      "width": 0.011,
-      "height": 0.004,
-      "shape": "rect",
-      "state": "unlit",
-      "category": "window",
-      "confidence": "estimated",
-      "source": "image-1461",
-      "sourcePixel": null,
-      "color": null,
-      "notes": ""
-    },
-    {
-      "id": "BU4-02",
-      "group": "BU4",
-      "surface": "bowl",
-      "side": "starboard",
-      "position": [
-        0.25465,
-        0.307,
-        -1.54335
-      ],
-      "normal": [
-        0.99863,
-        -0.7,
-        -0.05234
-      ],
-      "width": 0.011,
-      "height": 0.004,
-      "shape": "rect",
-      "state": "unlit",
-      "category": "window",
-      "confidence": "estimated",
-      "source": "image-1461",
-      "sourcePixel": null,
-      "color": null,
-      "notes": ""
-    },
-    {
       "id": "NAV-01",
       "group": "NAV",
       "surface": "beacon",
@@ -5059,60 +4991,6 @@
       "color": null,
       "notes": "",
       "mirroredFrom": "BU2-05"
-    },
-    {
-      "id": "BU5-01",
-      "group": "BU5",
-      "surface": "bowl",
-      "side": "port",
-      "position": [
-        -0.24846,
-        0.307,
-        -1.58736
-      ],
-      "normal": [
-        -0.97437,
-        -0.7,
-        -0.22495
-      ],
-      "width": 0.011,
-      "height": 0.004,
-      "shape": "rect",
-      "state": "unlit",
-      "category": "window",
-      "confidence": "estimated",
-      "source": "image-1461",
-      "sourcePixel": null,
-      "color": null,
-      "notes": "",
-      "mirroredFrom": "BU4-01"
-    },
-    {
-      "id": "BU5-02",
-      "group": "BU5",
-      "surface": "bowl",
-      "side": "port",
-      "position": [
-        -0.25465,
-        0.307,
-        -1.54335
-      ],
-      "normal": [
-        -0.99863,
-        -0.7,
-        -0.05234
-      ],
-      "width": 0.011,
-      "height": 0.004,
-      "shape": "rect",
-      "state": "unlit",
-      "category": "window",
-      "confidence": "estimated",
-      "source": "image-1461",
-      "sourcePixel": null,
-      "color": null,
-      "notes": "",
-      "mirroredFrom": "BU4-02"
     }
   ],
   "registration": {
@@ -5541,14 +5419,6 @@
         {
           "starboard": "BU2-05",
           "port": "BU3-05"
-        },
-        {
-          "starboard": "BU4-01",
-          "port": "BU5-01"
-        },
-        {
-          "starboard": "BU4-02",
-          "port": "BU5-02"
         },
         {
           "starboard": "EDIT-003",

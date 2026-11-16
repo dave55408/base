@@ -18,7 +18,7 @@ const {createServer}=require('./server.cjs');
     assert(await page.evaluate(()=>STCommandAudio.wanted),'bridge loop is enabled automatically on load');
     if(await page.evaluate(()=>STCommandAudio.awaitingGesture))await page.mouse.click(10,10);
     await page.waitForFunction(()=>STCommandAudio.playing);assert(await page.locator('#audio-panel').isHidden(),'automatic background loop keeps the audio panel closed');
-    await page.keyboard.press('b');assert.equal(await page.evaluate(()=>STCommandAudio.playing),false,'B stops the automatic loop');await page.keyboard.press('b');await page.waitForFunction(()=>STCommandAudio.playing);
+    await page.keyboard.press('Shift+B');assert.equal(await page.evaluate(()=>STCommandAudio.playing),false,'Shift+B stops the automatic loop');await page.keyboard.press('Shift+B');await page.waitForFunction(()=>STCommandAudio.playing);
     const initial=await page.locator('#bridge-ambience').evaluate(a=>({duration:a.duration,loop:a.loop,src:a.currentSrc,volume:a.volume,time:a.currentTime}));
     assert(initial.duration>120&&initial.duration<130,'the actual recording is about 2:05');assert(initial.loop);assert(initial.src.startsWith(origin+'/assets/audio/'));assert.equal(initial.volume,.3);
     await page.waitForFunction(t=>document.getElementById('bridge-ambience').currentTime>t+.2,initial.time);
@@ -40,16 +40,16 @@ const {createServer}=require('./server.cjs');
     await page.locator('#bridge-ambience').evaluate(a=>{a.currentTime=a.duration-.25;});
     await page.waitForFunction(()=>{const a=document.getElementById('bridge-ambience');return a.currentTime<2&&!a.paused;},null,{timeout:10000});
     await page.locator('#audio-close').click();assert.equal(await page.evaluate(()=>STCommandAudio.playing),false);assert(await page.locator('#audio-panel').isHidden());
-    await page.keyboard.press('b');await page.waitForFunction(()=>STCommandAudio.playing);assert.equal(await page.locator('#bridge-ambience').evaluate(a=>a.volume),.45);
+    await page.keyboard.press('Shift+B');await page.waitForFunction(()=>STCommandAudio.playing);assert.equal(await page.locator('#bridge-ambience').evaluate(a=>a.volume),.45);
     const reopened=await page.locator('#audio-panel').boundingBox();assert(Math.abs(reopened.x-(movedPanel.x-10))<1&&Math.abs(reopened.y-movedPanel.y)<1,'reopening preserves the window position');
     await page.setViewportSize({width:390,height:844});await page.waitForTimeout(100);
     const resized=await page.locator('#audio-panel').boundingBox();assert(resized.x>=0&&resized.y>=0&&resized.x+resized.width<=390&&resized.y+resized.height<=844,'resizing keeps the audio window within reach');
-    await page.keyboard.press('b');assert.equal(await page.evaluate(()=>STCommandAudio.playing),false);
+    await page.keyboard.press('Shift+B');assert.equal(await page.evaluate(()=>STCommandAudio.playing),false);
     await page.setViewportSize({width:2560,height:1440});
     assert.deepEqual(external,[],'audio works without external network requests');assert.deepEqual(errors,[]);
     assert(await page.evaluate(()=>document.documentElement.scrollHeight<=innerHeight),'1440p layout preserved');
     const autoplayBrowser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,args:['--no-sandbox','--autoplay-policy=no-user-gesture-required']});
     try{const autoplayPage=await autoplayBrowser.newPage();await autoplayPage.goto(origin);await autoplayPage.waitForFunction(()=>window.STCommandAudio?.playing&&document.getElementById('bridge-ambience').currentTime>.1);assert(await autoplayPage.locator('#audio-panel').isHidden(),'allowed autoplay starts without an interaction or audio popup');}finally{await autoplayBrowser.close();}
-    console.log('Passed actual local audio: '+initial.duration.toFixed(1)+' seconds, playback advances, volume, repeat across end, B toggle, close, byte-range serving, and no external network requests.');
+    console.log('Passed actual local audio: '+initial.duration.toFixed(1)+' seconds, playback advances, volume, repeat across end, Shift+B toggle, close, byte-range serving, and no external network requests.');
   }finally{await browser?.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -27,7 +27,7 @@ try{
   for(const side of ['port','starboard']){
    const pennant=third.model.getObjectByName(side+'-secondary-pennant'),grille=third.model.getObjectByName(side+'-forward-hull-service-grille'),gray=third.model.getObjectByName(side+'-pennant-front-gray-section');
    if(!pennant||!grille||gray)throw Error('Hull pennant and grille must retain the hull finish without gray paint');
-   if(pennant.material.opacity!==.80||!!third.model.getObjectByName(side+'-pennant-gold-overlay')||!pennant.userData.combinedPaintLayer||pennant.userData.hullClearance>.00005||third.model.getObjectByName(side+'-nacelle-registry').material.userData.pennantOpacity!==.80)throw Error('Hull and engine pennants need twenty percent transparency');
+   if(pennant.material.opacity!==.60||!!third.model.getObjectByName(side+'-pennant-gold-overlay')||!pennant.userData.combinedPaintLayer||pennant.userData.hullClearance>.00005||third.model.getObjectByName(side+'-nacelle-registry').material.userData.pennantOpacity!==.80)throw Error('Hull pennants need forty percent transparency and engine pennants need twenty percent transparency');
    for(const edge of ['upper','lower']){const line=third.model.getObjectByName(side+'-pennant-'+edge+'-raised-line');if(!line||!line.userData.roundedEnds||line.userData.edgePadding<.004||Math.abs(Math.abs(line.userData.height+.022)-.024)>1e-7||Math.abs(line.userData.front-grille.userData.panelFront-.014)>1e-7||Math.abs(line.userData.rear-(grille.userData.panelFront+(grille.userData.panelRear-grille.userData.panelFront)*(edge==='upper'?.55:.90)))>1e-7)throw Error('Raised trim must follow both gray-section edges');}
   }
   let pennantColorPixels=0,registryInk=0;

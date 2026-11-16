@@ -90,7 +90,8 @@ window.createThirdEnterpriseRenderer=()=>{
   const decalMaterial=map=>material(0xffffff,{map,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1,side:T.DoubleSide});
   const pennantMaterial=decalMaterial(details.pennant),portPennantMaterial=decalMaterial(details.portPennant);
   const registryMat=decalMaterial(details.registry),portRegistryMat=decalMaterial(details.portRegistry);
-  for(const paint of [pennantMaterial,portPennantMaterial])paint.opacity=.80;
+  // Let the hull plating show through the side pennants like thin paint.
+  for(const paint of [pennantMaterial,portPennantMaterial])paint.opacity=.60;
   // Fade engine paint while keeping the dark registry lettering crisp.
   for(const paint of [registryMat,portRegistryMat]){
     paint.onBeforeCompile=shader=>{shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>','#include <map_fragment>\nif(diffuseColor.r > diffuseColor.b*1.3 && (diffuseColor.r > diffuseColor.g*1.3 || diffuseColor.g > diffuseColor.b*1.15)) diffuseColor.a *= .80;');};
@@ -127,12 +128,17 @@ window.createThirdEnterpriseRenderer=()=>{
   const upperHousing=lathe(deckProfile,material(0xffffff,{map:details.deck,emissive:0xffead0,emissiveMap:details.deckGlow,emissiveIntensity:.55,side:T.DoubleSide}),0,.456,-1.53);upperHousing.scale.y=1.05;teardropHousing(upperHousing.geometry);upperHousing.name='upper-saucer-teardrop';
   const bridgeDome=lathe([[0,0],...G.smoothProfile([[.077,0],[.077,.006],[.073,.018],[.062,.027],[.040,.031],[0,.031]])],hull,0,.516,-1.53);bridgeDome.name='bridge-dome';carveBridgeHatch(T,bridgeDome,{centerY:.531});
   const bridgeDockingPort=createBridgeDockingPort(T,{centerY:.531,hull,dome:bridgeDome});model.add(bridgeDockingPort);
-  // Open the concealed dome base and deckhouse roof into the sunken room.
+  // Clear the full bridge cavity as its floor extends down into the deckhouse.
   // Clip complete triangles at the circular boundary, preserving their UVs.
   const sunken=bridgeDockingPort.getObjectByName('bridge-room-sunken-room').userData.sunkenRoom;
-  const pitPlanes=[[0,1,0,sunken.upperFloorY+.0001],[0,-1,0,-sunken.floorY+.0001]];
-  for(let i=0;i<96;i++){const a=i*Math.PI/48,nx=Math.sin(a),nz=Math.cos(a);pitPlanes.push([nx,0,nz,sunken.radius*Math.cos(Math.PI/96)+nz*sunken.centerZ]);}
+  const bridgeRoom=bridgeDockingPort.getObjectByName('bridge-circular-room'),bridgeLayout=bridgeRoom.userData.circularRoom,bridgeRoof=bridgeRoom.getObjectByName('bridge-room-ceiling').userData.domeCeiling;
+  const pitPlanes=[[0,1,0,bridgeRoof.apexY+.0001],[0,-1,0,-sunken.floorY+.0001]];
+  for(let i=0;i<96;i++){const a=i*Math.PI/48,nx=Math.sin(a),nz=Math.cos(a);pitPlanes.push([nx,0,nz,bridgeLayout.radius*Math.cos(Math.PI/96)+nz*sunken.centerZ]);}
   for(const skin of [bridgeDome,upperHousing])carveBridgeHatch(T,skin,{cutPlanes:pitPlanes,tag:'sunkenBridgeOpening'});
+  // Keep the hull base and deckhouse skin out of the entire corridor stairwell.
+  const corridorStart=bridgeDockingPort.position.z+bridgeLayout.entranceZ,corridorEnd=corridorStart+bridgeLayout.corridorLength;
+  const corridorPlanes=[[1,0,0,bridgeLayout.entranceWidth/2+.0005],[-1,0,0,bridgeLayout.entranceWidth/2+.0005],[0,0,-1,-corridorStart+.0005],[0,0,1,corridorEnd+.0005],[0,-1,0,-bridgeLayout.floorY+.001],[0,1,0,bridgeDockingPort.position.y+.0105]];
+  for(const skin of [bridgeDome,upperHousing])carveBridgeHatch(T,skin,{cutPlanes:corridorPlanes,tag:'bridgeCorridorStairOpening'});
   const sensorGlass=material(0xf0e5ce,{emissive:0xffdcc2,emissiveIntensity:1.3,roughness:.3,metalness:.08});
   sensorGlass.userData.lightLens=true;
   lathe([[0,0],[.036,0],[.036,.003],[0,.003]],edge,0,.544,-1.53);
@@ -788,9 +794,15 @@ window.createThirdEnterpriseRenderer=()=>{
   const engineeringAssembly=new T.Group();engineeringAssembly.name='reference-engineering-assembly';for(const part of engineeringParts)engineeringAssembly.add(part);engineeringAssembly.scale.z=engineeringShape.bodyScale;model.add(engineeringAssembly);
   model.userData.referenceDimensions={bodyScale:engineeringShape.bodyScale,bayScaleY:bayAssembly.scale.y,bayOffsetY:bayAssembly.position.y,saucerDiameter:1.36};
   model.position.z=-.032;
+  function isInsideBridge(pose){return bridgeDockingPort.isInteriorPoint(new T.Vector3(pose.x,pose.z-110,pose.y));}
+  function bridgeEntryPose(){
+    const point=bridgeDockingPort.localToWorld(new T.Vector3(0,sunken.floorY-.531+.014,bridgeLayout.centerZ));
+    return {x:point.x,y:point.z,z:110+point.y};
+  }
   function draw(ctx,w,h,m,s,updateOnly=false){
-    const insideBridge=bridgeDockingPort.isInteriorPoint(new T.Vector3(m.x,m.z-110,m.y));
+    const insideBridge=isInsideBridge(m);
     bridgeDockingPort.setInteriorView(insideBridge);
+    bridgeDockingPort.updateBridgeView(m,s);
     bridgeDockingPort.updateHatch();
     bayInterior.setGarageDoorOpen(m.garageDoorOpen??0);
     // Viewed head-on, +Z rotation is clockwise: port spins opposite starboard.
@@ -865,5 +877,5 @@ window.createThirdEnterpriseRenderer=()=>{
   resizeAftEngineFins(T,model,1.8);G.fitEngineFittings(T,model);addEngineInboardPanels(T,model,{handleLength:123*1.36/510,rearPanelWidth:39*1.36/510,surfaceDetail:hullSurfaceDetail});addEngineCouplingPatches(T,model,{surfaceDetail:hullSurfaceDetail});addEngineCouplingPatches(T,model,{inboard:true,surfaceDetail:hullSurfaceDetail});hullSurfaceDetail.prepare(model);
   model.userData.variant='third';
   applyGlassLightLenses(T,model);
-  return trackEnterpriseResources({draw,renderer,scene,model,camera,setBayDoorOpen,ready:Promise.all([details.ready,hullSurfaceDetail.ready,bridgeDockingPort.ready])},details);
+  return trackEnterpriseResources({draw,renderer,scene,model,camera,setBayDoorOpen,isInsideBridge,bridgeEntryPose,ready:Promise.all([details.ready,hullSurfaceDetail.ready,bridgeDockingPort.ready])},details);
 };

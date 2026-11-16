@@ -112,6 +112,7 @@ window.createBridgeDockingPort=(T,{centerY,hull,dome})=>{
   // The compact Three bundle exposes the base light; this is an unshadowed point emitter.
   const light=new T.Light(lightColor,.0000015);light.isPointLight=true;light.type='PointLight';light.distance=.006;light.decay=2;light.name='docking-side-light-emitter';light.position.set(side*lightRadius,0,raisedZ+.00065);port.add(light);
  }
+ const exteriorDoorLights=port.children.filter(object=>['docking-side-light','docking-side-light-glow','docking-side-light-emitter'].includes(object.name));
  // Shallow painted heads match the panel rivets rather than dark spherical bolts.
  for(let i=0;i<12;i++){
   const a=(i+.5)*Math.PI/6,head=add(new T.SphereGeometry(.000166,16,8),bolt,'docking-rim-fastener',Math.cos(a)*.008625,Math.sin(a)*.008625,raisedZ+.000014);
@@ -121,28 +122,61 @@ window.createBridgeDockingPort=(T,{centerY,hull,dome})=>{
  const interior=createBridgeHatchRoom(T,{dome,centerY,portZ:port.position.z,doorZ:doorZ-.0004});port.add(interior);
  // Only the portion outside the room belongs to the exterior airlock housing.
  // Its old forward edge protruded inside as two free-standing plated slabs.
- const layout=interior.userData.circularRoom,bp=block.geometry.attributes.position;
+ const layout=interior.userData.circularRoom,blockParameters=block.geometry.parameters,bp=block.geometry.attributes.position;
  for(let i=0;i<bp.count;i++){const join=layout.centerZ+Math.sqrt(Math.max(0,layout.radius**2-bp.getX(i)**2))+.00002;if(bp.getZ(i)<join)bp.setZ(i,join);}
  bp.needsUpdate=true;block.geometry.computeBoundingBox();block.geometry.computeBoundingSphere();
+ // The block's old bottom plate crossed the deeper stairs. Keep its outer
+ // housing intact while removing only the concealed floor inside the passage.
+ carveBridgeHatch(T,block,{centerY,cutPlanes:[[1,0,0,layout.entranceWidth/2+.0001],[-1,0,0,layout.entranceWidth/2+.0001],[0,0,-1,-layout.entranceZ+.0005],[0,0,1,layout.entranceZ+layout.corridorLength+.0005],[0,-1,0,centerY-layout.floorY+.001],[0,1,0,.0105]],tag:'bridgeCorridorStairOpening'});
+ block.geometry.parameters=blockParameters;
  block.userData.trimmedAtBridgeWall=true;
  port.ready=interior.ready;
- let open=0,lastTime,interiorView=false;
- port.setInteriorView=active=>{interiorView=!!active;interior.visible=open>0||interiorView;};
+ port.updateBridgeView=(mission,state)=>{if(interiorView)interior.updateBridgeView(mission,state);};
+ let open=0,innerOpen=0,openingElapsed=0,closingWait=0,lastTime,interiorView=false,lastTarget,closeOuterFirst=false;
+ port.setInteriorView=active=>{
+  interiorView=!!active;interior.visible=open>0||interiorView;
+  for(const object of exteriorDoorLights)object.visible=!interiorView;
+ };
  port.isInteriorPoint=point=>{
   port.updateWorldMatrix(true,false);const p=port.worldToLocal(point.clone()),layout=interior.userData.circularRoom,pit=interior.getObjectByName('bridge-room-sunken-room').userData.sunkenRoom,roof=interior.getObjectByName('bridge-room-ceiling').userData.domeCeiling;
   const inRoom=Math.hypot(p.x,p.z-layout.centerZ)<=layout.radius+.001&&p.y>=pit.floorY-centerY-.001&&p.y<=roof.apexY-centerY+.001;
   const inCorridor=Math.abs(p.x)<=.0106&&p.z>=layout.entranceZ-.001&&p.z<=raisedZ+.001&&p.y>=layout.floorY-centerY-.001&&p.y<=.0105;
   return inRoom||inCorridor;
  };
- port.setHatchOpen=value=>{
+ port.setHatchOpen=(value,syncInner=true)=>{
   open=Math.max(0,Math.min(1,value));const eased=open*open*(3-2*open);slide.value=(opening+.0001)*eased*.90;
   for(const {leaf,side}of leaves)leaf.position.x=side*slide.value;
   port.userData.hatchOpen=open;
+  if(syncInner){innerOpen=open;interior.setInnerDoorOpen(innerOpen);port.userData.innerDoorOpen=innerOpen;}
   interior.visible=open>0||interiorView;
  };
  port.updateHatch=(time=performance.now()/1000)=>{
+  interior.updateBridgeIndicators(time);
   if(!Number.isFinite(time))return;const dt=lastTime===undefined?0:Math.max(0,Math.min(.1,time-lastTime));lastTime=time;
-  const target=BridgeHatch.open?1:0;port.setHatchOpen(open+Math.sign(target-open)*Math.min(Math.abs(target-open),dt/1.2));
+  const target=BridgeHatch.open?1:0;
+  if(target!==lastTarget){closingWait=0;if(!target)closeOuterFirst=interiorView;lastTarget=target;}
+  openingElapsed=target?openingElapsed+dt:0;
+  const innerTarget=target?(openingElapsed>=1?1:innerOpen):0;
+  let innerDt=innerTarget?Math.min(dt,Math.max(0,openingElapsed-1)):dt;
+  if(!target&&closeOuterFirst){
+   // From the bridge, seal the outer hatch before closing the inner door.
+   if(open===0)closingWait+=dt;
+   else closingWait+=Math.max(0,dt-open*1.2);
+   innerDt=Math.min(dt,Math.max(0,closingWait-2));
+  }
+  const previousInner=innerOpen;
+  innerOpen+=Math.sign(innerTarget-innerOpen)*Math.min(Math.abs(innerTarget-innerOpen),innerDt/1.2);
+  let outerDt=dt;
+  if(target)closingWait=0;
+  else if(!closeOuterFirst){
+   // Close the red door completely, then hold the outer hatch for two seconds.
+   if(innerOpen===0)closingWait+=Math.max(0,dt-previousInner*1.2);
+   else closingWait=0;
+   outerDt=Math.min(dt,Math.max(0,closingWait-2));
+  }
+  port.setHatchOpen(open+Math.sign(target-open)*Math.min(Math.abs(target-open),outerDt/1.2),false);
+  interior.setInnerDoorOpen(innerOpen);
+  port.userData.innerDoorOpen=innerOpen;
  };
  port.setHatchOpen(0);
  port.userData.dockingPort={floorY:centerY-.0155,width:.021,height:.031,depth:.035,faceZ,doorZ,raisedZ,facing:'aft',usesExistingApproach:true,interiorRoom:true};

@@ -136,6 +136,7 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
   }
   function advanceCarrier(dt){
     const carrier=m.carrier,b=m.bridgeState;if(!m.freeSpace||!carrier||!b)return;
+    const carriedInBridge=window.EnterpriseModels?.isInsideBridge(m)===true;
     if(m.launchAttached&&ShuttleBayFlight.clearedEntrance(m,s))m.launchAttached=false;
     const yaw=(keys.has('Numpad3')?1:0)-(keys.has('Numpad1')?1:0),tilt=(keys.has('Numpad2')||keys.has('Numpad8')?1:0)-(keys.has('Numpad5')||keys.has('NumpadDivide')?1:0);
     const power=(keys.has('PageUp')?1:0)-(keys.has('PageDown')?1:0),roll=(keys.has('NumpadDecimal')?1:0)-(keys.has('Numpad0')?1:0);
@@ -186,9 +187,9 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     if(carrier.returningNeutral&&Math.abs(angle(carrier.heading,0))<1e-8&&Math.abs(carrier.pitch)<1e-8&&Math.abs(carrier.roll)<1e-8){
       carrier.heading=0;carrier.pitch=0;carrier.roll=0;carrier.manualRoll=0;carrier.returningNeutral=false;
     }
-    // Hold launch motion relative to the bay until the craft clears the doors.
-    // Free flight remains inertial as Enterprise moves beneath the shuttle.
-    if(m.phase==='flight'&&!m.launchAttached){
+    // Bridge occupants and attached launch craft keep their ship-relative pose.
+    // Local movement is added below; exterior free flight remains inertial.
+    if(m.phase==='flight'&&!m.launchAttached&&!carriedInBridge){
       const local=carrierVector({x:wx-carrier.x,y:wy-carrier.y,z:wz-carrier.z},carrier,true),nose=carrierVector(direction,carrier,true);
       m.x=local.x;m.y=local.y;m.z=110+local.z;
       const previousPitch=s.pitch;
@@ -235,22 +236,37 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     say('Clamshell doors open. Shuttle lifting to a hover. Apply thrust when ready; cockpit view engages at the second black side door from space.');telemetry();
   }
   const canJumpToEngines=()=>['bridge','orbit','flight','landed'].includes(m.phase);
-  function jumpToEngines(ship){
+  function jumpToEngines(ship,bridgePose=null){
     bayWasOccupied=false;bayDepartureElapsed=null;
     if(!m.freeSpace||!active())beginShuttleSortie();
     let height=EnterpriseModels.selected==='original'?.535:.490,station=0;
     const tube=ship?.model.getObjectByName('starboard-engine-outer-tube');
-    if(tube){
+    if(tube&&!bridgePose){
       const T=AlpineThree;ship.model.updateWorldMatrix(true,true);height=tube.getWorldPosition(new T.Vector3()).y;
       tube.geometry.computeBoundingBox();const bounds=tube.geometry.boundingBox;let front=Infinity,rear=-Infinity;
       for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z]){const axial=tube.localToWorld(new T.Vector3(x,y,z)).z;front=Math.min(front,axial);rear=Math.max(rear,axial);}
       station=(front+rear)/2;
     }
     if(document.pointerLockElement)document.exitPointerLock();$('shuttle-choice').close();
-    Object.assign(m,{phase:'flight',freeSpace:true,planet:null,x:0,y:station,z:110+height,cameraView:'cockpit',lookYaw:0,lookPitch:0,cameraZoom:1,clock:6,target:'ship',returnLeg:1,approach:false,recovered:false,completed:false,targetSquareHidden:true,cockpitFromBerth:false,landing:null,landingChoicePending:false,landingCameraFade:null,launchAttached:false,launchStage:null,launchLiftRemaining:0,liftRemaining:0,departureRamp:false,departureCameraPending:false,departureCameraFade:null,departureCameraAnchor:null,entranceCameraFade:null,entranceCameraPose:null,returningNeutral:false,roll:0,turnBank:0,bank:0,pitchBob:0,lastVisualPitch:0,hangarDoorTarget:0,bayDoorOpen:0});
+    Object.assign(m,{phase:'flight',freeSpace:true,planet:null,x:0,y:station,z:110+height,cameraView:'cockpit',lookYaw:0,lookPitch:0,cameraZoom:1,clock:6,target:'ship',returnLeg:1,approach:false,recovered:false,completed:false,targetSquareHidden:true,cockpitFromBerth:false,landing:null,landingChoicePending:false,landingCameraFade:null,launchAttached:false,launchStage:null,launchLiftRemaining:0,liftRemaining:0,departureRamp:false,departureCameraPending:false,departureCameraFade:null,departureCameraAnchor:null,entranceCameraFade:null,entranceCameraPose:null,returningNeutral:false,roll:0,turnBank:0,bank:0,pitchBob:0,lastVisualPitch:0,hangarDoorTarget:0,bayDoorOpen:0,...bridgePose});
     Object.assign(s,{paused:false,heading:0,pitch:0,throttle:0,speed:0,drive:'impulse',autopilot:false,arrived:false,turn:0,pitchTurn:0});keys.clear();
     destinations(true);document.body.classList.add('shuttle-mode');
-    say('Shuttle cockpit centered between the engines at their midpoint, facing forward. Apply thrust when ready.');telemetry();
+    say(bridgePose?'On the bridge, facing the viewscreen. Your movement is relative to Enterprise.':'Shuttle cockpit centered between the engines at their midpoint, facing forward. Apply thrust when ready.');telemetry();
+  }
+  async function goToBridge(){
+    if(pendingLaunch||!canJumpToEngines())return;
+    hideMissionEnd();const request={model:EnterpriseModels.selected,phase:m.phase};pendingLaunch=request;
+    say('Preparing the bridge.');telemetry();
+    try{
+      await new Promise(resolve=>requestAnimationFrame(resolve));
+      if(pendingLaunch!==request)return;
+      const scene=STCommand.games[0].scene.getScene('Forward'),ship=EnterpriseModels.rendererFor(scene);await ship?.ready;
+      if(pendingLaunch!==request||m.phase!==request.phase||EnterpriseModels.selected!==request.model||document.querySelector('dialog[open]'))return;
+      if(!ship?.bridgeEntryPose)throw Error('Bridge renderer unavailable');
+      jumpToEngines(ship,ship.bridgeEntryPose());
+      for(const game of STCommand.games)game.loop.resetDelta();
+    }catch(error){say('The bridge could not load. Press B to try again.');console.error(error);}
+    finally{if(pendingLaunch===request)pendingLaunch=null;updateUI();}
   }
   async function requestLaunch(relaunch=false,engineLevel=false){
     if(pendingLaunch||!(engineLevel?canJumpToEngines():relaunch?m.phase==='landed'&&m.landingChoicePending:canLaunchShuttle()))return;
@@ -498,7 +514,7 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
       document.querySelector('.galaxy .display-footer span:last-child').textContent=approach?'ATTITUDE / ALIGNMENT':surface?'RANGE 30 KM':'GRID 100 LY';
       $('map-view').setAttribute('aria-label',approach?'3D shuttle attitude and aft bay approach: drag to orbit, scroll to zoom':surface?'Local planetary terrain and navigation targets':'3D galaxy: drag to orbit, scroll to zoom, click a system to plot a course');
     }
-    $('control-hints').textContent=local?'← → TURN · ↑ DIVE / ↓ CLIMB · A / D ROLL · W / S POWER · SPACE STOP · P PAUSE · R RESET · B AUDIO':'← → YAW · ↑ ↓ PITCH · W / S POWER · SPACE STOP · P PAUSE · R RESET · B AUDIO';
+    $('control-hints').textContent=local?'← → TURN · ↑ DIVE / ↓ CLIMB · A / D ROLL · W / S POWER · SPACE STOP · P PAUSE · R RESET · B BRIDGE · SHIFT+B AUDIO':'← → YAW · ↑ ↓ PITCH · W / S POWER · SPACE STOP · P PAUSE · R RESET · B BRIDGE · SHIFT+B AUDIO';
     $('mission-actions').hidden=!local;
     $('retrieve-beacon').hidden=m.freeSpace||m.recovered;$('retrieve-beacon').disabled=m.phase!=='flight'||m.target!=='beacon'||range()>.45||agl()>.45||Math.abs(s.speed)>.15;
     const landingReason=landingBlocker();
@@ -534,6 +550,9 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
     const choiceOpen=$('shuttle-choice').open;
     const launchKey=event.key.toLowerCase()==='l'&&!event.ctrlKey&&!event.altKey&&!event.metaKey;
     const editing=event.target?.closest?.('input,select,textarea,[contenteditable]:not([contenteditable="false"])')&&!event.target.matches('.helm input[type="range"],#enterprise-inset-power');
+    if(event.key.toLowerCase()==='b'&&!event.shiftKey&&!event.ctrlKey&&!event.altKey&&!event.metaKey&&!event.isComposing&&!editing&&!document.querySelector('dialog[open]')){
+      event.preventDefault();event.stopImmediatePropagation();if(!event.repeat)void goToBridge();return;
+    }
     if(launchKey&&!editing&&!document.querySelector('dialog[open]:not(#shuttle-choice)')){
       const action=active()?endShuttleMission:canJumpToEngines()?()=>requestLaunch(false,true):null;
       if(action){event.preventDefault();event.stopImmediatePropagation();if(!event.repeat)action();return;}
@@ -549,31 +568,16 @@ window.createAwayMission = ({state:s,systems,keys,say,telemetry}) => {
   // Perspective terrain is built from a continuous multi-frequency height field.
   // Fixed, repeating world-space points give shuttle travel and mouse look
   // the same perspective as the ship, without a screen-space star overlay.
-  let starSeed=1701;
-  const starRandom=()=>{starSeed=(Math.imul(starSeed,1664525)+1013904223)>>>0;return starSeed/4294967296;};
-  const spaceStars=Array.from({length:3000},()=>({x:starRandom()*120,y:starRandom()*120,z:starRandom()*120,size:.6+starRandom()*.9}));
   function drawSpaceStars(c,w,h,camera){
     const carrier=m.freeSpace?m.carrier:null,origin=carrierVector({x:m.x,y:m.y,z:m.z-110},carrier);
     origin.x+=carrier?.x||0;origin.y+=carrier?.y||0;origin.z+=carrier?.z||0;
-    const heading=camera.heading*rad,pitch=camera.pitch*rad,focal=w*.65*(camera.cameraZoom||1);
+    const heading=camera.heading*rad,pitch=camera.pitch*rad;
     const forward=carrierVector(SpaceMath.direction(camera.heading,camera.pitch),carrier),right=carrierVector({x:Math.cos(heading),y:Math.sin(heading),z:0},carrier),up=carrierVector({x:-Math.sin(heading)*Math.sin(pitch),y:Math.cos(heading)*Math.sin(pitch),z:Math.cos(pitch)},carrier);
     const cb=Math.cos(m.bank||0),sb=Math.sin(m.bank||0),baseRight={...right},baseUp={...up};
     // Match the cockpit camera's rotateZ(-bank), including the compensating
     // bank that holds the shuttle steady while Enterprise rolls beneath it.
     for(const axis of ['x','y','z']){right[axis]=baseRight[axis]*cb-baseUp[axis]*sb;up[axis]=baseRight[axis]*sb+baseUp[axis]*cb;}
-    const relative=(p,origin)=>((p-origin+60)%120+120)%120-60;
-    c.fillStyle='#d2e7ff';
-    for(const star of spaceStars){
-      const dx=relative(star.x,origin.x),dy=relative(star.y,origin.y),dz=relative(star.z,origin.z);
-      const side=dx*right.x+dy*right.y+dz*right.z,depth=dx*forward.x+dy*forward.y+dz*forward.z,height=dx*up.x+dy*up.y+dz*up.z;
-      if(depth<=.1)continue;
-      const x=w/2+side/depth*focal,y=h/2-height/depth*focal;
-      if(x<0||x>w||y<0||y>h)continue;
-      // Fade before wrapping so long excursions never reveal a moving boundary.
-      c.globalAlpha=clamp((60-Math.max(Math.abs(dx),Math.abs(dy),Math.abs(dz)))/12,0,1)*clamp((depth-.5)/2,0,1);
-      c.fillRect(x,y,star.size,star.size);
-    }
-    c.globalAlpha=1;
+    SpaceStarfield.draw(c,w,h,{origin,forward,right,up,zoom:camera.cameraZoom||1});
   }
   function render(scene,w,h){
     if(m.phase==='bridge'){scene.departureSnapshot=null;scene.entranceSnapshot=null;scene.landingSnapshot=null;return false;}
