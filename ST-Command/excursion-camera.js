@@ -74,7 +74,7 @@ window.attachExcursionCamera=ship=>{
   const insideBay=external&&ShuttleBayFlight.inside(m);
   const departing=external&&(m.departureCameraPending||m.departureCameraFade!=null||m.landingChoicePending||m.landing?.keepLaunchCamera);
   if(!insideBay&&!m.entranceCameraPose)bayFrame=null;
-  if(insideBay||departing||m.entranceCameraPose){
+  if((insideBay||departing||m.entranceCameraPose)&&!m.trackingEnterprise){
    const b=ShuttleBayFlight.dimensions();camera.clearViewOffset();camera.aspect=w/h;camera.near=.005;camera.far=20;
    if(departing){
     // Hold the launch camera in place as the shuttle rises and departs.
@@ -132,7 +132,7 @@ window.attachExcursionCamera=ship=>{
    enterpriseCorners=boxCorners(min,max);
    ship.model.traverse(o=>{if(!o.isMesh)return;const p=o.geometry.attributes.position,stride=Math.max(1,Math.ceil(p.count/128));for(let i=0;i<p.count;i+=stride)enterpriseSurface.push(new T.Vector3().fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld));});
   }
-  if(!m.freeSpace){
+  if(!m.freeSpace&&!m.trackingEnterprise){
    planetCamera(w,h,m);SimPerformance.resize(ship.renderer,w,h);ship.renderer.render(ship.scene,camera);ctx.drawImage(ship.renderer.domElement,0,0,w,h);
    const projected=enterpriseCorners.map(v=>v.clone().project(camera));ship.excursionFraming={enterprise:projected.map(v=>v.toArray()),shuttle:[]};
    ctx.fillStyle='#b5e9ff';ctx.font='12px Consolas';ctx.fillText('EXCURSION CAMERA',18,28);const p=new T.Vector3().project(camera);return {x:(p.x+1)*w/2,y:(1-p.y)*h/2,visible:p.z>=-1&&p.z<=1};
@@ -146,7 +146,7 @@ window.attachExcursionCamera=ship=>{
   // Enterprise motion changes the shuttle's carrier-relative heading and bank.
   // Level the chase camera in inertial space, then convert back into the
   // Enterprise rendering frame so it stays with the shuttle through that motion.
-  const carrierPose=new T.Group(),carrier=m.carrier;
+  const carrierPose=new T.Group(),carrier=m.freeSpace?m.carrier:null;
   if(carrier)carrierPose.rotation.set((carrier.pitch||0)*rad,-(carrier.heading||0)*rad,-(carrier.roll||0),'YXZ');
   forward.applyQuaternion(carrierPose.quaternion);
   const worldYaw=Math.atan2(forward.x,-forward.z)+lookYaw*rad;
@@ -176,7 +176,13 @@ window.attachExcursionCamera=ship=>{
    const middle=(Math.max(...craftProjected.map(v=>v.y))+Math.min(...craftProjected.map(v=>v.y)))/2;
    height+=(middle+.50)*backoff*tangent;
   }
-  positionCamera(backoff,height);const projected=points.map(v=>v.clone().project(camera));
+  positionCamera(backoff,height);
+  if(m.trackingEnterprise){
+   // The operator rides aboard the shuttle and pans with motion-aware lead room.
+   EnterpriseTracking.mount(m,camera,craft);
+   EnterpriseTracking.aim(camera,ship.model,m,s);
+  }
+  const projected=points.map(v=>v.clone().project(camera));
   if(m.freeSpace){
    ctx.fillStyle='#01050e';ctx.fillRect(0,0,w,h);ctx.fillStyle='#c3d8e7';
    // Star directions are inertial. Convert them into the same carrier-relative

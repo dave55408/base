@@ -3,14 +3,16 @@
  const panel=document.createElement('aside');panel.id='enterprise-inset';panel.hidden=true;panel.setAttribute('aria-label','Enterprise remote helm and tactical attitude monitor');
  panel.innerHTML='<div class="enterprise-inset-title">ENTERPRISE · REMOTE HELM</div><canvas id="enterprise-inset-canvas" width="440" height="300" role="img" aria-label="Forward-facing Enterprise wireframe with three-dimensional yaw, pitch and roll reference rings"></canvas><output id="enterprise-inset-readout"></output><div class="enterprise-inset-keys">NUMPAD 1 / 3 YAW &middot; 5 / 2 PITCH<br>7 / 9 FLAT TURN &middot; 0 / . ROLL &middot; SLASH / 8 PITCH &middot; PAGE UP / DOWN POWER<br>&minus; / + Z UP / DOWN &middot; ENTER NEUTRAL<br>END SLOW STOP &middot; HOME FULL STOP</div>';
  panel.querySelector('#enterprise-inset-readout').insertAdjacentHTML('afterend','<div class="enterprise-inset-power"><label for="enterprise-inset-power">ENGINE POWER <output id="enterprise-inset-power-output">0%</output></label><input id="enterprise-inset-power" type="range" min="-100" max="100" step="1" value="0" title="Enterprise engine power: reverse to forward"><div class="enterprise-inset-power-scale"><span>REVERSE</span><span>0</span><span>FORWARD</span></div></div>');
+ panel.querySelector('.enterprise-inset-power').insertAdjacentHTML('beforeend','<div class="enterprise-inset-drives" role="group" aria-label="Enterprise drive mode"><button type="button" id="enterprise-inset-impulse" title="Return Enterprise to impulse drive">IMPULSE</button><button type="button" id="enterprise-inset-warp" title="Engage warp on the current course">WARP</button></div>');
  document.querySelector('.tactical').append(panel);
- const home=panel.parentElement,handle=panel.querySelector('.enterprise-inset-title');let dragging=null,bridgePopupShown=false,dismissed=false;
+ const home=panel.parentElement,handle=panel.querySelector('.enterprise-inset-title');let dragging=null,wasInsideBridge=false,wasEnterpriseMoving=false,bridgeControlsUsed=false,bridgeCarrier=null,dismissed=false;
  const closeButton=document.createElement('button');closeButton.type='button';closeButton.className='enterprise-inset-close';closeButton.setAttribute('aria-label','Close helm panel');closeButton.title='Close helm panel';closeButton.innerHTML='&times;';handle.append(closeButton);
  const reopenButton=document.createElement('button');reopenButton.type='button';reopenButton.id='enterprise-inset-open';reopenButton.textContent='HELM';reopenButton.setAttribute('aria-label','Open helm panel');reopenButton.setAttribute('aria-controls',panel.id);reopenButton.hidden=true;document.body.append(reopenButton);
  closeButton.addEventListener('pointerdown',event=>event.stopPropagation());
  closeButton.addEventListener('click',event=>{event.stopPropagation();dismissed=true;dragging=null;panel.hidden=true;reopenButton.hidden=false;syncFloatingHost();reopenButton.focus({preventScroll:true});});
  for(const button of [closeButton,reopenButton])button.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' ')event.stopPropagation();});
  reopenButton.addEventListener('click',()=>{
+  if(onBridge()){EnterpriseInset.openFromHelm();if(!panel.hidden)closeButton.focus({preventScroll:true});return;}
   dismissed=false;const app=window.STCommand;if(!app)return;last=-Infinity;EnterpriseInset.render(app.away.state,app.state);
   if(!panel.hidden&&!panel.dataset.floating){const width=Math.min(290,innerWidth-12);floatPanel(innerWidth-width-18,70,width);}
   if(!panel.hidden)closeButton.focus({preventScroll:true});
@@ -35,7 +37,7 @@
   if(event.button!==0||event.target.closest('button'))return;event.preventDefault();event.stopPropagation();
   const rect=panel.getBoundingClientRect();
   if(!panel.dataset.floating)floatPanel(rect.left,rect.top,rect.width);
-  const current=panel.getBoundingClientRect();dragging={id:event.pointerId,x:event.clientX-current.left,y:event.clientY-current.top};handle.setPointerCapture(event.pointerId);
+  dragging={id:event.pointerId,x:event.clientX-rect.left,y:event.clientY-rect.top};handle.setPointerCapture(event.pointerId);
  });
  handle.addEventListener('pointermove',event=>{if(dragging?.id!==event.pointerId)return;event.preventDefault();event.stopPropagation();placePanel(event.clientX-dragging.x,event.clientY-dragging.y);});
  function endDrag(event){if(dragging?.id!==event.pointerId)return;dragging=null;if(handle.hasPointerCapture(event.pointerId))handle.releasePointerCapture(event.pointerId);event.stopPropagation();}
@@ -45,6 +47,28 @@
  const power=panel.querySelector('#enterprise-inset-power'),powerOutput=panel.querySelector('#enterprise-inset-power-output');
  power.addEventListener('input',()=>window.STCommand?.away.setEnterprisePower(Number(power.value)));
  panel.querySelector('.enterprise-inset-power').addEventListener('pointerdown',event=>event.stopPropagation());
+ const warp=panel.querySelector('#enterprise-inset-warp');
+ const impulse=panel.querySelector('#enterprise-inset-impulse');
+ const onBridge=()=>{const mission=window.STCommand?.away.state;return !!mission&&window.EnterpriseModels?.isInsideBridge(mission)===true;};
+ for(const [button,action]of [[warp,'warpEnterprise'],[impulse,'impulseEnterprise']]){
+  button.addEventListener('pointerdown',event=>{if(event.button===0&&onBridge())event.preventDefault();});
+  button.addEventListener('click',()=>{
+   window.STCommand?.away[action]();
+   if(onBridge()){
+    const view=document.getElementById('main-view');if(!view.hasAttribute('tabindex'))view.tabIndex=-1;
+    view.focus({preventScroll:true});
+   }
+  });
+  button.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' ')event.stopPropagation();});
+ }
+ const helmControls='.helm .flight-controls button,.helm input[type="range"],#attitude-ball,#power-dial,#engage,#manual';
+ for(const type of ['click','input','pointerdown'])document.addEventListener(type,event=>{if(event.target.closest?.(helmControls)&&!document.querySelector('dialog[open]'))window.EnterpriseInset?.openFromHelm();},{capture:true});
+ function syncBridgePresence(m){
+  const inside=window.EnterpriseModels?.isInsideBridge(m)===true,moving=!!m.carrier?.moving||Math.abs(m.carrier?.speed||0)>.000001||Math.abs(m.bridgeState?.speed||0)>.000001;
+  if(inside&&(!wasInsideBridge||bridgeCarrier!==m.carrier||(wasEnterpriseMoving&&!moving)))bridgeControlsUsed=false;
+  if(inside&&moving&&(!wasInsideBridge||bridgeCarrier!==m.carrier||!wasEnterpriseMoving))dismissed=false;
+  wasInsideBridge=inside;wasEnterpriseMoving=moving;bridgeCarrier=m.carrier;return inside;
+ }
  const canvas=panel.querySelector('canvas'),ctx=canvas.getContext('2d'),readout=panel.querySelector('output'),rad=Math.PI/180;
  const paths=[],rings=[];let last=-Infinity,previous=null,camera,pivot;
  const circle=(center,r1,r2,plane,segments=48)=>Array.from({length:segments+1},(_,n)=>{
@@ -69,25 +93,27 @@
  function signed(value,digits=2){return (value<-.5?'−':'+')+Math.abs(Math.round(value)).toString().padStart(digits,'0')+'°';}
  function project(point,rotated=false){const p=new AlpineThree.Vector3(...point);if(rotated)p.multiplyScalar(1.15).applyQuaternion(pivot.quaternion);p.project(camera);return [(p.x+1)*canvas.width/2,(1-p.y)*canvas.height/2];}
  function stroke(points,color,width=1,rotated=false){ctx.beginPath();for(const [n,p]of points.entries()){const [x,y]=project(p,rotated);n?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();}
- window.EnterpriseInset={render(m,s){
-  const available=!!m.freeSpace&&!!m.carrier&&!['bridge','orbit'].includes(m.phase),visible=available&&!dismissed,wasHidden=panel.hidden;
-  panel.hidden=!visible;reopenButton.hidden=!available||!dismissed;syncFloatingHost();
-  if(!visible){previous=null;if(!available)bridgePopupShown=false;return;}
-  const insideBridge=window.EnterpriseModels?.isInsideBridge(m)===true,c=m.carrier,b=m.bridgeState;
-  if(!insideBridge)bridgePopupShown=false;
-  const moving=c.moving||Math.abs(c.speed||0)>.000001||Math.abs(b.speed||0)>.000001||Math.abs(b.turn||0)>.000001||Math.abs(b.pitchTurn||0)>.000001;
-  if(insideBridge&&moving&&!bridgePopupShown){
-   bridgePopupShown=true;
-   if(!panel.dataset.floating){const width=Math.min(290,innerWidth-12);floatPanel(innerWidth-width-18,70,width);}
-  }
+ window.EnterpriseInset={openFromHelm(){
+  const app=window.STCommand;if(!app||!app.away.active()||!app.away.state.freeSpace||!window.EnterpriseModels?.isInsideBridge(app.away.state))return;
+  const placeAtCorner=panel.hidden||!panel.dataset.floating;
+  syncBridgePresence(app.away.state);bridgeControlsUsed=true;dismissed=false;last=-Infinity;this.render(app.away.state,app.state);
+  if(!panel.hidden&&placeAtCorner){const width=Math.min(290,innerWidth-12);floatPanel(12,innerHeight,width);placePanel(12,innerHeight-panel.getBoundingClientRect().height-12);}
+ },render(m,s){
+  const insideBridge=syncBridgePresence(m),available=!!m.freeSpace&&!!m.carrier&&!['bridge','orbit'].includes(m.phase),bridgeHelmActive=bridgeControlsUsed||wasEnterpriseMoving,visible=available&&!dismissed&&(!insideBridge||bridgeHelmActive),wasHidden=panel.hidden;
+  panel.hidden=!visible;reopenButton.hidden=!available||!dismissed||(insideBridge&&!bridgeHelmActive);syncFloatingHost();
+  if(!visible){previous=null;return;}
+  const c=m.carrier,b=m.bridgeState;
   syncFloatingHost();
   if(wasHidden&&panel.dataset.floating)placePanel(parseFloat(panel.style.left)||6,parseFloat(panel.style.top)||6);
+  impulse.classList.toggle('selected',b.drive==='impulse');impulse.setAttribute('aria-pressed',String(b.drive==='impulse'));
+  warp.classList.toggle('selected',b.drive==='warp');warp.setAttribute('aria-pressed',String(b.drive==='warp'));
   power.value=String(m.bridgeState.throttle);powerOutput.value=Math.round(m.bridgeState.throttle)+'%';
   power.setAttribute('aria-valuetext',Math.round(m.bridgeState.throttle)+' percent Enterprise engine power');
-  const now=performance.now();if(now-last<50)return;last=now;
+  const now=performance.now();if(now-last<50&&!wasHidden)return;last=now;
   const T=AlpineThree,yaw=((c.heading+180)%360+360)%360-180,values={yaw,pitch:c.pitch,roll:c.roll/rad};
   readout.innerHTML=Object.entries(values).map(([axis,value])=>'<span data-axis="'+axis+'" data-active="'+(!!previous&&Math.abs(value-previous[axis])>.05)+'">'+axis.toUpperCase()+'<strong>'+signed(value,axis==='yaw'?3:2)+'</strong></span>').join('')+'<small>HDG '+Math.round(b.heading).toString().padStart(3,'0')+'° · '+(c.speed*1000).toFixed(0)+' M/S · '+Math.round(b.throttle)+'%</small>';
   previous=values;
+  if(insideBridge&&wasHidden){const width=Math.min(290,innerWidth-12);floatPanel(12,innerHeight,width);placePanel(12,innerHeight-panel.getBoundingClientRect().height-12);}
   // Look straight ahead so zero pitch puts the compass horizon flat and
   // the ship level in the same reference frame.
   if(!camera){camera=new T.OrthographicCamera(-2.42,2.42,1.65,-1.65,.1,20);camera.position.set(0,0,-3.5);camera.lookAt(0,0,0);camera.updateWorldMatrix(true,false);pivot=new T.Group();}

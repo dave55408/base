@@ -21,13 +21,13 @@
     if(!canLook()){lookDrag=null;view.classList.remove('looking');return;}
     const dx=event.clientX-lookDrag.x,dy=event.clientY-lookDrag.y;
     if(Math.hypot(dx,dy)<4&&!lookDrag.moved)return;
-    lookDrag.moved=true;const m=STCommand.away.state;
+    lookDrag.moved=true;const m=STCommand.away.state;if(m.trackingEnterprise){m.trackingEnterprise=false;STCommand.away.updateUI();}
     m.lookYaw=((lookDrag.yaw-dx*.22+180)%360+360)%360-180;
     m.lookPitch=Math.max(-85,Math.min(85,lookDrag.pitch+dy*.22));
   });
   const endLook=()=>{if(lookDrag?.moved)lastLookDrag=performance.now();lookDrag=null;view.classList.remove('looking');};
   view.addEventListener('pointerup',endLook);view.addEventListener('pointercancel',endLook);view.addEventListener('lostpointercapture',endLook);
-  document.getElementById('look-forward').addEventListener('click',()=>{const m=STCommand.away.state;m.entranceCameraPose=null;m.entranceCameraFade=null;m.cameraView='cockpit';m.lookYaw=0;m.lookPitch=0;m.cameraZoom=1;document.getElementById('camera-zoom').textContent='1.0×';STCommand.away.updateUI();});
+  document.getElementById('look-forward').addEventListener('click',()=>{const m=STCommand.away.state;m.trackingEnterprise=false;m.entranceCameraPose=null;m.entranceCameraFade=null;m.cameraView='cockpit';m.lookYaw=0;m.lookPitch=0;m.cameraZoom=1;document.getElementById('camera-zoom').textContent='1.0×';STCommand.away.updateUI();});
   let active=false,nativeOwned=false,transitioning=false,scrollPosition=0;
   function setMode(value){
     active=value;document.body.classList.toggle('viewscreen-mode',value);

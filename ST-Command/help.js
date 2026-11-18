@@ -1,6 +1,6 @@
 /* A keyboard-accessible controls window; preserve the user's pause state. */
 (() => {
-  const dialog=document.getElementById('controls-help'),links=document.querySelectorAll('#help-link,#about-link');
+  const dialog=document.getElementById('controls-help'),links=document.querySelectorAll('#help-link,#about-link,#welcome-help-link');
   let resume=false,opener=null;
   for(const link of links)link.addEventListener('click',event=>{
     event.preventDefault();if(dialog.open)return;

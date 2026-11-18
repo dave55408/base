@@ -62,7 +62,7 @@ window.resizeAftEngineFins=(T,model,factor=1.8)=>{
  const gridTile=document.createElement('canvas');gridTile.width=gridTile.height=128;const gc=gridTile.getContext('2d');gc.fillStyle='#ffffff';gc.fillRect(0,0,128,128);gc.fillStyle='#d4dad4';
  for(const edge of [0,122]){gc.fillRect(edge,0,6,128);gc.fillRect(0,edge,128,6);}
  const gridMap=new T.CanvasTexture(gridTile);gridMap.colorSpace=T.SRGBColorSpace;gridMap.wrapS=gridMap.wrapT=T.MirroredRepeatWrapping;gridMap.anisotropy=4;
- for(const texture of [gridMap,relief]){texture.center.set(.5,.5);texture.rotation=Math.PI/4;}
+ for(const texture of [gridMap,relief]){texture.center.set(.5,.5);texture.rotation=0;}
  const inset=gray.clone();inset.map=gridMap;inset.bumpMap=relief;inset.bumpScale=.00055;
  model.traverse(o=>{if(o.isMesh&&o.name.endsWith('-aft-engine-fin'))fins.push(o);});
  for(const fin of fins){

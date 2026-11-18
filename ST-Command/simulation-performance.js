@@ -11,9 +11,13 @@
  const dialog=document.createElement('dialog');dialog.id='performance-settings';dialog.setAttribute('aria-labelledby','performance-title');
  dialog.innerHTML='<div class="performance-heading"><h2 id="performance-title">Performance</h2><button id="performance-close" type="button" autofocus>Close</button></div><label for="render-quality">Rendering quality</label><select id="render-quality"><option value="full">Full resolution</option><option value="balanced">Balanced · 75% resolution</option><option value="economy">Economy · 50% resolution</option></select><p>Lower resolution improves speed. Nearby ship details stay intact; distant interiors use less detail.</p><label for="frame-limit">Frame rate</label><select id="frame-limit"><option value="60">60 FPS · smoother motion</option><option value="30">30 FPS · lower power use</option></select><label for="performance-textures">Ship textures</label><select id="performance-textures"><option value="low">Low Memory</option><option value="high">High Detail</option></select><p>Low Memory reduces texture memory. Settings apply immediately and are saved.</p><output id="performance-readout" aria-live="off">Measuring…</output><p class="performance-timing-note">Render timing measures CPU work, not complete GPU time. Paused views redraw only when something changes.</p>';
  document.body.append(dialog);
+ const introLabel=document.createElement('label');introLabel.className='performance-checkbox';
+ const introCheckbox=document.createElement('input');introCheckbox.type='checkbox';introCheckbox.id='performance-intro';
+ introLabel.append(introCheckbox,' Show intro screen on startup');
+ dialog.querySelector('#performance-readout').before(introLabel);
  const qualitySelect=dialog.querySelector('#render-quality'),fpsSelect=dialog.querySelector('#frame-limit'),textures=dialog.querySelector('#performance-textures'),readout=dialog.querySelector('#performance-readout');
  function persist(){try{localStorage.setItem('st-command-performance',JSON.stringify({quality,frameLimit}));}catch{}}
- function sync(){qualitySelect.value=quality;fpsSelect.value=String(frameLimit);textures.value=window.ShipTextures?.quality||'low';}
+ function sync(){qualitySelect.value=quality;fpsSelect.value=String(frameLimit);textures.value=window.ShipTextures?.quality||'low';introCheckbox.checked=true;try{introCheckbox.checked=localStorage.getItem('st-command-hide-welcome')!=='true';}catch{}}
  function invalidate(duration=0){
   animateUntil=Math.max(animateUntil,performance.now()+duration);
   if(wakePending)return;wakePending=true;
@@ -122,6 +126,10 @@
  button.addEventListener('click',()=>{sync();dialog.showModal();report();});dialog.querySelector('#performance-close').addEventListener('click',()=>dialog.close());
  qualitySelect.addEventListener('change',()=>{api.quality=qualitySelect.value;});fpsSelect.addEventListener('change',()=>{api.frameLimit=fpsSelect.value;});
  textures.addEventListener('change',()=>{const original=document.getElementById('texture-quality');original.value=textures.value;original.dispatchEvent(new Event('change'));invalidate();});
+ introCheckbox.addEventListener('change',()=>{
+  try{if(introCheckbox.checked)localStorage.removeItem('st-command-hide-welcome');else localStorage.setItem('st-command-hide-welcome','true');}catch{}
+  const dismiss=document.getElementById('welcome-dismiss');if(dismiss)dismiss.checked=!introCheckbox.checked;
+ });
  for(const event of ['input','change','click','pointerdown','pointerup','wheel','keyup'])document.addEventListener(event,()=>invalidate(),{passive:true});
  document.addEventListener('pointermove',event=>{if(event.buttons||document.pointerLockElement)invalidate();},{passive:true});
  document.addEventListener('keydown',event=>invalidate(event.key.toLowerCase()==='h'?1400:0),{passive:true});

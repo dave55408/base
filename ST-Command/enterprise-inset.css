@@ -20,5 +20,8 @@
 .enterprise-inset-power label{display:flex;justify-content:space-between;font-size:8px;letter-spacing:.4px}
 .enterprise-inset-power input{display:block;width:100%;margin:5px 0 2px;accent-color:#ffe16b;cursor:pointer;touch-action:pan-y}
 .enterprise-inset-power-scale{display:flex;justify-content:space-between;font-size:6px;color:var(--remote-helm-label)}
+.enterprise-inset-drives{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+#enterprise-inset-warp,#enterprise-inset-impulse{display:block;width:100%;min-width:0;min-height:0;margin:0;padding:5px 6px;border:1px solid #766044;border-radius:3px;background:#21180e;color:#ffe16b;font-size:8px;letter-spacing:.5px;cursor:pointer}
+#enterprise-inset-warp:hover,#enterprise-inset-warp:focus-visible,#enterprise-inset-warp.selected,#enterprise-inset-impulse:hover,#enterprise-inset-impulse:focus-visible,#enterprise-inset-impulse.selected{background:#503619;outline:1px solid #ffe16b}
 @media(min-width:1600px) and (max-height:1250px){#enterprise-inset{top:34px;max-width:245px}}
 @media(max-width:650px){#enterprise-inset{top:42px;width:55%;min-width:160px}}

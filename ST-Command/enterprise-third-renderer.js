@@ -4,6 +4,7 @@ window.createThirdEnterpriseRenderer=()=>{
   const T=window.AlpineThree;if(!T)return null;const G=EnterpriseThirdGeometry;
   let renderer;try{renderer=new T.WebGLRenderer({alpha:true,antialias:true,preserveDrawingBuffer:true,powerPreference:'high-performance'});}catch{return null;}
   renderer.setPixelRatio(1);renderer.setClearColor(0x000000,0);renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
+  renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
   const scene=new T.Scene(),model=new T.Group(),camera=new T.PerspectiveCamera(45,1,.005,100000);
   scene.add(model);scene.add(new T.HemisphereLight(0xd9e6dd,0x62756b,.75));
   const sun=new T.DirectionalLight(0xeaf1ed,2.5);sun.position.set(4,6,3);scene.add(sun);
@@ -264,6 +265,19 @@ window.createThirdEnterpriseRenderer=()=>{
     const interiorGray=new T.MeshLambertMaterial({color:0x353535,side:T.DoubleSide});
     const nacelleProfile=[[capRadius,capSeam],[capRadius,capSeam+.006],[capRadius,-.75],[.087,.64],[.087,.715],[.08146,.745],[.079,.755],[.068,.78]];
     const tube=lathe(nacelleProfile,[nacelleMetal,hull,exhaustHoodMaterial],x,.515,0,'z',64);tube.name=(side<0?'port':'starboard')+'-engine-outer-tube';
+    // Match the underside saucer running lights, mounted above the aft casing.
+    const aftRunningZ=.70,aftRunningY=.515+radiusAt(nacelleProfile,aftRunningZ);
+    const aftRunningBase=sphere(x,aftRunningY,aftRunningZ,.008,.002,.008,trim);
+    aftRunningBase.name=(side<0?'port':'starboard')+'-nacelle-aft-running-light-base';
+    const aftRunningLight=sphere(x,aftRunningY+.002,aftRunningZ,.005,.0035,.005,white.clone());
+    aftRunningLight.name=(side<0?'port':'starboard')+'-nacelle-aft-running-light';
+    navigationLights.push({lens:aftRunningLight,on:0xffedcd,off:0x25251e});
+    const aftBottomY=.515-radiusAt(nacelleProfile,aftRunningZ);
+    const aftBottomBase=sphere(x,aftBottomY,aftRunningZ,.008,.002,.008,trim);
+    aftBottomBase.name=(side<0?'port':'starboard')+'-nacelle-aft-bottom-running-light-base';
+    const aftBottomLight=sphere(x,aftBottomY-.002,aftRunningZ,.005,.0035,.005,white.clone());
+    aftBottomLight.name=(side<0?'port':'starboard')+'-nacelle-aft-bottom-running-light';
+    navigationLights.push({lens:aftBottomLight,on:0xffedcd,off:0x25251e});
     // The retaining ring owns this first axial band. Remove the duplicate skin;
     // retain the reference vertices so existing fitting measurements stay fixed.
     const tubeGroups=tube.geometry.groups.slice(1);tube.geometry.setIndex(Array.from(tube.geometry.index.array).slice(64*6));tube.geometry.clearGroups();
@@ -664,7 +678,7 @@ window.createThirdEnterpriseRenderer=()=>{
     model.add(grille);engineeringParts.push(grille);
   }
   for(const side of [-1,1]){
-    const on=side<0?0xff5144:0x69e991,off=side<0?0x442823:0x243e2a;
+    const on=side<0?0xff5144:0x69e991,off=0x000000;
     const surfaceY=.380+.029+(.674-.635)*.009/.104;
     const lens=sphere(side*.635,surfaceY+.002,-1.53,.012,.008,.012,new T.MeshBasicMaterial({color:on,toneMapped:false}));
     lens.name=side<0?'port-red-navigation-light':'starboard-green-navigation-light';
@@ -796,7 +810,8 @@ window.createThirdEnterpriseRenderer=()=>{
   model.position.z=-.032;
   function isInsideBridge(pose){return bridgeDockingPort.isInteriorPoint(new T.Vector3(pose.x,pose.z-110,pose.y));}
   function bridgeEntryPose(){
-    const point=bridgeDockingPort.localToWorld(new T.Vector3(0,sunken.floorY-.531+.014,bridgeLayout.centerZ));
+    // Center the arrival viewpoint behind both helm chairs, at standing eye level.
+    const point=bridgeDockingPort.localToWorld(new T.Vector3(0,sunken.floorY-.531+.013,bridgeLayout.centerZ+.0212));
     return {x:point.x,y:point.z,z:110+point.y};
   }
   function draw(ctx,w,h,m,s,updateOnly=false){
@@ -824,12 +839,11 @@ window.createThirdEnterpriseRenderer=()=>{
     const doorDt=lastDoorTime===undefined?0:Math.max(0,Math.min(.1,rotorTime-lastDoorTime));lastDoorTime=rotorTime;
     if(Number.isFinite(s.bayDoorOpen))setBayDoorOpen(s.bayDoorOpen);
     else if(m.phase){
-      const range=Math.hypot(m.x,m.y,m.z-110);
-      const wantOpen=m.phase==='docking'||m.phase==='flight'&&(range<3||(m.clock||0)<6)||m.phase==='landed'&&(m.clock||0)<6;
+      const wantOpen=m.phase==='docking'||m.phase==='flight'&&(m.clock||0)<6||m.phase==='landed'&&(m.clock||0)<6;
       setBayDoorOpen(advanceHangarDoor(bayDoorOpen,wantOpen?1:0,doorDt));
     }
     const navigationFlash=((rotorTime%2)+2)%2<.5;
-    const navigationPulse=.5-.5*Math.cos(rotorTime*Math.PI*2/3);
+    const navigationPulse=.5-.5*Math.cos(rotorTime*Math.PI*2/2.5);
     for(const {lens,on,off,fade,onColor,offColor} of navigationLights){
       if(fade){lens.material.color.copy(offColor).lerp(onColor,navigationPulse);lens.material.emissive?.copy(lens.material.color);if(lens.material.emissive)lens.material.emissiveIntensity=.8*navigationPulse;}
       else{const color=navigationFlash?on:off;lens.material.color.setHex(color);lens.material.emissive?.setHex(color);}
@@ -845,6 +859,8 @@ window.createThirdEnterpriseRenderer=()=>{
     camera.position.set(m.x,m.z-110,m.y);const heading=s.heading*Math.PI/180,pitch=s.pitch*Math.PI/180;
     // Match the shuttle's physical up vector and the remote attitude monitor.
     camera.rotation.set(pitch,-heading,-(m.bank||0),'YXZ');
+    if(m.trackingEnterprise)EnterpriseTracking.aim(camera,model,m,s);
+    if(m.trackingEnterprise&&m.freeSpace)EnterpriseTracking.drawStars(ctx,w,h,camera);
     renderer.render(scene,camera);ctx.drawImage(renderer.domElement,0,0,w,h);
     const bay=new T.Vector3(0,0,0).project(camera);
     return {x:(bay.x+1)*w/2,y:(1-bay.y)*h/2,visible:bay.z>=-1&&bay.z<=1};
@@ -877,5 +893,10 @@ window.createThirdEnterpriseRenderer=()=>{
   resizeAftEngineFins(T,model,1.8);G.fitEngineFittings(T,model);addEngineInboardPanels(T,model,{handleLength:123*1.36/510,rearPanelWidth:39*1.36/510,surfaceDetail:hullSurfaceDetail});addEngineCouplingPatches(T,model,{surfaceDetail:hullSurfaceDetail});addEngineCouplingPatches(T,model,{inboard:true,surfaceDetail:hullSurfaceDetail});hullSurfaceDetail.prepare(model);
   model.userData.variant='third';
   applyGlassLightLenses(T,model);
-  return trackEnterpriseResources({draw,renderer,scene,model,camera,setBayDoorOpen,isInsideBridge,bridgeEntryPose,ready:Promise.all([details.ready,hullSurfaceDetail.ready,bridgeDockingPort.ready])},details);
+  ExteriorLights.add(T,model);
+  // Only the major opaque surfaces cast hull-light shadows; tiny trim and
+  // lamp lenses otherwise produce speckling at this model's small scale.
+  const hullOccluders=new Set(['movie-saucer','upper-saucer-teardrop','bridge-dome','secondary-hull','deflector-dish','deflector-backplate','deflector-stepped-inner-housing','movie-deflector-collar','movie-deflector-retaining-rim','movie-deflector-base-ring','port-engine-outer-tube','starboard-engine-outer-tube']);
+  model.traverse(object=>{if(object.isMesh){object.receiveShadow=true;object.castShadow=hullOccluders.has(object.name);}});
+  return ExteriorLights.attach(trackEnterpriseResources({draw,renderer,scene,model,camera,setBayDoorOpen,isInsideBridge,bridgeEntryPose,ready:Promise.all([details.ready,hullSurfaceDetail.ready,bridgeDockingPort.ready])},details));
 };

@@ -8,15 +8,18 @@ window.createEnterpriseWindowMaterial=(T,{lit,color,appearance})=>{
   shader.uniforms.windowLit={value:lit?1:0};
   shader.vertexShader=shader.vertexShader.replace('#include <common>',`#include <common>
    attribute vec2 windowProfile;
+   attribute float windowFrameScale;
+   varying float vWindowFrameScale;
    varying vec2 vWindowProfile;
    varying vec2 vWindowUv;`);
   shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
-   vWindowProfile=windowProfile;vWindowUv=uv;`);
+   vWindowProfile=windowProfile;vWindowUv=uv;vWindowFrameScale=windowFrameScale;`);
   shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
    uniform float windowAppearanceStrength;
    uniform float windowReflectionStrength;
    uniform float windowLit;
    varying vec2 vWindowProfile;
+   varying float vWindowFrameScale;
    varying vec2 vWindowUv;`);
   shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
    vec2 windowP=abs(vWindowUv-0.5)*vec2(vWindowProfile.y,1.0);
@@ -29,6 +32,9 @@ window.createEnterpriseWindowMaterial=(T,{lit,color,appearance})=>{
    float windowPixelHeight=1.0/max(fwidth(vWindowUv.y),0.0001);
    float windowDetail=windowAppearanceStrength*smoothstep(3.0,12.0,windowPixelHeight);
    if(windowEdge<0.0&&windowDetail>0.5)discard;
+   // Keep the forward portholes' bevel/reveal as thin as the side windows,
+   // independently of the enlarged opening diameter.
+   windowEdge/=max(0.001,vWindowFrameScale);
    float windowGlass=smoothstep(0.070,0.105,windowEdge);
    float windowBevel=smoothstep(0.012,0.035,windowEdge)*(1.0-smoothstep(0.050,0.078,windowEdge));
    float windowEdgeLight=clamp(0.55+0.45*(vWindowUv.y-vWindowUv.x),0.15,1.0);
@@ -64,6 +70,6 @@ window.createEnterpriseWindowMaterial=(T,{lit,color,appearance})=>{
   shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',`outgoingLight+=windowReflection;
    #include <opaque_fragment>`);
  };
- material.customProgramCacheKey=()=> 'enterprise-window-recessed-glass-v1';
+ material.customProgramCacheKey=()=> 'enterprise-window-fixed-front-frame-v2';
  return material;
 };

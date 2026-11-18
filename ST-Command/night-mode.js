@@ -1,7 +1,7 @@
 /* Dim outside illumination at render time without changing onboard lighting. */
 (()=>{
  const buttons=document.querySelectorAll('#night-mode-toggle,#viewscreen-night-mode-toggle'),attached=new WeakSet(),factor=.025;
- let enabled=false;try{enabled=localStorage.getItem('st-command-night-mode')==='true';}catch{}
+ let enabled=false;
  function sync(){for(const button of buttons){button.setAttribute('aria-pressed',String(enabled));button.setAttribute('aria-description',enabled?'Restore normal external lighting':'Dim external lighting; keep stars and onboard illumination');}document.body.classList.toggle('night-mode',enabled);}
  function belongsTo(light,root){for(let node=light;node;node=node.parent)if(node===root)return true;return false;}
  function outsideLight(light,ship){
@@ -10,7 +10,7 @@
  }
  const api={
   get enabled(){return enabled;},
-  set enabled(value){enabled=!!value;try{localStorage.setItem('st-command-night-mode',String(enabled));}catch{}sync();},
+  set enabled(value){enabled=!!value;sync();},
   attach(ship){
    if(!ship||attached.has(ship.renderer))return ship;
    const renderer=ship.renderer,render=renderer.render;attached.add(renderer);

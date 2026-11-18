@@ -28,7 +28,7 @@
   // Keep flight shortcuts out of the modal while retaining native form keys.
   for (const type of ['keydown', 'keyup']) {
     window.addEventListener(type, event => {
-      if (!dialog.open) return;
+      if (!dialog.open || document.getElementById('controls-help')?.open) return;
       event.stopImmediatePropagation();
       if (type === 'keydown' && event.key === 'Escape') {
         event.preventDefault();

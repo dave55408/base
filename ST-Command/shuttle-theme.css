@@ -69,4 +69,6 @@ body.shuttle-mode #project-notes-open:hover,
 body.shuttle-mode #project-notes button,
 body.shuttle-mode #shuttle-choice button,
 body.shuttle-mode #help-close{color:#ffffff}
-#find-enterprise{font-size:9px;padding:0 8px;white-space:nowrap}
+#find-enterprise,#track-enterprise{font-size:9px;padding:0 8px;white-space:nowrap}
+
+#track-enterprise[aria-pressed="true"]{background:#254e64;border-color:#9bdaff}

@@ -123,13 +123,15 @@
   const editable=el=>el&&(el.isContentEditable||['INPUT','SELECT','TEXTAREA'].includes(el.tagName));
   const enterpriseKeys=new Set(['Numpad1','Numpad2','Numpad3','Numpad5','Numpad7','Numpad8','Numpad9','NumpadDivide','NumpadSubtract','NumpadAdd','NumpadEnter','Numpad0','NumpadDecimal','PageUp','PageDown','Home','End']);
   window.addEventListener('keydown',event=>{
+    if(event.isComposing||document.querySelector('dialog[open]'))return;
     const key=event.key.length===1?event.key.toLowerCase():event.key;
     if(event.code?.startsWith('Numpad')||enterpriseKeys.has(event.code)){
       if(!away.state.freeSpace||!away.active()||event.ctrlKey||event.altKey||event.metaKey)return;
       if(editable(event.target)&&!event.target.matches('.helm input[type="range"],#enterprise-inset-power'))return;
       event.preventDefault();
       if(!enterpriseKeys.has(event.code))return;
-      if(event.code==='Home'){if(!event.repeat)away.stopEnterprise();return;}
+      if(event.code==='Home'){if(!event.repeat)away.stopEnterprise();window.EnterpriseInset?.openFromHelm();return;}
+      window.EnterpriseInset?.openFromHelm();
       if(event.code==='End'){if(!event.repeat)away.slowEnterprise();return;}
       if(event.code==='NumpadEnter'){if(!event.repeat)away.neutralEnterprise();return;}
       keys.add(event.code);return;
@@ -141,6 +143,7 @@
     }
     const helmFlightKey=['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','w','a','s','d','c',' ','p','r','Enter'].includes(key)&&event.target?.matches('.helm input[type="range"]');
     if(editable(event.target)&&!helmFlightKey)return;
+    if(!event.ctrlKey&&!event.altKey&&!event.metaKey&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','w','a','s','d','c',' ','Enter'].includes(key)&&!(event.target?.tagName==='BUTTON'&&event.key==='Enter'))window.EnterpriseInset?.openFromHelm();
     if(key==='c'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&away.state.phase==='flight'){event.preventDefault();if(!event.repeat)away.neutralShuttle();return;}
     if(event.target?.tagName==='BUTTON'&&event.key==='Enter')return;
     if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','w','a','s','d','c',' ','p','r','Enter'].includes(key))event.preventDefault();

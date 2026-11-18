@@ -62,20 +62,24 @@ window.createBridgeDockingPort=(T,{centerY,hull,dome})=>{
  const innerFrame=[],innerIndices=[],frameCount=framePositions.length/3,bulkheadThickness=.0003;
  for(const z of [doorZ-.0004,doorZ-.0004+bulkheadThickness])for(let i=0;i<frameCount;i++)innerFrame.push(framePositions[i*3],framePositions[i*3+1],z);
  for(let i=0;i<frameIndices.length;i+=3){const [a,b,c]=frameIndices.slice(i,i+3);innerIndices.push(a,c,b,a+frameCount,b+frameCount,c+frameCount);}
- for(let i=0;i<angles.length-1;i++)for(const edge of [0,1]){const a=i*2+edge,b=(i+1)*2+edge;innerIndices.push(a,b,b+frameCount,a,b+frameCount,a+frameCount);}
+ // The continuous recess wall closes the aperture edge. A second cylindrical
+ // face here would overlap it and flicker along the rim at close range.
+ for(let i=0;i<angles.length-1;i++){const a=i*2+1,b=(i+1)*2+1;innerIndices.push(a,b,b+frameCount,a,b+frameCount,a+frameCount);}
  const insideFace=add(geometry(innerFrame,innerIndices),new T.MeshStandardMaterial({color:0x303236,roughness:1,metalness:0,side:T.DoubleSide}),'docking-block-interior-face');insideFace.userData.wallThickness=bulkheadThickness;
  function ring(name,inner,outerRadius,z,mat){
-  const p=[],indices=[];for(let i=0;i<=96;i++){const a=i*Math.PI/48;for(const r of [inner,outerRadius])p.push(Math.cos(a)*r,Math.sin(a)*r,z);}
-  for(let i=0;i<96;i++){const j=i*2;indices.push(j,j+1,j+3,j,j+3,j+2);}return add(geometry(p,indices),mat,name);
+  const p=[],indices=[];for(const a of angles)for(const r of [inner,outerRadius])p.push(Math.cos(a)*r,Math.sin(a)*r,z);
+  for(let i=0;i<angles.length-1;i++){const j=i*2;indices.push(j,j+1,j+3,j,j+3,j+2);}return add(geometry(p,indices),mat,name);
  }
  function wall(name,r,z0,z1,mat,inward=false){
-  const p=[],indices=[];for(let i=0;i<=96;i++){const a=i*Math.PI/48;for(const z of [z0,z1])p.push(Math.cos(a)*r,Math.sin(a)*r,z);}
-  for(let i=0;i<96;i++){const j=i*2;indices.push(...(inward?[j,j+1,j+3,j,j+3,j+2]:[j,j+3,j+1,j,j+2,j+3]));}return add(geometry(p,indices),mat,name);
+  const p=[],indices=[];for(const a of angles)for(const z of [z0,z1])p.push(Math.cos(a)*r,Math.sin(a)*r,z);
+  for(let i=0;i<angles.length-1;i++){const j=i*2;indices.push(...(inward?[j,j+1,j+3,j,j+3,j+2]:[j,j+3,j+1,j,j+2,j+3]));}return add(geometry(p,indices),mat,name);
  }
  // Silver jambs open into the room; there is no solid backing behind the doors.
  wall('docking-raised-circle-edge',outer,faceZ,raisedZ,rim);
  wall('docking-recess-inner-wall',opening,doorZ-.0004,raisedZ,rim,true);
- ring('docking-port-metal-rim',opening,outer,raisedZ,rim);
+ // Match the red paint on the two saucer spine stripes.
+ const circlePaint=new T.MeshStandardMaterial({color:0x9e3029,roughness:.74,metalness:.12,side:T.DoubleSide});
+ ring('docking-port-metal-rim',opening,outer,raisedZ,circlePaint);
  // Extend the meeting edges across the center, with the left leaf in front.
  // A shallow lap and depth bias prevent a dark gap or coplanar flicker.
  const leaves=[],slide={value:0};
@@ -132,7 +136,7 @@ window.createBridgeDockingPort=(T,{centerY,hull,dome})=>{
  block.userData.trimmedAtBridgeWall=true;
  port.ready=interior.ready;
  port.updateBridgeView=(mission,state)=>{if(interiorView)interior.updateBridgeView(mission,state);};
- let open=0,innerOpen=0,openingElapsed=0,closingWait=0,lastTime,interiorView=false,lastTarget,closeOuterFirst=false;
+ let open=0,innerOpen=0,sequenceWait=0,lastTime,interiorView=false,lastTarget,outerFirst=true;
  port.setInteriorView=active=>{
   interiorView=!!active;interior.visible=open>0||interiorView;
   for(const object of exteriorDoorLights)object.visible=!interiorView;
@@ -154,27 +158,17 @@ window.createBridgeDockingPort=(T,{centerY,hull,dome})=>{
   interior.updateBridgeIndicators(time);
   if(!Number.isFinite(time))return;const dt=lastTime===undefined?0:Math.max(0,Math.min(.1,time-lastTime));lastTime=time;
   const target=BridgeHatch.open?1:0;
-  if(target!==lastTarget){closingWait=0;if(!target)closeOuterFirst=interiorView;lastTarget=target;}
-  openingElapsed=target?openingElapsed+dt:0;
-  const innerTarget=target?(openingElapsed>=1?1:innerOpen):0;
-  let innerDt=innerTarget?Math.min(dt,Math.max(0,openingElapsed-1)):dt;
-  if(!target&&closeOuterFirst){
-   // From the bridge, seal the outer hatch before closing the inner door.
-   if(open===0)closingWait+=dt;
-   else closingWait+=Math.max(0,dt-open*1.2);
-   innerDt=Math.min(dt,Math.max(0,closingWait-2));
-  }
-  const previousInner=innerOpen;
-  innerOpen+=Math.sign(innerTarget-innerOpen)*Math.min(Math.abs(innerTarget-innerOpen),innerDt/1.2);
-  let outerDt=dt;
-  if(target)closingWait=0;
-  else if(!closeOuterFirst){
-   // Close the red door completely, then hold the outer hatch for two seconds.
-   if(innerOpen===0)closingWait+=Math.max(0,dt-previousInner*1.2);
-   else closingWait=0;
-   outerDt=Math.min(dt,Math.max(0,closingWait-2));
-  }
-  port.setHatchOpen(open+Math.sign(target-open)*Math.min(Math.abs(target-open),outerDt/1.2),false);
+  if(target!==lastTarget){sequenceWait=0;outerFirst=target?!interiorView:interiorView;lastTarget=target;}
+  // Finish the first door, wait two full seconds, then move the second.
+  // Open the near door first; close the far door first. Keep that order for
+  // the whole sequence, even if the viewer moves through the doorway.
+  const first=outerFirst?open:innerOpen;
+  const firstTravel=Math.abs(target-first)*1.2;
+  sequenceWait=firstTravel<=dt?sequenceWait+Math.max(0,dt-firstTravel):0;
+  const secondDt=Math.min(dt,Math.max(0,sequenceWait-2));
+  const advance=(value,elapsed)=>value+Math.sign(target-value)*Math.min(Math.abs(target-value),elapsed/1.2);
+  innerOpen=advance(innerOpen,outerFirst?secondDt:dt);
+  port.setHatchOpen(advance(open,outerFirst?dt:secondDt),false);
   interior.setInnerDoorOpen(innerOpen);
   port.userData.innerDoorOpen=innerOpen;
  };

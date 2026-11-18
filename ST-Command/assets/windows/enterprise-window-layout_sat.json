@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "USS Enterprise · editable window plan",
-  "revision": "lower-saucer-dark-pairs-removed-21",
+  "revision": "thin-forward-window-frames-25",
   "coordinateFrame": {
     "units": "schematic model units; saucer diameter 1.36",
     "x": "positive to starboard",
@@ -2150,8 +2150,8 @@
       "side": "starboard",
       "position": [
         0.27,
-        0.29646,
-        -0.2673161
+        0.33,
+        -0.26840162
       ],
       "normal": [
         1,
@@ -2229,8 +2229,8 @@
       "side": "port",
       "position": [
         -0.27,
-        0.29646,
-        -0.2673161
+        0.33,
+        -0.26840162
       ],
       "normal": [
         -1,
@@ -2283,7 +2283,7 @@
       "side": "center",
       "position": [
         0,
-        0.37282,
+        0.37604,
         -2.21
       ],
       "normal": [
@@ -2291,8 +2291,8 @@
         0.15,
         -1
       ],
-      "width": 0.012,
-      "height": 0.012,
+      "width": 0.01452,
+      "height": 0.01452,
       "shape": "round",
       "state": "lit",
       "category": "window",
@@ -2780,8 +2780,8 @@
       "surface": "rim",
       "side": "center",
       "position": [
-        0.037672,
-        0.37282,
+        0.0320212,
+        0.37604,
         -2.21
       ],
       "normal": [
@@ -2789,8 +2789,8 @@
         0.15,
         -1
       ],
-      "width": 0.012,
-      "height": 0.012,
+      "width": 0.01452,
+      "height": 0.01452,
       "shape": "round",
       "state": "lit",
       "category": "window",
@@ -2806,8 +2806,8 @@
       "surface": "rim",
       "side": "center",
       "position": [
-        -0.037672,
-        0.37282,
+        -0.0320212,
+        0.37604,
         -2.21
       ],
       "normal": [
@@ -2815,8 +2815,8 @@
         0.15,
         -1
       ],
-      "width": 0.012,
-      "height": 0.012,
+      "width": 0.01452,
+      "height": 0.01452,
       "shape": "round",
       "state": "lit",
       "category": "window",
@@ -5470,8 +5470,15 @@
         "EDIT-003"
       ],
       "centerWindow": "FW-02",
-      "topY": 0.37882,
-      "spacingScale": 0.85
+      "topY": 0.3833,
+      "spacingScale": 0.7225,
+      "bottomY": 0.36878,
+      "sizeScale": 1.21,
+      "frameReferenceWindow": "SF-05",
+      "baselineReferences": [
+        "SR-08",
+        "PR-08"
+      ]
     },
     "pylonWindowMove": {
       "aftWindowWidths": 2,
@@ -5486,8 +5493,8 @@
         },
         {
           "id": "SP-02",
-          "y": 0.29646,
-          "z": -0.2673161
+          "y": 0.33,
+          "z": -0.26840162
         },
         {
           "id": "SP-03",
@@ -5501,8 +5508,8 @@
         },
         {
           "id": "PP-02",
-          "y": 0.29646,
-          "z": -0.2673161
+          "y": 0.33,
+          "z": -0.26840162
         },
         {
           "id": "PP-03",

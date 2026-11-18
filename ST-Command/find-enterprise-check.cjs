@@ -4,6 +4,7 @@ const {chromium}=require(require.resolve('playwright',{paths:[__dirname,path.res
 try{
  browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});const page=await browser.newPage({viewport:{width:1600,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.STCommand?.games.every(g=>g.isBooted));
+ await page.locator('#welcome-close').click();
  const button=page.locator('#find-enterprise');assert(await button.isHidden());
  await page.evaluate(()=>{STCommand.state.throttle=0;STCommand.away.launchShuttle();STCommand.state.paused=true;for(const g of STCommand.games)g.loop.stop();});
  for(const [x,y,z]of [[2,3,111],[-3,-2,109],[0,-4,110]]){

@@ -6,4 +6,5 @@
 #performance-settings p{font-size:11px;color:#c7b395}#performance-settings button{padding:7px 10px;background:#50331b;color:#ffdfad;border:1px solid #a77a44;border-radius:3px;font:11px Consolas,monospace}
 #performance-readout{display:block;white-space:pre-line;margin-top:18px;padding:12px;background:#100d0a;border:1px solid #71502e;color:#ffe0ac;font-size:12px;font-variant-numeric:tabular-nums}
 #performance-settings :focus-visible,#performance-open:focus-visible{outline:2px solid #ffd47c;outline-offset:2px}
+#performance-settings .performance-checkbox{display:flex;align-items:center;justify-content:flex-start;text-align:left;gap:8px;margin-top:18px;cursor:pointer}#performance-intro{margin:0;accent-color:#ffd08a}
 @media(max-width:700px){#performance-open{font-size:8px;padding:4px}}

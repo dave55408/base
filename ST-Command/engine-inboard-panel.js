@@ -71,7 +71,7 @@ window.addEngineInboardPanels=(T,model,{handleLength=null,rearPanelWidth=null,su
   const roomHeight=insertHeight-2*insertBorder,roomLength=insertLength-2*insertBorder,roomDepth=.174/5,roomBack=meshRadius-roomDepth;
   // Engine room: five matte sides, open toward the mesh.
   // Match the assembly's darkest mesh color with diffuse-only room surfaces.
-  const roomPaint=new T.MeshLambertMaterial({color:grilleMaterial.color}),roomWall=roomPaint.clone(),gridMargin=.003;
+  const roomPaint=new T.MeshLambertMaterial({color:grilleMaterial.color}),roomWall=roomPaint.clone(),roomFloor=roomPaint.clone(),gridMargin=.003;
   // Keep the grille size fixed and clear the tube skin beyond its frame,
   // including the top and bottom edges when viewed at an angle.
   const cutoutClearance=.004,openingHeight=insertHeight+2*cutoutClearance;
@@ -111,53 +111,55 @@ window.addEngineInboardPanels=(T,model,{handleLength=null,rearPanelWidth=null,su
     }
     for(let row=0;row<=coveSteps;row++)for(let col=0;col<columns-1;col++){const a=row*columns+col,b=a+columns;if(inboard>0)indices.push(a,a+1,b,a+1,b+1,b);else indices.push(a,b,a+1,a+1,b,b+1);}
     const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new T.Float32BufferAttribute(normals,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geometry.setIndex(indices);
-    const wall=add(geometry,roomWall,'-inboard-insert-room-'+name+'-wall');wall.position.set(x+inboard*roomBack,y,insertCenter);wall.receiveShadow=true;wall.userData.backWallCove={radius:coveRadius,steps:coveSteps,sphericalCorners:true};engineRoom.add(wall);
+    const wall=add(geometry,name==='lower'?roomFloor:roomWall,'-inboard-insert-room-'+name+'-wall');wall.position.set(x+inboard*roomBack,y,insertCenter);wall.receiveShadow=true;wall.userData.backWallCove={radius:coveRadius,steps:coveSteps,sphericalCorners:true};engineRoom.add(wall);
   }
   const grid=new T.Group();grid.name=prefix+'-inboard-gold-grid';group.add(grid);
   const gridRadius=meshRadius-roomDepth*.2,gridLength=roomLength;
   const gridBottom=y-roomHeight/2,gridTop=y+roomHeight/2,gridHeight=gridTop-gridBottom,gridY=(gridTop+gridBottom)/2;
-  // Match the impulse outlets' black rectangular bars and cell pitch. Batch
-  // each direction so the finer mesh still takes only two draw calls.
-  const verticalWidth=impulseVertical?.geometry.parameters.width??.00048,horizontalHeight=impulseHorizontal?.geometry.parameters.height??.00045,barDepth=impulseVertical?.geometry.parameters.depth??.00065;
-  const verticalPitch=(impulseHorizontal?.geometry.parameters.width??.059)/13,horizontalPitch=(impulseVertical?.geometry.parameters.height??.025)/6;
-  const verticalCount=Math.max(2,Math.round(gridLength/verticalPitch)),horizontalCount=Math.max(2,Math.round(gridHeight/horizontalPitch));
-  const horizontalGeometry=new T.BoxGeometry(barDepth,horizontalHeight,gridLength),verticalGeometry=new T.BoxGeometry(barDepth,gridHeight+.0006,verticalWidth);
-  const horizontals=new T.InstancedMesh(horizontalGeometry,grilleMaterial,horizontalCount),verticals=new T.InstancedMesh(verticalGeometry,grilleMaterial,verticalCount),matrix=grid.matrix.clone();
-  horizontals.name=prefix+'-impulse-mesh-horizontal';verticals.name=prefix+'-impulse-mesh-vertical';
-  for(let row=0;row<horizontalCount;row++){
-   const dy=gridBottom+(row+.5)*gridHeight/horizontalCount;matrix.makeTranslation(x+inboard*(gridRadius+.0003),dy,insertCenter);horizontals.setMatrixAt(row,matrix);
-  }
-  for(let col=0;col<verticalCount;col++){
-   const z=insertCenter-gridLength/2+(col+.5)*gridLength/verticalCount;matrix.makeTranslation(x+inboard*gridRadius,gridY,z);verticals.setMatrixAt(col,matrix);
-  }
-  horizontals.instanceMatrix.needsUpdate=verticals.instanceMatrix.needsUpdate=true;grid.add(horizontals,verticals);
-  grid.userData={roundBars:false,impulseMesh:true,horizontalBars:horizontalCount,verticalBars:verticalCount,setbackFraction:.2,radius:gridRadius,top:gridTop,bottom:gridBottom,verticalWidth,horizontalHeight,barDepth,sealedRodEnds:true};
-  // Uniform white emission: no painted shadows in the wall or its glow.
-  roomPaint.emissive.setHex(0xffffff);roomPaint.emissiveIntensity=.12;backWall.userData.faintWhiteGlow=true;
-  // Match the back-wall emission at the seam, then feather by surface distance
-  // around the coves and along the walls. The smooth falloff has no hard edge.
-  const bounceCanvas=document.createElement('canvas');bounceCanvas.width=512;bounceCanvas.height=1;
-  const bounceContext=bounceCanvas.getContext('2d'),bouncePixels=bounceContext.createImageData(512,1);
-  for(let i=0;i<512;i++){
-   const t=i/511,smooth=t*t*(3-2*t),linear=1-.9*smooth;
-   const shade=Math.round(255*(linear<=.0031308?linear*12.92:1.055*Math.pow(linear,1/2.4)-.055));
-   bouncePixels.data.set([shade,shade,shade,255],i*4);
-  }
-  bounceContext.putImageData(bouncePixels,0,0);
-  const bounceMap=new T.CanvasTexture(bounceCanvas);bounceMap.colorSpace=T.SRGBColorSpace;bounceMap.anisotropy=4;
-  roomWall.emissive.setHex(0xffffff);roomWall.emissiveIntensity=roomPaint.emissiveIntensity;roomWall.emissiveMap=bounceMap;
-  const coveArc=coveRadius*Math.PI/2,glowTravel=coveArc+roomDepth-coveRadius;
-  for(const wall of engineRoom.children){
-   if(wall===backWall)continue;
-   const positions=wall.geometry.attributes.position,uv=wall.geometry.attributes.uv;
-   for(let i=0;i<positions.count;i++){
-    const depth=Math.max(0,Math.min(roomDepth,(wall.position.x+positions.getX(i)-x)*inboard-roomBack));
-    const travel=depth<coveRadius?coveRadius*Math.acos(Math.max(0,Math.min(1,1-depth/coveRadius))):coveArc+depth-coveRadius;
-    uv.setXY(i,travel/glowTravel,.5);
+  // Coarser solid diamond bars reduce subpixel shimmer. Match the surround's
+  // paint and use a matte finish rather than bright, flickering highlights.
+  const barWidth=.0011,barDepth=.0012,barPitch=.008,layerGap=.00008,endClearance=.0003;
+  const gratePaint=new T.MeshStandardMaterial({color:housingMetal.color,roughness:.95,metalness:.05});
+  function diagonalBars(slope,layer,name){
+   const positions=[],halfY=gridHeight/2-endClearance,halfZ=gridLength/2-endClearance,extent=halfY+halfZ;
+   let count=0;
+   function clip(poly,bound,positive){
+    const result=[],distance=p=>(p[0]-slope*p[1]-bound)*(positive?1:-1);
+    for(let i=0;i<poly.length;i++){
+     const a=poly[i],b=poly[(i+1)%poly.length],da=distance(a),db=distance(b);
+     if(da>=0)result.push(a);
+     if((da>=0)!==(db>=0)){const t=da/(da-db);result.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);}
+    }
+    return result;
    }
-   uv.needsUpdate=true;wall.userData.diffuseWhiteBounce=true;wall.userData.featheredBackWallGlow=true;
+   const vertex=(p,front)=>[x+inboard*(gridRadius+layer+(front?1:-1)*barDepth/2),gridY+p[0],insertCenter+p[1]];
+   function triangle(a,b,c){positions.push(...a,...(inboard>0?b:c),...(inboard>0?c:b));}
+   const pitch=barPitch*Math.SQRT2,halfWidth=barWidth/Math.SQRT2;
+   for(let n=-Math.ceil(extent/pitch);n<=Math.ceil(extent/pitch);n++){
+    let poly=[[-halfY,-halfZ],[halfY,-halfZ],[halfY,halfZ],[-halfY,halfZ]];
+    poly=clip(clip(poly,n*pitch-halfWidth,true),n*pitch+halfWidth,false);if(poly.length<3)continue;count++;
+    for(let i=1;i<poly.length-1;i++){
+     triangle(vertex(poly[0],true),vertex(poly[i],true),vertex(poly[i+1],true));
+     triangle(vertex(poly[0],false),vertex(poly[i+1],false),vertex(poly[i],false));
+    }
+    for(let i=0;i<poly.length;i++){
+     const a=poly[i],b=poly[(i+1)%poly.length];
+     triangle(vertex(a,false),vertex(b,false),vertex(b,true));triangle(vertex(a,false),vertex(b,true),vertex(a,true));
+    }
+   }
+   const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.computeVertexNormals();
+   const bars=new T.Mesh(geometry,gratePaint);bars.name=prefix+name;bars.userData={angleDegrees:slope*45,barCount:count,layerOffset:layer};grid.add(bars);return count;
   }
-  engineRoom.userData.glow={color:0xffffff,pulsing:false,wholeBackWall:true,diffuseWallBounce:true,featheredCorners:true};
+  const positiveBars=diagonalBars(1,(barDepth+layerGap)/2,'-engine-room-grate-positive');
+  const negativeBars=diagonalBars(-1,-(barDepth+layerGap)/2,'-engine-room-grate-negative');
+  grid.userData={roundBars:false,impulseMesh:false,diagonalGrate:true,angleDegrees:45,positiveBars,negativeBars,setbackFraction:.2,radius:gridRadius,top:gridTop,bottom:gridBottom,barWidth,barDepth,barPitch,layerGap,endClearance,sealedRodEnds:true,paintMatchesSurround:true};
+  // A matte off-white back wall replaces the luminous panel and wall glow.
+  // The cool tint retains the surrounding area's soft gray-white appearance.
+  roomPaint.color.setHex(0xc6cbd0);roomPaint.emissive.setHex(0x000000);roomPaint.emissiveIntensity=0;
+  roomWall.copy(roomPaint);
+  roomFloor.copy(roomPaint);
+  backWall.userData.paintedWhiteWall=true;
+  engineRoom.userData.glow={enabled:false,diffuseWallBounce:false,featheredCorners:false};
 
   // The bracket's underside sits at the casing radius, without a stand-off.
   box('-inboard-handle-end-plate',.0894,0,front-.004,.0048,.0348,.036,bracket);

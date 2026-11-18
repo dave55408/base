@@ -12,36 +12,49 @@
   <link rel="stylesheet" href="audio.css">
   <link rel="stylesheet" href="viewscreen.css?v=door-opening-messages-6">
   <link rel="stylesheet" href="mission.css">
-  <link rel="stylesheet" href="help.css?v=shuttle-ad-roll-5">
+  <link rel="stylesheet" href="help.css?v=welcome-text-6">
   <link rel="stylesheet" href="console-slope.css">
-  <link rel="stylesheet" href="enterprise-inset.css?v=closable-remote-helm-5">
+  <link rel="stylesheet" href="enterprise-inset.css?v=helm-drive-row-8">
   <link rel="stylesheet" href="project-notes.css?v=plain-version-labels-4">
   <link rel="stylesheet" href="shuttle-choice.css">
-  <link rel="stylesheet" href="shuttle-theme.css?v=find-enterprise-2">
+  <link rel="stylesheet" href="shuttle-theme.css?v=track-enterprise-3">
   <link rel="stylesheet" href="night-mode.css?v=deeper-night-console-2">
-  <link rel="stylesheet" href="simulation-performance.css">
+  <link rel="stylesheet" href="exterior-lights.css?v=1">
+  <link rel="stylesheet" href="simulation-performance.css?v=intro-checkbox-left-4">
   <link rel="stylesheet" href="console-wash.css">
-  <link rel="stylesheet" href="welcome.css">
+  <link rel="stylesheet" href="welcome.css?v=static-gallery-7">
 </head>
 <body>
   <dialog id="welcome-screen" aria-labelledby="welcome-title" aria-describedby="welcome-intro">
     <p class="welcome-eyebrow">ST COMMAND</p>
     <h1 id="welcome-title">Welcome!</h1>
     <p id="welcome-intro">This is an open-ended simulator for folks who love the classic USS Enterprise.</p>
+    <div class="welcome-gallery" role="group" aria-label="Simulator screenshots">
+      <img src="assets/welcome/beauty-1176.jpg" width="480" height="270" alt="Shuttle flying above the Enterprise saucer" decoding="async">
+      <img src="assets/welcome/beauty-1215.jpg" width="480" height="270" alt="Inside the Enterprise bridge" decoding="async">
+      <img src="assets/welcome/beauty-1178.jpg" width="480" height="270" alt="Shuttle approaching the open hangar bay" decoding="async">
+    </div>
     <ul>
-      <li>Launch and land a shuttle</li>
+      <li>Hint: For a quickstart, press "L" (for Look) to jump to flying the shuttle: Arrows keys = up/down/left/right, "W" and "S" for forward/backward. "A" and "D" for roll. "F" for Fullscreen. 
+
+      </li>
+      <li>Things to do:</li>
+      <ul>
+      <li>Launch or land a shuttle</li>
       <li>Fly around the Enterprise</li>
-      <li>Check out the Bridge</li>
+      <li>Check out the Bridge ("B" or open the hatch "H")</li>
       <li>Peek in the shuttle garage</li>
       <li>Visit Vulcan (not fully done)</li>
-    </ul>
+      <li>Night Mode</li>
+    </ul></ul>
+    <p class="welcome-more-help"><a id="welcome-help-link" href="#controls-help" aria-haspopup="dialog">More Help</a></p>
     <p class="welcome-feedback">Let me know what you think at <a href="mailto:david.granholm@gmail.com">david.granholm@gmail.com</a>.</p>
     <div class="welcome-actions">
       <label for="welcome-dismiss"><input id="welcome-dismiss" type="checkbox"> Don't show me this again.</label>
       <button id="welcome-close" type="button" autofocus>Close</button>
     </div>
   </dialog>
-  <script src="welcome.js"></script>
+  <script src="welcome.js?v=static-gallery-4"></script>
   <main>
     <div class="console">
       <section class="display forward">
@@ -57,6 +70,7 @@
             <div class="camera-controls viewscreen-controls" role="group" aria-label="Viewscreen controls">
             <div id="bridge-camera-controls" class="camera-controls"><button id="enterprise-chase" type="button" aria-pressed="false">CHASE CAMERA</button></div>
             <div id="camera-controls" class="camera-controls" hidden><span id="camera-hint">DRAG VIEW TO LOOK</span><output id="camera-zoom" aria-label="Camera zoom">1.0&#xd7;</output><button id="look-forward" type="button">FORWARD VIEW</button><button id="excursion-view" type="button" aria-pressed="false" hidden>EXCURSION VIEW</button></div>
+            <button type="button" data-exterior-lights aria-pressed="false">HULL LIGHTS</button>
             <button id="viewscreen-night-mode-toggle" type="button" aria-pressed="false">NIGHT MODE</button>
             </div>
           </div>
@@ -109,6 +123,20 @@
   </aside>
   <dialog id="controls-help" aria-labelledby="help-title">
     <div class="help-heading"><h2 id="help-title">ST Command controls</h2><button id="help-close" type="button" autofocus>Close</button></div>
+    <div class="help-welcome-text">
+      <p>This is an open-ended simulator for folks who love the classic USS Enterprise.</p>
+      <p>Hint: For a quickstart, press "L" for "Look" to jump to flying the shuttle: Arrows keys = up/down/left/right, "W" and "S" for forward/backward. "A" and "D" for roll.</p>
+      <p>Things to do:</p>
+      <ul>
+        <li>Launch or land a shuttle</li>
+        <li>Fly around the Enterprise</li>
+        <li>Check out the Bridge (press "B")</li>
+        <li>Peek in the shuttle garage</li>
+        <li>Visit Vulcan (not fully done)</li>
+        <li>Night Mode</li>
+      </ul>
+      <p>Let me know what you think at <a href="mailto:david.granholm@gmail.com">david.granholm@gmail.com</a>.</p>
+    </div>
     <p class="help-intro help-disclaimer"><strong>This is unofficial fan art. Star Trek is a registered trademark of Paramount Global. No copyright infringement intended.</strong></p>
     <section class="help-control-diagrams" aria-label="Flight control diagrams"><figure class="shuttle-help" id="shuttle-controls-diagram"><figcaption>Shuttle navigation</figcaption><div class="shuttle-letter-layout"><div class="control-key power-up"><kbd>W</kbd><span>Power up</span></div><div class="control-key roll-left"><kbd>A</kbd><span>Roll left</span></div><div class="control-key "><kbd>S</kbd><span>Power down</span></div><div class="control-key "><kbd>D</kbd><span>Roll right</span></div><div class="control-key neutral"><kbd>C</kbd><span>Neutral</span></div></div><div class="shuttle-arrow-layout" aria-label="Arrow key alternatives"><div class="control-key arrow-up"><kbd>&uarr;</kbd><span>Dive</span></div><div class="control-key arrow-left"><kbd>&larr;</kbd><span>Turn left</span></div><div class="control-key arrow-down"><kbd>&darr;</kbd><span>Climb</span></div><div class="control-key arrow-right"><kbd>&rarr;</kbd><span>Turn right</span></div></div><div class="shuttle-action-layout"><div class="control-key "><kbd>Space</kbd><span>All stop</span></div><div class="control-key "><kbd>Enter</kbd><span>Course / resume</span></div><div class="control-key "><kbd>L</kbd><span>Start / end mission</span></div><div class="control-key "><kbd>P</kbd><span>Pause / resume</span></div></div><p>Letter keys and arrows steer the shuttle. Pitch and roll can turn through a full rotation into inverted flight; release to hold the angle. Down Arrow pitches up through a loop; Up Arrow pitches down. A / D rolls left / right. Turning adds a gentle bank that settles after release. Power down brakes before reversing.</p><p>L starts at the engines' midpoint, facing forward at zero thrust. In shuttle mode it ends the mission and returns to galaxy navigation, preserving Enterprise's state. Enter resumes when paused; otherwise it engages the selected course.</p><p>Bridge steering uses the arrows and W / S power keys; its up arrow climbs and down arrow dives.</p></figure><figure class="numpad-help remote-helm-help" id="remote-controls-diagram"><figcaption>Enterprise remote helm</figcaption><div class="numpad-layout"><div class="numpad-key unused"><kbd>Num</kbd><span>Unused</span></div><div class="numpad-key "><kbd>/</kbd><span>Pitch forward</span></div><div class="numpad-key unused"><kbd>*</kbd><span>Unused</span></div><div class="numpad-key "><kbd>&minus;</kbd><span>Z up</span></div><div class="numpad-key "><kbd>7</kbd><span>Turn left</span></div><div class="numpad-key "><kbd>8</kbd><span>Pitch back</span></div><div class="numpad-key "><kbd>9</kbd><span>Turn right</span></div><div class="numpad-key tall-plus"><kbd>+</kbd><span>Z down</span></div><div class="numpad-key unused"><kbd>4</kbd><span>Unused</span></div><div class="numpad-key "><kbd>5</kbd><span>Pitch forward</span></div><div class="numpad-key unused"><kbd>6</kbd><span>Unused</span></div><div class="numpad-key "><kbd>1</kbd><span>Bank left</span></div><div class="numpad-key "><kbd>2</kbd><span>Pitch back</span></div><div class="numpad-key "><kbd>3</kbd><span>Bank right</span></div><div class="numpad-key tall-enter"><kbd>Enter</kbd><span>Neutral</span></div><div class="numpad-key wide-zero"><kbd>0</kbd><span>Roll left</span></div><div class="numpad-key"><kbd>.</kbd><span>Roll right</span></div></div><div class="remote-power-layout"><div class="numpad-key"><kbd>Page Up</kbd><span>Power up</span></div><div class="numpad-key"><kbd>Page Down</kbd><span>Power down</span></div><div class="numpad-key"><kbd>End</kbd><span>Gradual stop</span></div><div class="numpad-key"><kbd>Home</kbd><span>Full stop</span></div></div><p>Flies Enterprise independently during a space shuttle mission. Num Lock may be on or off. Use the dedicated Page Up, Page Down, End and Home keys.</p><p>Steering, Z movement, power adjustments, braking and neutral return share the 0.65-second acceleration ramp. Page Down brakes before reversing.</p><p>1 / 3 bank into a turn and hold the bank after release. 7 / 9 turn horizontally without adding bank or pitch. The inset power slider also controls Enterprise.</p></figure><p class="control-diagram-note">Neutral returns yaw, pitch and roll without changing power; manual attitude input cancels it. Enterprise's Home stop also clears held remote controls. Shuttle and remote Enterprise power stay independent.</p></section>
     <p class="help-intro">Start stopped in space on galaxy navigation near Sol at 0% impulse power, with Vulcan selected. Help pauses the simulation; Close or Escape restores your previous pause state.</p>
@@ -125,10 +153,10 @@
       <section><h3>Shuttle bay &amp; space flight</h3><dl>
         <dt>Launch Shuttle</dt><dd>Use the button for a normal bay launch from galaxy navigation with Enterprise power below 15% in either direction. After graphics preparation, the clamshell doors open and the shuttle lifts from its pad over 1.5 seconds, then hovers until you apply thrust.</dd>
         <dt>Launch camera</dt><dd>The fixed camera stays behind the shuttle during liftoff. As you depart past the second black side door, the view fades into the cockpit.</dd>
-        <dt>Find Enterprise</dt><dd>Point the shuttle toward Enterprise and return to cockpit view. This changes direction without engaging autopilot.</dd>
+        <dt>Find Enterprise</dt><dd>Point the shuttle toward Enterprise and return to cockpit view. This changes direction without engaging autopilot.</dd><dt>Track Enterprise</dt><dd>Film Enterprise from the shuttle with smooth, stabilized panning and some space ahead of its apparent motion. Both ships' movement affects the framing. Tracking preserves your zoom, flight path and power. Toggle off, drag the view, or choose Forward View, Excursion View or Find Enterprise to stop tracking.</dd>
         <dt>Return &amp; land</dt><dd>Engage Course for a guided aft approach, or fly manually. When the bay lip leaves the cockpit view, the camera fades to an aligned external view. Fly inside, slow below 60 m/s, level pitch and roll within 15 degrees, then press Land Shuttle.</dd>
         <dt>Touchdown &amp; relaunch</dt><dd>Facing Enterprise's nose centers the shuttle on the circular pad, lands it, then turns it toward the exit. After the camera returns to the launch view, choose Power Down to return to the bridge, or Launch Again to lift into a hover.</dd>
-        <dt>Hangar &amp; garage doors</dt><dd>Open / Close Hangar Door controls the outer clamshells during flight and after landing. One minute after the shuttle clears the bay, the hangar and garage doors close automatically. Returning inside cancels the countdown; pausing also pauses it. Distant automatic hangar doors reopen within 3 km on return. Open / Close Garage operates the separate rear storage door and reveals four stored shuttles.</dd>
+        <dt>Hangar &amp; garage doors</dt><dd>Open / Close Hangar Door controls the outer clamshells during flight and after landing. One minute after the shuttle clears the bay, the hangar and garage doors close automatically. Returning inside cancels the countdown; pausing also pauses it. Flying nearby does not open the hangar; use Open Hangar Door when returning. Launch and landing sequences can open it. Open / Close Garage operates the separate rear storage door and reveals four stored shuttles.</dd>
         <dt>Moving Enterprise</dt><dd>Enterprise continues moving after launch if it had power or speed, with a gentle port turn and shallow dive. Stop before launch to keep it stationary, or use the remote helm during flight.</dd>
       </dl></section>
       <section><h3>Landing craft &amp; cameras</h3><dl>
@@ -162,25 +190,27 @@
   </dialog>
   <script src="vendor/phaser.min.js"></script>
   <script src="space-math.js?v=inverted-pitch-3"></script>
-  <script src="space-starfield.js?v=soft-bridge-star-points-2"></script>
+  <script src="space-starfield.js?v=soft-star-points-4"></script>
   <script src="galaxy3d.js?v=attitude-auto-fit-2"></script>
   <script src="planet-renderer.js"></script>
   <script src="vendor/alpine-three.js?v=spotlight-exports-2"></script>
   <script src="vendor/three-spotlight.js?v=1"></script>
   <script src="ship-texture-manifest.js"></script>
   <script src="ship-textures.js?v=shared-plating-owners-2"></script>
-  <script src="simulation-performance.js?v=launch-bay-culling-2"></script>
+  <script src="simulation-performance.js?v=intro-checkbox-3"></script>
   <script src="shuttle-garage.js?v=recessed-clearance-safe-lamps-28"></script>
   <script src="shuttle-bay-walls.js?v=trim-flush-with-last-jamb-top-50"></script>
   <script src="shuttle-bay-interior.js?v=red-line-and-gray-deck-pulled-back-25"></script>
   <script src="hangar-door-frame.js?v=shared-white-lamp-glass-27"></script>
   <script src="hangar-signal-lights.js?v=dark-lamp-bezels-4"></script>
-  <script src="bridge-hatch-room.js?v=dimmer-dome-light-96"></script>
-  <script src="bridge-docking-port.js?v=live-bridge-view-update-29"></script>
+  <script src="assets/reference/helm/images.js?v=chair-arrows-27"></script>
+  <script src="bridge-helm-console.js?v=restore-earlier-chair-shape-48"></script>
+  <script src="bridge-hatch-room.js?v=spock-display-darker-lines-41"></script>
+  <script src="bridge-docking-port.js?v=inside-first-opening-4"></script>
   <script src="engine-outboard-patch.js?v=subtle-curved-paint-12"></script>
-  <script src="engine-inboard-panel.js?v=flush-room-frame-32"></script>
+  <script src="engine-inboard-panel.js?v=matching-engine-room-floor-36"></script>
   <script src="engine-aft-vent.js?v=twelve-cowling-ridges-4"></script>
-  <script src="engine-handle-fin.js?v=diagonal-fin-mesh-9"></script>
+  <script src="engine-handle-fin.js?v=square-fin-mesh-10"></script>
   <script src="saucer-raised-panels.js?v=barely-raised-white-panels-2"></script>
   <script src="assets/reference/image-1444/lettering-stencils.js?v=image1444-curved-panels-14"></script>
   <script src="enterprise-engineering-shape.js?v=rounded-bay-cutout-7"></script>
@@ -192,25 +222,27 @@
   <script src="enterprise-third-geometry.js?v=rear-fittings-forward-7"></script>
   <script src="enterprise-third-detailing.js?v=photo-1"></script>
   <script src="enterprise-third-photo-details.js?v=recessed-roof-lenses-2"></script>
-  <script src="enterprise-window-data.js?v=lower-saucer-dark-pairs-removed-21"></script>
-  <script src="enterprise-window-appearance.js?v=recessed-glass-1"></script>
-  <script src="enterprise-window-layer.js?v=recessed-glass-3"></script>
-  <script src="enterprise-third-renderer.js?v=bridge-shortcut-entry-94"></script>
+  <script src="enterprise-window-data.js?v=thin-forward-window-frames-25"></script>
+  <script src="enterprise-window-appearance.js?v=thin-forward-frames-2"></script>
+  <script src="enterprise-window-layer.js?v=fixed-forward-frame-width-4"></script>
+  <script src="exterior-lights.js?v=feathered-dorsal-registry-79"></script>
+  <script src="enterprise-third-renderer.js?v=red-green-lights-faster-fade-108"></script>
   <script src="shuttle-bay-flight.js?v=inverted-cockpit-9"></script>
-  <script src="excursion-camera.js?v=no-bridge-shadows-21"></script>
-  <script src="night-mode.js?v=viewscreen-toggle-2"></script>
+  <script src="enterprise-tracking.js?v=slower-close-pass-pans-8"></script>
+  <script src="excursion-camera.js?v=tracking-camera-operator-28"></script>
+  <script src="night-mode.js?v=default-off-3"></script>
   <script src="enterprise-models.js?v=bridge-interior-query-5"></script>
   <script src="enterprise-chase-camera.js?v=centered-overlay-2"></script>
   <script src="orbit-arrival.js?v=3"></script>
   <script src="surface-world.js"></script>
   <script src="shuttle-map.js?v=both-ships-auto-fit-5"></script>
-  <script src="away-mission.js?v=bridge-key-shortcut-43"></script>
-  <script src="enterprise-inset.js?v=closable-helm-panel-12"></script>
-  <script src="simulation.js?v=shuttle-ad-roll-9"></script>
+  <script src="away-mission.js?v=tracking-camera-operator-53"></script>
+  <script src="enterprise-inset.js?v=bridge-motion-popup-18"></script>
+  <script src="simulation.js?v=stopped-helm-reopen-11"></script>
   <script src="audio.js?v=shift-b-audio-2"></script>
-  <script src="viewscreen.js?v=drag-look-only-2"></script>
+  <script src="viewscreen.js?v=track-cancel-drag-3"></script>
   <script src="door-status.js?v=hangar-garage-only-2"></script>
-  <script src="help.js"></script>
+  <script src="help.js?v=welcome-link-2"></script>
   <script src="app-version-data.js"></script>
   <script src="app-version.js?v=labeled-version-build-3"></script>
 </body>

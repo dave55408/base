@@ -6,6 +6,7 @@
 .help-heading h2{margin:0;font-size:20px;font-weight:500;color:#ffd08a}
 #help-close{padding:8px 14px;background:#50331b;border:1px solid #a77a44;color:#ffdfad;font-size:12px}
 .help-intro{margin:10px 0 18px;color:#c7b395;font-size:12px}
+.help-welcome-text{margin:18px 0;padding-bottom:6px;border-bottom:1px solid #71502e;font-size:12px;line-height:1.65}.help-welcome-text p{margin:0 0 12px}.help-welcome-text ul{margin:0 0 12px;padding-left:24px}.help-welcome-text li{margin:4px 0}.help-welcome-text a{color:#ffd08a;overflow-wrap:anywhere;text-underline-offset:3px}
 .help-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px 26px}
 .help-grid h3{margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #71502e;color:#ffd08a;font-size:14px;font-weight:500}
 .help-grid dl{margin:0}.help-grid dt{color:#ffe3b8;margin-top:9px;font-weight:bold}.help-grid dd{margin:2px 0 0;color:#cdbb9f}

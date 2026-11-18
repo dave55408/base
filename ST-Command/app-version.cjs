@@ -28,7 +28,14 @@ function createVersionTracker(root=__dirname){
   const result={version:release+(release.includes('+')?'.':'+')+revision,release,revision};
   const snapshot='/* Generated automatically from app code and assets. */\nwindow.ST_COMMAND_VERSION='+JSON.stringify(result)+';\n';
   const target=path.join(root,'app-version-data.js');let previous='';try{previous=await fs.readFile(target,'utf8');}catch(error){if(error.code!=='ENOENT')throw error;}
-  if(previous!==snapshot){await fs.writeFile(target+'.tmp',snapshot);await fs.rename(target+'.tmp',target);}
+  if(previous!==snapshot){
+   try{await fs.writeFile(target+'.tmp',snapshot);await fs.rename(target+'.tmp',target);}
+   catch(error){
+    // A read-only/offline snapshot must not break the live /api/version result.
+    // Explicit snapshot generation still reports the write failure to the caller.
+    if(require.main===module||!['EACCES','EPERM','EROFS'].includes(error.code))throw error;
+   }
+  }
   return result;
  }
  return {async current(force=false){

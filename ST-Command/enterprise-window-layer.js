@@ -3,6 +3,8 @@ window.addEnterpriseWindowLayout=(T,model,data)=>{
  const layer=new T.Group();layer.name='reference-window-plan';
  const primary=model.getObjectByName('reference-saucer-assembly'),batches=new Map(),features=[];
  const appearance={strength:{value:1},reflections:{value:1}};
+ const forwardFrames=new Set(data.registration?.forwardPortholes?.windowIds||[]);
+ const frameReference=data.windows.find(w=>w.id===data.registration?.forwardPortholes?.frameReferenceWindow);
  model.updateWorldMatrix(true,true);
  const targets={engineering:['secondary-hull','port-raised-forward-pennant-pad','starboard-raised-forward-pennant-pad'],neck:['movie-dorsal-connector'],rim:['movie-saucer'],bridge:['upper-saucer-teardrop'],bowl:['movie-underside-bowl'],pylon:['port-engine-strut','starboard-engine-strut']};
  const triangles={};
@@ -98,7 +100,8 @@ window.addEnterpriseWindowLayout=(T,model,data)=>{
    return hit;
   }
   const center=sample(.5,.5),key=w.state+':'+(w.color||'');
-  let batch=batches.get(key);if(!batch)batches.set(key,batch={positions:[],uv:[],profiles:[],indices:[],ids:[],state:w.state,color:w.color});
+  let batch=batches.get(key);if(!batch)batches.set(key,batch={positions:[],uv:[],profiles:[],frameScales:[],indices:[],ids:[],state:w.state,color:w.color});
+  const frameScale=forwardFrames.has(w.id)&&frameReference?frameReference.height/w.height:1;
   const start=batch.positions.length/3,round=w.shape==='round',cols=round?24:6,rows=3;
   let maxClearance=0;
   for(let row=0;row<=rows;row++)for(let col=0;col<=cols;col++){
@@ -107,15 +110,16 @@ window.addEnterpriseWindowLayout=(T,model,data)=>{
    const hit=sample(u,v),point=hit.point.addScaledVector(hit.normal,.00015);
    maxClearance=Math.max(maxClearance,point.distanceTo(hit.meshPoint));batch.positions.push(...point.toArray());
    batch.uv.push(u,v);batch.profiles.push(round?1:0,w.width/w.height);
+   batch.frameScales.push(frameScale);
   }
   for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
    const a=start+row*(cols+1)+col,b=a+cols+1;batch.indices.push(a,a+1,b,a+1,b+1,b);
   }
   batch.ids.push(w.id);
-  features.push({id:w.id,group:w.group,surface:w.surface,side:w.side,state:w.state,shape:w.shape,width:w.width,height:w.height,sourcePosition:w.position.slice(),position:center.meshPoint.toArray(),normal:center.normal.toArray(),clearance:maxClearance});
+  features.push({id:w.id,group:w.group,surface:w.surface,side:w.side,state:w.state,shape:w.shape,width:w.width,height:w.height,frameScale,sourcePosition:w.position.slice(),position:center.meshPoint.toArray(),normal:center.normal.toArray(),clearance:maxClearance});
  }
  for(const [key,batch]of batches){
-  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(batch.positions,3));g.setAttribute('uv',new T.Float32BufferAttribute(batch.uv,2));g.setAttribute('windowProfile',new T.Float32BufferAttribute(batch.profiles,2));g.setIndex(batch.indices);g.computeVertexNormals();
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(batch.positions,3));g.setAttribute('uv',new T.Float32BufferAttribute(batch.uv,2));g.setAttribute('windowProfile',new T.Float32BufferAttribute(batch.profiles,2));g.setAttribute('windowFrameScale',new T.Float32BufferAttribute(batch.frameScales,1));g.setIndex(batch.indices);g.computeVertexNormals();
   const lit=batch.state==='lit',color=batch.color||(lit?0xffdfb0:0x19201f);
   const material=createEnterpriseWindowMaterial(T,{lit,color,appearance});
   const mesh=new T.Mesh(g,material);mesh.name='window-plan-'+key;mesh.renderOrder=4;mesh.castShadow=false;mesh.receiveShadow=false;mesh.userData.windowIds=batch.ids;layer.add(mesh);

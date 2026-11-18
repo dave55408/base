@@ -1,0 +1,2 @@
+[data-exterior-lights][aria-pressed=true]{border-color:#8ca0ac;background:linear-gradient(#29475b,#102737);color:#fff0d6}
+body.night-mode [data-exterior-lights][aria-pressed=true]{background:#10212a;border-color:#486572;color:#acc4d0}

@@ -3,6 +3,7 @@ const {chromium}=require(require.resolve('playwright',{paths:[__dirname,path.res
 (async()=>{const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
 try{
  browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});const page=await browser.newPage({viewport:{width:1600,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.STCommand?.games.every(g=>g.isBooted));
+ await page.locator('#welcome-close').click();
  await page.evaluate(()=>{const a=STCommand;a.stop();a.away.launchShuttle();a.state.paused=true;for(const g of a.games)g.loop.stop();Object.assign(a.away.state,{phase:'flight',freeSpace:true,target:'ship',x:.2,y:.5,z:110.3,launchAttached:false,launchStage:null,launchLiftRemaining:0});EnterpriseInset.render(a.away.state,a.state);});
  const panel=page.locator('#enterprise-inset'),handle=panel.locator('.enterprise-inset-title');await handle.scrollIntoViewIfNeeded();let b=await handle.boundingBox();
  await page.mouse.move(b.x+30,b.y+b.height/2);await page.mouse.down();await page.mouse.move(320,140,{steps:8});await page.mouse.up();

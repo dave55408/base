@@ -2,11 +2,12 @@
 (()=>{
  const offlineImages=new Map();
  function imageSource(name='bridge-front-wall',key='BRIDGE_FRONT_WALL_IMAGE'){
-  if(location.protocol!=='file:')return Promise.resolve('assets/reference/'+name+'.png');
+  const version=name==='bridge-front-wall'?'?v=new-wall4-updated-31':name==='bridge-ceiling-panel'?'?v=ceiling-panel2-supplied-17':'';
+  if(location.protocol!=='file:')return Promise.resolve('assets/reference/'+name+'.png'+version);
   // File-origin images decode successfully but cannot supply WebGL pixels.
   // A local script provides the same PNG as a data URL for offline launches.
   if(!offlineImages.has(name))offlineImages.set(name,new Promise((resolve,reject)=>{
-   const script=document.createElement('script');script.src='assets/reference/'+name+'-image.js';
+   const script=document.createElement('script');script.src='assets/reference/'+name+'-image.js'+version;
    script.onload=()=>{const source=window[key];delete window[key];script.remove();source?resolve(source):reject(new Error('Missing offline bridge image: '+name));};
    script.onerror=()=>{script.remove();reject(new Error('Could not load the offline bridge image: '+name));};document.head.append(script);
   }));
@@ -38,16 +39,18 @@
   const deckPositions=[],deckIndices=[];
   for(let i=0;i<=128;i++){const [x,z]=outline[i],d=Math.hypot(x,z-centerZ);deckPositions.push(x,floorY,z,x/d*lowerRadius,floorY,centerZ+(z-centerZ)/d*lowerRadius);}
   for(let i=0;i<=128;i++){const j=i*2,k=((i+1)%129)*2;deckIndices.push(j,k,k+1,j,k+1,j+1);}
-  const upperDeckMaterial=new T.MeshBasicMaterial({color:0x0c0a09,side:T.DoubleSide,toneMapped:false});
-  surface('bridge-room-floor',deckPositions,deckIndices).material=upperDeckMaterial;
+  const upperDeckMaterial=new T.MeshBasicMaterial({color:0x010101,side:T.DoubleSide,toneMapped:false});
+  const upperDeckFloorMaterial=upperDeckMaterial.clone();upperDeckFloorMaterial.color.setHex(0x080808);
+  surface('bridge-room-floor',deckPositions,deckIndices).material=upperDeckFloorMaterial;
   const sunken=new T.Group();sunken.name='bridge-room-sunken-room';room.add(sunken);
   const lowerPositions=[0,lowerFloor,centerZ],lowerIndices=[];
   for(let i=0;i<=128;i++){const angle=i*Math.PI/64;lowerPositions.push(Math.sin(angle)*lowerRadius,lowerFloor,centerZ+Math.cos(angle)*lowerRadius);if(i<128)lowerIndices.push(0,i+2,i+1);}
   const lowerDeck=surface('bridge-room-sunken-floor',lowerPositions,lowerIndices);lowerDeck.material=deckMaterial;sunken.add(lowerDeck);
   const stairWidth=.012*bridgeScale*.8,stairGap=Math.asin(stairWidth/2/lowerRadius),wallPositions=[],wallIndices=[];
-  const stairways=[{clock:6,angle:0},{clock:2,angle:Math.PI*2/3},{clock:10,angle:Math.PI*4/3}];
+  const stairways=[{clock:3,angle:Math.PI/2},{clock:12,angle:Math.PI},{clock:9,angle:Math.PI*3/2}];
+  const railOpenings=[{clock:6,angle:0},...stairways];
   for(let section=0;section<stairways.length;section++){
-   const start=stairways[section].angle+stairGap,end=(stairways[section+1]?.angle??Math.PI*2)-stairGap,base=wallPositions.length/3;
+   const start=stairways[section].angle+stairGap,end=(stairways[section+1]?.angle??stairways[0].angle+Math.PI*2)-stairGap,base=wallPositions.length/3;
    for(let i=0;i<=48;i++){const angle=start+(end-start)*i/48,x=Math.sin(angle)*lowerRadius,z=centerZ+Math.cos(angle)*lowerRadius;wallPositions.push(x,lowerFloor,z,x,floorY,z);if(i<48){const j=base+i*2;wallIndices.push(j,j+2,j+3,j,j+3,j+1);}}
   }
   const lowerWall=surface('bridge-room-sunken-wall',wallPositions,wallIndices);lowerWall.material=deckMaterial;sunken.add(lowerWall);
@@ -56,8 +59,8 @@
   const railWidth=.0016,railThickness=.00055,railY=floorY+railHeight,railGap=Math.asin((stairWidth/2+.0024)/railRadius),postEndSetback=.0018;
   const railPaint=new T.MeshStandardMaterial({color:0x751b17,emissive:0x751b17,emissiveIntensity:.10,roughness:.75,metalness:0,flatShading:true});
   const postPaint=new T.MeshStandardMaterial({color:0x050505,roughness:.9,metalness:0});
-  for(let section=0;section<stairways.length;section++){
-   const start=stairways[section].angle+railGap,end=(stairways[section+1]?.angle??Math.PI*2)-railGap,positions=[],indices=[],postCount=section===1?6:5,segments=postCount+1;
+  for(let section=0;section<railOpenings.length;section++){
+   const start=railOpenings[section].angle+railGap,end=(railOpenings[section+1]?.angle??Math.PI*2)-railGap,positions=[],indices=[],postCount=4,segments=postCount+1;
    const inset=postEndSetback/railRadius,postAngles=Array.from({length:postCount},(_,i)=>start+inset+(end-start-2*inset)*i/(postCount-1)),handleAngles=[start,...postAngles,end];
    for(let i=0;i<=segments;i++){
     const angle=handleAngles[i],faceAngle=i===0?(angle+handleAngles[1])/2:i===segments?(handleAngles[i-1]+angle)/2:(handleAngles[i-1]+2*angle+handleAngles[i+1])/4;
@@ -75,8 +78,8 @@
     post.position.copy(base).add(top).multiplyScalar(.5);post.rotation.set(-Math.atan2(postBaseRadius-railRadius,direction.y),angle,0,'YXZ');railing.add(post);
    }
   }
-  railing.userData={height:railHeight,baseRadius:postBaseRadius,topRadius:railRadius,stairGaps:stairways.map(s=>s.clock),posts:16,straightSpans:19,postEndSetback,handleWidth:railWidth,handleThickness:railThickness};
-  const stairStart=Math.sqrt(lowerRadius*lowerRadius-(stairWidth/2)**2),run=.020*bridgeScale*.8,stepCount=4;
+  railing.userData={height:railHeight,baseRadius:postBaseRadius,topRadius:railRadius,stairGaps:railOpenings.map(s=>s.clock),stepDownGaps:[6],posts:16,straightSpans:20,postEndSetback,handleWidth:railWidth,handleThickness:railThickness};
+  const stairStart=Math.sqrt(lowerRadius*lowerRadius-(stairWidth/2)**2),run=.010*bridgeScale*.8,stepCount=3;
   const stairMaterial=deckMaterial.clone();stairMaterial.flatShading=true;
   // The landing slightly overlaps the curved deck; depth bias avoids flicker.
   stairMaterial.polygonOffset=true;stairMaterial.polygonOffsetFactor=-1;stairMaterial.polygonOffsetUnits=-1;
@@ -98,27 +101,34 @@
    const step=makeSolidStair('bridge-room-sunken-stair-'+clock,profile,stairWidth);step.rotation.y=angle;step.position.z=centerZ;
    step.userData.stairway={clock,treads:stepCount-1,riserHeight:depth/stepCount,treadDepth:tread,firstTreadZ:stairStart-tread/2,landingBack,closedSolid:true};sunken.add(step);
   }
-  const corridorDrop=corridorFloorY-floorY,corridorRiser=depth/stepCount,corridorTreads=Math.max(1,Math.floor(corridorDrop/corridorRiser)),landing=.003,stairBack=doorZ-landing,corridorTread=(stairBack-entranceZ)/corridorTreads;
+  const originalCorridorDrop=corridorFloorY-floorY,originalCorridorTreads=Math.max(1,Math.floor(originalCorridorDrop/(depth/4))),corridorRiser=originalCorridorDrop/originalCorridorTreads;
+  const originalStairBack=doorZ-.006,corridorTread=(originalStairBack-entranceZ)/originalCorridorTreads;
+  // Replace the upper five steps with a lower landing at the existing tread.
+  const removedSteps=Math.min(5,originalCorridorTreads-1),corridorTreads=originalCorridorTreads-removedSteps;
+  const landingFloorY=corridorFloorY-removedSteps*corridorRiser,corridorDrop=landingFloorY-floorY,stairBack=originalStairBack-removedSteps*corridorTread,landing=doorZ-stairBack;
   const corridorProfile=[[doorZ,floorY-.00005],[entranceZ,floorY-.00005],[entranceZ,floorY]];
   for(let i=corridorTreads-1;i>=0;i--){const z=stairBack-i*corridorTread;corridorProfile.push([z,floorY+corridorRiser*(corridorTreads-i-1)],[z,floorY+corridorRiser*(corridorTreads-i)]);}
-  corridorProfile.push([doorZ,corridorFloorY]);
+  // Finish the climb before the hatch; the last riser meets a level landing.
+  corridorProfile.push([doorZ,landingFloorY]);
   const entryStairs=makeSolidStair('bridge-corridor-entry-stairs',corridorProfile,halfEntrance*2);
-  entryStairs.userData.stairway={treads:corridorTreads,riserHeight:corridorRiser,treadDepth:corridorTread,landing,landingStart:stairBack,thresholdRise:corridorDrop-corridorRiser*corridorTreads,thresholdY:corridorFloorY+centerY,bridgeFloorY:floorY+centerY,drop:corridorDrop,closedSolid:true};
+  entryStairs.userData.stairway={treads:corridorTreads,riserHeight:corridorRiser,treadDepth:corridorTread,landing,landingStart:stairBack,loweredSteps:removedSteps,originalLandingStart:originalStairBack,originalThresholdY:corridorFloorY+centerY,thresholdRise:Math.max(0,corridorDrop-corridorRiser*corridorTreads),thresholdY:landingFloorY+centerY,bridgeFloorY:floorY+centerY,drop:corridorDrop,closedSolid:true};
   sunken.userData.sunkenRoom={radius:lowerRadius,centerZ:portZ+centerZ,diameterRatio:lowerDiameterRatio,height:depth,heightRatio:depth/(ceilingY-floorY),floorY:lowerFloor+centerY,upperFloorY:floorY+centerY,steps:stepCount-1,stairways:stairways.map(s=>s.clock),twelveOClock:'fore',connected:true};
+  const helm=createBridgeHelmConsole(T,{floorY:lowerFloor,centerZ});room.add(helm);
+  room.add(createBridgeCaptainRiser(T,{floorY:lowerFloor,upperFloorY:floorY,centerZ,radius:lowerRadius}));
   // A shallow eight-panel dome fits below the exterior sensor cap. The radial
   // joints sit just inside its surface so they read clearly from the bridge.
   const ceiling=new T.Group();ceiling.name='bridge-room-ceiling';room.add(ceiling);
   const rise=.0029*bridgeScale*1.375,seamMaterial=new T.MeshStandardMaterial({color:0x391719,roughness:1,metalness:0,side:T.DoubleSide});
-  const ceilingCanvas=document.createElement('canvas');ceilingCanvas.width=393;ceilingCanvas.height=433;
-  const ceilingContext=ceilingCanvas.getContext('2d');ceilingContext.fillStyle='#302b29';ceilingContext.fillRect(0,0,393,433);
+  const ceilingCanvas=document.createElement('canvas');ceilingCanvas.width=471;ceilingCanvas.height=413;
+  const ceilingContext=ceilingCanvas.getContext('2d');ceilingContext.fillStyle='#241e1f';ceilingContext.fillRect(0,0,471,413);
   const ceilingTexture=new T.CanvasTexture(ceilingCanvas);ceilingTexture.colorSpace=T.SRGBColorSpace;ceilingTexture.anisotropy=8;
   const ceilingPaint=new T.MeshStandardMaterial({color:0xffffff,map:ceilingTexture,emissive:0xffffff,emissiveMap:ceilingTexture,emissiveIntensity:.4,roughness:1,metalness:0,side:T.DoubleSide});
   const ceilingReady=new Promise((resolve,reject)=>{
-   const image=new Image();image.onload=()=>{ceilingContext.drawImage(image,0,0,393,433);ceilingTexture.needsUpdate=true;ceilingPaint.userData.artworkLoaded=true;resolve();};
+   const image=new Image();image.onload=()=>{ceilingCanvas.width=image.naturalWidth;ceilingCanvas.height=image.naturalHeight;ceilingContext.drawImage(image,0,0);ceilingTexture.needsUpdate=true;ceilingPaint.userData.artworkLoaded=true;resolve();};
    image.onerror=()=>reject(new Error('Could not load the bridge ceiling artwork.'));
    imageSource('bridge-ceiling-panel','BRIDGE_CEILING_PANEL_IMAGE').then(source=>{image.src=source;}).catch(reject);
   });
-  const domeRadiusRatio=.84,ledgeBottomY=ceilingY-.0006,domeSpringY=ceilingY+.0002;
+  const domeRadiusRatio=.84,centerCapRatio=.1*1.2*2,ledgeBottomY=ceilingY-.0006,domeSpringY=ceilingY+.0002;
   const ledgePositions=[],ledgeIndices=[],ledgeSegments=128;
   for(let i=0;i<=ledgeSegments;i++){
    const angle=i*Math.PI*2/ledgeSegments;
@@ -128,11 +138,11 @@
   const ledgeGeometry=new T.BufferGeometry();ledgeGeometry.setAttribute('position',new T.Float32BufferAttribute(ledgePositions,3));ledgeGeometry.setIndex(ledgeIndices);ledgeGeometry.computeVertexNormals();
   const ledge=new T.Mesh(ledgeGeometry,new T.MeshStandardMaterial({color:0x1d222f,roughness:.9,metalness:0}));ledge.name='bridge-ceiling-light-ledge';ceiling.add(ledge);
   ledge.userData={innerRadius:radius*domeRadiusRatio,outerRadius:radius,bottomY:ledgeBottomY,topY:domeSpringY};
-  function ceilingPatch(name,start,end,material,offset=0,inner=.1,outer=domeRadiusRatio,flat=false){
-   const positions=[],indices=[],uv=[],radialSteps=20,angularSteps=name.includes('seam')?1:name.includes('cap')?128:24;
+  function ceilingPatch(name,start,end,material,offset=0,inner=centerCapRatio,outer=domeRadiusRatio,flat=false){
+   const positions=[],indices=[],uv=[],radialSteps=20,angularSteps=name.includes('seam')?1:(name.includes('cap')||name.includes('mount'))?192:24;
    for(let r=0;r<=radialSteps;r++)for(let a=0;a<=angularSteps;a++){
     const t=inner+(outer-inner)*r/radialSteps,angle=start+(end-start)*a/angularSteps;
-    positions.push(Math.sin(angle)*radius*t,domeSpringY+rise*(1-(flat ? .1/domeRadiusRatio : t/domeRadiusRatio)**2)+offset,centerZ+Math.cos(angle)*radius*t);
+    positions.push(Math.sin(angle)*radius*t,domeSpringY+rise*(1-(flat ? centerCapRatio/domeRadiusRatio : t/domeRadiusRatio)**2)+offset,centerZ+Math.cos(angle)*radius*t);
     uv.push(a/angularSteps,1-r/radialSteps);
    }
    for(let r=0;r<radialSteps;r++)for(let a=0;a<angularSteps;a++){
@@ -145,20 +155,31 @@
    ceilingPatch('bridge-room-ceiling-section-'+(section+1),angle,angle+Math.PI/4,ceilingPaint);
    ceilingPatch('bridge-room-ceiling-seam-'+(section+1),angle-.0025,angle+.0025,seamMaterial,-.000025);
   }
-  const capRadius=radius*.1,diffuserRadius=capRadius*Math.sqrt(.7)*.8,capY=domeSpringY+rise*(1-(.1/domeRadiusRatio)**2),diffuserHeight=.00096;
-  const domeMountPaint=new T.MeshStandardMaterial({color:0x1d222f,roughness:.9,metalness:0,side:T.DoubleSide});
-  ceilingPatch('bridge-dome-light-mount',0,Math.PI*2,domeMountPaint,0,0,.1,true);
+  // Size the lamp independently of the enlarged ceiling circle.
+  const capRadius=radius*centerCapRatio,diffuserRadius=radius*.12*Math.sqrt(.7)*.8*.9,capY=domeSpringY+rise*(1-(centerCapRatio/domeRadiusRatio)**2),diffuserHeight=.00096;
+  const domeMountPaint=new T.MeshStandardMaterial({color:0x5a4844,roughness:.9,metalness:0,side:T.DoubleSide});
+  ceilingPatch('bridge-dome-light-mount',0,Math.PI*2,domeMountPaint,0,0,centerCapRatio,true);
   const diffuserCanvas=document.createElement('canvas');diffuserCanvas.width=diffuserCanvas.height=128;
   const diffuserContext=diffuserCanvas.getContext('2d'),diffuserGradient=diffuserContext.createRadialGradient(64,64,4,64,64,64);
   for(const [stop,color]of [[0,'#ffffff'],[.82,'#f5f8ff'],[1,'#c5ddff']])diffuserGradient.addColorStop(stop,color);
   diffuserContext.fillStyle=diffuserGradient;diffuserContext.fillRect(0,0,128,128);
+  // Fine, fixed grain gives the glowing diffuser a lightly frosted glass surface.
+  const glassPixels=diffuserContext.getImageData(0,0,128,128);
+  let glassSeed=7419;
+  for(let y=0;y<128;y++)for(let x=0;x<128;x++){
+   glassSeed=(Math.imul(glassSeed,1664525)+1013904223)>>>0;
+   const grain=glassSeed/4294967296,ripple=Math.sin(x*.43+Math.sin(y*.21))*Math.sin(y*.37);
+   const transmission=.92+grain*.07+ripple*.01,index=(y*128+x)*4;
+   for(let channel=0;channel<3;channel++)glassPixels.data[index+channel]*=transmission;
+  }
+  diffuserContext.putImageData(glassPixels,0,0);
   const diffuserMap=new T.CanvasTexture(diffuserCanvas);diffuserMap.colorSpace=T.SRGBColorSpace;
-  const capPaint=new T.MeshStandardMaterial({color:0xffffff,map:diffuserMap,emissive:0xffffff,emissiveMap:diffuserMap,emissiveIntensity:.56,roughness:.85,metalness:0,side:T.DoubleSide});capPaint.userData.frostedDiffuser=true;
+  const capPaint=new T.MeshStandardMaterial({color:0xffffff,map:diffuserMap,bumpMap:diffuserMap,bumpScale:.000008,emissive:0xffffff,emissiveMap:diffuserMap,emissiveIntensity:.56,roughness:.78,metalness:0,side:T.DoubleSide});capPaint.userData.frostedDiffuser=true;capPaint.userData.glassTexture='fine-frosted-grain';
   const capGeometry=new T.SphereGeometry(1,48,24,0,Math.PI*2,Math.PI/2,Math.PI/2);capGeometry.scale(diffuserRadius,diffuserHeight,diffuserRadius);capGeometry.translate(0,capY,centerZ);
   const cap=new T.Mesh(capGeometry,capPaint);cap.name='bridge-room-ceiling-center-cap';ceiling.add(cap);
   const capPositions=capGeometry.attributes.position,capUV=capGeometry.attributes.uv;
   for(let i=0;i<capPositions.count;i++)capUV.setXY(i,.5+capPositions.getX(i)/(diffuserRadius*2),.5-(capPositions.getZ(i)-centerZ)/(diffuserRadius*2));
-  cap.userData.domeLight={diffuse:true,radius:diffuserRadius,mountRadius:capRadius,areaRatio:.7*.8*.8,height:diffuserHeight};
+  cap.userData.domeLight={diffuse:true,radius:diffuserRadius,mountRadius:capRadius,areaRatio:(diffuserRadius/capRadius)**2,height:diffuserHeight};
   const haloCanvas=document.createElement('canvas');haloCanvas.width=haloCanvas.height=128;
   const haloContext=haloCanvas.getContext('2d'),haloGradient=haloContext.createRadialGradient(64,64,0,64,64,64);
   for(const [stop,color]of [[0,'rgba(80,145,255,0)'],[.70,'rgba(80,145,255,0)'],[.77,'rgba(105,170,255,.45)'],[.87,'rgba(70,135,255,.18)'],[1,'rgba(60,120,255,0)']])haloGradient.addColorStop(stop,color);
@@ -166,13 +187,16 @@
   const haloMap=new T.CanvasTexture(haloCanvas);haloMap.colorSpace=T.SRGBColorSpace;
   const halo=new T.Mesh(new T.PlaneGeometry(diffuserRadius*2.6,diffuserRadius*2.6),new T.MeshBasicMaterial({map:haloMap,transparent:true,opacity:.7,depthWrite:false,blending:T.AdditiveBlending,side:T.DoubleSide,toneMapped:false}));
   halo.name='bridge-dome-light-blue-halo';halo.rotation.x=Math.PI/2;halo.position.set(0,capY-.00003,centerZ);ceiling.add(halo);
-  ceilingPatch('bridge-room-ceiling-cap-rim',0,Math.PI*2,seamMaterial,-.000025,.099,.101,true);
-  const throatStart=centerZ+Math.sqrt(radius*radius-halfEntrance*halfEntrance);
-  const throat=surface('bridge-room-entrance-ceiling',[-halfEntrance,ceilingY,throatStart,halfEntrance,ceilingY,throatStart,halfEntrance,corridorCeilingY,doorZ,-halfEntrance,corridorCeilingY,doorZ],[0,1,2,0,2,3]);
+  ceilingPatch('bridge-room-ceiling-cap-rim',0,Math.PI*2,seamMaterial,-.000025,centerCapRatio-.001,centerCapRatio+.001,true);
+  const throatStart=centerZ+Math.sqrt(radius*radius-halfEntrance*halfEntrance),frameDepth=.0012,innerZ=throatStart-.0004,headerHeight=.0012,headerFrontZ=innerZ+frameDepth/2;
+  const throat=surface('bridge-room-entrance-ceiling',[-halfEntrance,ceilingY,headerFrontZ,halfEntrance,ceilingY,headerFrontZ,halfEntrance,corridorCeilingY,doorZ,-halfEntrance,corridorCeilingY,doorZ],[0,1,2,0,2,3]);
   throat.material=red;ceiling.add(throat);
+  // The ceiling ledge must stop behind the door frame rather than cutting
+  // through its upper face as a dark horizontal band from the corridor.
+  carveBridgeHatch(T,ledge,{cutPlanes:[[1,0,0,halfEntrance],[-1,0,0,halfEntrance],[0,0,-1,-(innerZ-frameDepth/2)],[0,0,1,doorZ]],tag:'bridgeDoorHeaderClearance'});
   // Red center-split turbolift door at the bridge end of the corridor.
   const innerDoor=new T.Group();innerDoor.name='bridge-corridor-inner-door';room.add(innerDoor);
-  const doorWidth=.0144,doorHeight=ceilingY-floorY-.0008,innerZ=throatStart-.0004;
+  const doorWidth=.0144,doorHeight=ceilingY-floorY-headerHeight;
   const framePaint=new T.MeshStandardMaterial({color:0x969395,roughness:.9,metalness:0});
   const doorReflectionCanvas=document.createElement('canvas');doorReflectionCanvas.width=128;doorReflectionCanvas.height=64;
   const reflectionContext=doorReflectionCanvas.getContext('2d'),doorReflectionGradient=reflectionContext.createLinearGradient(0,0,0,64);
@@ -190,9 +214,9 @@
   };
   doorPaint.customProgramCacheKey=()=> 'bridge-inner-door-pocket-mask-v1';
   // Keep the bridge-facing surfaces dark even when corridor or dome lights spill here.
-  const bridgeDoorPaint=new T.MeshBasicMaterial({color:0x080808,toneMapped:false});
+  const bridgeDoorPaint=upperDeckMaterial.clone();
   bridgeDoorPaint.onBeforeCompile=doorPaint.onBeforeCompile;bridgeDoorPaint.customProgramCacheKey=doorPaint.customProgramCacheKey;
-  const bridgeFramePaint=new T.MeshBasicMaterial({color:0x080808,toneMapped:false});
+  const bridgeFramePaint=upperDeckMaterial.clone();
   // Box face 5 points fore (-Z), into the bridge; face 4 faces the corridor.
   const doorFaces=[bridgeDoorPaint,bridgeDoorPaint,bridgeDoorPaint,bridgeDoorPaint,doorPaint,bridgeDoorPaint];
   const frameFaces=[bridgeFramePaint,bridgeFramePaint,bridgeFramePaint,bridgeFramePaint,framePaint,bridgeFramePaint];
@@ -201,27 +225,27 @@
   };
   const doorCenterY=floorY+doorHeight/2,innerLeaves=[];
   for(const side of [-1,1]){
-   innerBox('bridge-inner-door-jamb-'+side,side*(doorWidth/2+(halfEntrance-doorWidth/2)/2),floorY+(ceilingY-floorY)/2,halfEntrance-doorWidth/2,ceilingY-floorY,.0012,frameFaces);
+   innerBox('bridge-inner-door-jamb-'+side,side*(doorWidth/2+(halfEntrance-doorWidth/2)/2),doorCenterY,halfEntrance-doorWidth/2,doorHeight,frameDepth,frameFaces);
    const leaf=innerBox('bridge-inner-door-'+(side<0?'left':'right'),0,doorCenterY,doorWidth/2-.000025,doorHeight,.00045,doorFaces);
    leaf.geometry.translate(side*doorWidth/4,0,0);
    leaf.geometry.setAttribute('innerDoorSide',new T.Float32BufferAttribute(new Float32Array(leaf.geometry.attributes.position.count).fill(side),1));innerLeaves.push({leaf,side});
   }
-  innerBox('bridge-inner-door-header',0,ceilingY-.0004,doorWidth,.0008,.0012,frameFaces);
+  innerBox('bridge-inner-door-header',0,ceilingY-headerHeight/2,halfEntrance*2,headerHeight,frameDepth,frameFaces);
   const signCanvas=document.createElement('canvas');signCanvas.width=512;signCanvas.height=64;
   const signContext=signCanvas.getContext('2d');signContext.fillStyle='#101113';signContext.fillRect(0,0,512,64);signContext.fillStyle='#eee8dd';signContext.font='32px sans-serif';signContext.textAlign='center';signContext.textBaseline='middle';signContext.fillText('Bridge',256,32);
   const signMap=new T.CanvasTexture(signCanvas);signMap.colorSpace=T.SRGBColorSpace;
-  innerBox('bridge-inner-door-sign',0,ceilingY-.00042,.0038,.00048,.00008,new T.MeshBasicMaterial({map:signMap}),innerZ+.00065);
+  innerBox('bridge-inner-door-sign',0,ceilingY-headerHeight/2,.0038,.00048,.00008,new T.MeshBasicMaterial({map:signMap}),innerZ+.00065);
   room.setInnerDoorOpen=value=>{
    const open=Math.max(0,Math.min(1,value)),eased=open*open*(3-2*open);innerSlide.value=doorWidth/2*eased;
    for(const {leaf,side}of innerLeaves){leaf.position.x=side*innerSlide.value;leaf.visible=open<1;}
    innerDoor.userData.open=open;
   };
   room.setInnerDoorOpen(0);
-  ceiling.userData.domeCeiling={sections:8,radius,rise,riseScale:1.375,domeRadius:radius*domeRadiusRatio,centerCapRadius:radius*.1,centerCapDiameterRatio:.1,artwork:'assets/reference/bridge-ceiling-panel.png',springY:domeSpringY+centerY,apexY:domeSpringY+centerY+rise*(1-(.1/domeRadiusRatio)**2)};
+  ceiling.userData.domeCeiling={sections:8,radius,rise,riseScale:1.375,domeRadius:radius*domeRadiusRatio,centerCapRadius:capRadius,centerCapDiameterRatio:centerCapRatio,artwork:'assets/reference/bridge-ceiling-panel.png',springY:domeSpringY+centerY,apexY:capY+centerY};
   const p=[],indices=[];
   // The circular skin stops at the corridor. Its two straight side walls are
   // closed solids below, rather than exposed single sheets.
-  for(let i=0;i<outline.length;i++){const [x,z]=outline[i];p.push(x,i<=128?floorY:corridorFloorY,z,x,i<=128?ceilingY:corridorCeilingY,z);}
+  for(let i=0;i<outline.length;i++){const [x,z]=outline[i];p.push(x,i<=128?floorY:landingFloorY,z,x,i<=128?ceilingY:corridorCeilingY,z);}
   for(let i=0;i<128;i++){
    const a=i*2,b=((i+1)%outline.length)*2;indices.push(a,b,b+1,a,b+1,a+1);
   }
@@ -270,7 +294,25 @@
   wallPaint.onBeforeCompile=shader=>{
    shader.uniforms.bridgeIndicatorTime=indicatorTime;
    shader.uniforms.bridgeViewTexture={value:viewTexture};shader.uniforms.bridgeViewMask={value:viewMask};shader.uniforms.bridgeViewBounds=viewBounds;shader.uniforms.bridgeViewReady=viewReady;
-   shader.fragmentShader='uniform float bridgeIndicatorTime;uniform sampler2D bridgeViewTexture;uniform sampler2D bridgeViewMask;uniform vec4 bridgeViewBounds;uniform float bridgeViewReady;\n'+shader.fragmentShader;
+   shader.fragmentShader=`uniform float bridgeIndicatorTime;uniform sampler2D bridgeViewTexture;uniform sampler2D bridgeViewMask;uniform vec4 bridgeViewBounds;uniform float bridgeViewReady;
+    // SVG stroke-dasharray="5 5" on r=159.15, with stroke-width=318.3.
+    // The stroke reaches each circle's center and covers the clipped port.
+    float spockStroke(float phase){
+     float footprint=length(vec2(dFdx(phase),dFdy(phase)));
+     return smoothstep(-max(0.001,footprint),max(0.001,footprint),sin(phase));
+    }
+    float spockDisplay(vec2 point,float rotation){
+     vec2 offset=point-vec2(10.0/150.0,-10.0/150.0);
+     float frequency=159.15*6.283185307/10.0;
+     float basePhase=atan(-point.y,point.x)*frequency;
+     float movingPhase=(atan(-offset.y,offset.x)-rotation)*frequency;
+     float pattern=(1.0-spockStroke(basePhase))*(1.0-spockStroke(movingPhase));
+     float footprint=max(length(vec2(dFdx(basePhase),dFdy(basePhase))),length(vec2(dFdx(movingPhase),dFdy(movingPhase))));
+     float phaseGap=abs(mod(basePhase-movingPhase+3.141592654,6.283185307)-3.141592654);
+     float beat=0.5*(1.0-phaseGap/3.141592654);
+     return mix(pattern,beat,smoothstep(0.65,1.5,footprint));
+    }
+   `+shader.fragmentShader;
    shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`if(vMapUv.x < 0.0 || vMapUv.x > 1.0) discard;
     #include <map_fragment>
     float indicatorCycleTime=mod(bridgeIndicatorTime,2.75);
@@ -280,6 +322,24 @@
     float indicatorMask=0.0;vec3 indicatorColor=vec3(0.0),indicatorGlow=vec3(0.0);
     ${indicatorShader}
     diffuseColor.rgb=mix(diffuseColor.rgb,indicatorColor,indicatorMask);
+    // The photographed scanner's glass and a six-pixel dark gray border.
+    vec2 scannerPoint=(vMapUv-vec2(8044.0/9800.0,1.0-480.0/1000.0))/vec2(24.0/9800.0,22.0/1000.0);
+    float scannerDistance=length(scannerPoint);
+    float scannerEdge=max(0.001,fwidth(scannerDistance));
+    float scannerBorderSoftness=max(0.02,scannerEdge);
+    float scannerMask=1.0-smoothstep(1.04-scannerBorderSoftness,1.04+scannerBorderSoftness,scannerDistance);
+    float scannerAngle=mod(bridgeIndicatorTime,50.0)*6.283185307/50.0;
+    // A small Gaussian blur softens the glass to match the wall artwork.
+    // Its radius follows the display, so the softness survives camera zoom.
+    float scannerBlur=0.035;
+    float scannerLevel=spockDisplay(scannerPoint,scannerAngle)*0.25;
+    scannerLevel+=(spockDisplay(scannerPoint+vec2(scannerBlur,0.0),scannerAngle)+spockDisplay(scannerPoint-vec2(scannerBlur,0.0),scannerAngle)+spockDisplay(scannerPoint+vec2(0.0,scannerBlur),scannerAngle)+spockDisplay(scannerPoint-vec2(0.0,scannerBlur),scannerAngle))*0.125;
+    scannerLevel+=(spockDisplay(scannerPoint+vec2(scannerBlur,scannerBlur),scannerAngle)+spockDisplay(scannerPoint-vec2(scannerBlur,scannerBlur),scannerAngle)+spockDisplay(scannerPoint+vec2(scannerBlur,-scannerBlur),scannerAngle)+spockDisplay(scannerPoint+vec2(-scannerBlur,scannerBlur),scannerAngle))*0.0625;
+    // Deepen only shadow tones; preserve the stripe midpoint, width and blur.
+    scannerLevel*=1.0-0.16*pow(max(0.0,1.0-2.0*scannerLevel),2.0);
+    vec3 scannerFill=vec3(0.955973353,0.871367119,0.701101892); // #faf0da in linear RGB.
+    vec3 scannerColor=scannerFill*scannerLevel*0.9;
+    scannerColor=mix(scannerColor,vec3(0.009134059),smoothstep(1.0-scannerBorderSoftness,1.0+scannerBorderSoftness,scannerDistance)); // Soft #181818 border.
     vec2 bridgeViewUv=(vMapUv-bridgeViewBounds.xy)/(bridgeViewBounds.zw-bridgeViewBounds.xy);
     float bridgeViewInside=step(0.0,bridgeViewUv.x)*step(0.0,bridgeViewUv.y)*step(bridgeViewUv.x,1.0)*step(bridgeViewUv.y,1.0);
     float bridgeViewAlpha=texture2D(bridgeViewMask,clamp(bridgeViewUv,0.0,1.0)).a*bridgeViewInside*bridgeViewReady;
@@ -290,14 +350,15 @@
    `);
    shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance=mix(totalEmissiveRadiance,indicatorColor*1.5,indicatorMask)+indicatorGlow;diffuseColor.rgb*=1.0-bridgeViewAlpha;totalEmissiveRadiance=mix(totalEmissiveRadiance,bridgeViewColor,bridgeViewAlpha);');
    // Display whites stay at maximum brightness independently of scene exposure.
-   shader.fragmentShader=shader.fragmentShader.replace('#include <tonemapping_fragment>','#include <tonemapping_fragment>\ngl_FragColor.rgb=mix(gl_FragColor.rgb,bridgeViewColor,bridgeViewAlpha);');
+   shader.fragmentShader=shader.fragmentShader.replace('#include <tonemapping_fragment>','#include <tonemapping_fragment>\ngl_FragColor.rgb=mix(gl_FragColor.rgb,bridgeViewColor,bridgeViewAlpha);gl_FragColor.rgb=mix(gl_FragColor.rgb,scannerColor,scannerMask);');
   };
-  wallPaint.customProgramCacheKey=()=> 'bridge-wall-live-forward-view-white-stars-black-space-v7';
+  wallPaint.customProgramCacheKey=()=> 'bridge-wall-spock-scanner-darker-shadows-v21';
   const photoGeometry=new T.BufferGeometry(),photoPositions=new Float32Array(129*2*3),photoUV=[],photoIndices=[];
   for(let i=0;i<=128;i++){photoUV.push(i/128,0,i/128,1);if(i<128){const j=i*2;photoIndices.push(j,j+2,j+3,j,j+3,j+1);}}
   photoGeometry.setAttribute('position',new T.Float32BufferAttribute(photoPositions,3));photoGeometry.setAttribute('uv',new T.Float32BufferAttribute(photoUV,2));photoGeometry.setIndex(photoIndices);
   const photo=new T.Mesh(photoGeometry,wallPaint);photo.name='bridge-room-front-panorama';photo.visible=false;room.add(photo);
   photo.userData.indicatorLights={count:12,banks:[3,6,3],stepSeconds:1/8,cycleSeconds:1.5,fadeSeconds:.25,pauseSeconds:1,repeatSeconds:2.75,trail:'fading-behind-leader',colors:['warm-white','amber'],source:'https://www.youtube.com/watch?v=peO6n-ii14w'};
+  photo.userData.spockScanner={centerPixels:[8044,480],radiusPixels:[24,22],strokeRadius:159.15,strokeWidth:318.3,dashArray:[5,5],offsetPixels:[10,10],referenceDiameter:300,rotationSeconds:50,fill:'#faf0da',border:'#181818',borderWidth:6,blurRadius:0.035,blend:'opaque-black-on-amber'};
   room.updateBridgeIndicators=time=>{if(Number.isFinite(time))indicatorTime.value=Math.max(0,time);};
   const wallReady=new Promise((resolve,reject)=>{
    const image=new Image();image.onload=()=>{
@@ -353,7 +414,7 @@
    image.onerror=()=>reject(new Error('Could not load the bridge front-wall panorama.'));
    imageSource().then(source=>{image.src=source;}).catch(reject);
   });
-  room.ready=Promise.all([wallReady,ceilingReady]);
+  room.ready=Promise.all([wallReady,ceilingReady,helm.ready]);
   room.traverse(object=>{if(object.isMesh){object.castShadow=false;object.receiveShadow=false;object.userData.bridgeNoShadows=true;}});
   const light=new T.Light(0x6ca8ff,.00084);light.isPointLight=true;light.type='PointLight';light.distance=.14;light.decay=2;light.name='bridge-dome-light-emitter';light.position.set(0,capY-diffuserHeight-.0004,centerZ);room.add(light);
   room.userData.circularRoom={radius,centerZ,bridgeScale,sinkOffset,wallHeightScale,entranceZ:throatStart,corridorLength:doorZ-throatStart,floorY:floorY+centerY,corridorFloorY:corridorFloorY+centerY,ceilingY:ceilingY+centerY,entranceWidth:halfEntrance*2,matteRed:true};
