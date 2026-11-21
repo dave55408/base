@@ -810,9 +810,10 @@ window.createThirdEnterpriseRenderer=()=>{
   model.position.z=-.032;
   function isInsideBridge(pose){return bridgeDockingPort.isInteriorPoint(new T.Vector3(pose.x,pose.z-110,pose.y));}
   function bridgeEntryPose(){
-    // Center the arrival viewpoint behind both helm chairs, at standing eye level.
-    const point=bridgeDockingPort.localToWorld(new T.Vector3(0,sunken.floorY-.531+.013,bridgeLayout.centerZ+.0212));
-    return {x:point.x,y:point.z,z:110+point.y};
+    // Reference opening view: centered behind the helm, looking slightly down.
+    const eyeY=Math.min(bridgeLayout.ceilingY-.004,Math.max(sunken.floorY+.013,.5275));
+    const point=bridgeDockingPort.localToWorld(new T.Vector3(0,0,bridgeLayout.centerZ+.0252));point.y=eyeY;
+    return {x:point.x,y:point.z,z:110+point.y,heading:0,pitch:-7,lookYaw:0,lookPitch:0,cameraZoom:1};
   }
   function draw(ctx,w,h,m,s,updateOnly=false){
     const insideBridge=isInsideBridge(m);
