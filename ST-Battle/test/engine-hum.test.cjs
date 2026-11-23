@@ -31,7 +31,7 @@ test('steady viewscreen ambience never spikes to engine volume or repeatedly res
 });
 test('Enterprise engine loop uses drone_hum and raises pitch by at most 40 percent in either direction',async()=>{
   const {engine:e,players:[a]}=harness();assert.equal(a.url,'assets/drone_hum.mp3');assert.equal(a.loop,true);assert.equal(a.preservesPitch,false);
-  e.setEnabled(true);e.update({speed:0,maximum:200,active:true});await new Promise(setImmediate);assert.equal(a.playbackRate,1);assert(!a.paused);
+  e.setEnabled(true);e.update({speed:0,maximum:200,active:true});await new Promise(setImmediate);assert.equal(a.playbackRate,1);assert.equal(a.volume,.3);assert(!a.paused);
   e.update({speed:100,maximum:200,active:true});assert.equal(a.playbackRate,1.2);
   e.update({speed:200,maximum:200,active:true});assert.equal(a.playbackRate,1.4);
   e.update({speed:-200,maximum:200,active:true});assert.equal(a.playbackRate,1.4);

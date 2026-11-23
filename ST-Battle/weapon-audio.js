@@ -145,7 +145,7 @@ window.BattleEngineAudio=class{
     }).catch(()=>{if(token===this.generation){this.starting=false;this.playing=false;this.enabled=false;}});}
     catch{this.starting=false;this.playing=false;this.enabled=false;}
   }
-  update({speed=0,maximum=300,active=false,volume=.2}={}){
+  update({speed=0,maximum=300,active=false,volume=.3}={}){
     this.active=active;
     const fraction=Math.max(0,Math.min(1,Math.abs(speed)/Math.max(1,maximum)));
     const rate=1+.4*fraction,targetVolume=this.enabled&&active?volume:0;

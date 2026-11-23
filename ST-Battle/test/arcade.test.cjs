@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),B=require('../engine.js');
 test('difficulty changes enemy damage but preserves the default duel and survives a rematch',()=>{
   const losses={};for(const level of ['cadet','captain','admiral']){
-    const s=new B.Simulation();assert(s.setDifficulty(level));s.damage(s.player,s.enemy,20,'phaser','hull');losses[level]=100-s.player.shields[B.facing(s.player,s.enemy)];
+    const s=new B.Simulation();s.random=()=>.5;assert(s.setDifficulty(level));s.damage(s.player,s.enemy,20,'phaser','hull');losses[level]=100-s.player.shields[B.facing(s.player,s.enemy)];
     s.reset();assert.equal(s.difficulty,level);s.running=true;assert.equal(s.setDifficulty('cadet'),false);
   }
   assert(Math.abs(losses.captain-56)<1e-8);assert(losses.cadet<losses.captain);assert(losses.admiral>losses.captain);

@@ -59,12 +59,12 @@ test('Yorktown retreats for at most ten seconds and returns on a different maneu
   s.reset();assert.equal(s.enemyMind.returnManeuver,undefined);assert.equal(s.enemyMind.runAwaySince,undefined);
 });
 
-test('Yorktown also turns back after ten seconds of pulling away with an exhausted plan',()=>{
+test('Yorktown stays engaged after exhausting its plan instead of pulling away',()=>{
   const s=duel();s.beforePlayerFire=()=>false;s.player.repairBudget=0;
   for(const order of s.turn.enemyOrders)order.status='hit';
   Object.assign(s.turn.spent.enemy,{phaser:2,torpedo:1});
   for(let i=0;i<110;i++)s.tick(.1);
-  assert.equal(s.enemyRetreating,false);assert(s.enemyMind.returnManeuver);assert(s.enemyMind.reengageUntil>s.time);
+  assert.equal(s.enemyRetreating,false);assert.equal(s.enemyMind.returnManeuver,undefined);assert.equal(s.enemyMind.runAwaySince,null);
   assert.equal(s.nextOrder(s.enemy),undefined);assert.deepEqual(s.turn.spent.enemy,{phaser:2,torpedo:1});
 });
 
@@ -85,6 +85,30 @@ test('damaged Enterprise cancels ordinary Yorktown retreat, while emergency retr
   const s=duel();s.player.hull=60;s.enemy.hull=24;s.enemyRetreating=true;s.fire=()=>false;s.tick(.1);assert.equal(s.enemyRetreating,false);
   s.enemy.hull=10;s.tick(.1);assert.equal(s.enemyPressesAdvantage(),false);assert.equal(s.enemyRetreating,true,'critical Yorktown can still escape');
   s.freeFlight=true;s.enemy.hull=100;assert.equal(s.enemyPressesAdvantage(),false);
+});
+
+test('Enterprise red alert prevents Yorktown breakaway even with critical hull and disabled weapons',()=>{
+  for(const phase of ['attack','disengage']){
+    const s=duel(),e=s.enemy,p=s.player;
+    p.hull=24;p.repairBudget=0;p.fullStop=true;p.throttle=0;
+    e.hull=10;e.integrity.weapons=0;e.repairBudget=0;
+    s.enemyRetreating=true;s.enemyMind.runAwaySince=s.time-5;
+    s.enemyMind.reengageUntil=s.time+20;s.enemyMind.returnManeuver='behind';
+    for(const order of s.turn.enemyOrders)order.status='hit';
+    Object.assign(s.turn.spent.enemy,{phaser:2,torpedo:1});
+    s.turn.phase=phase;s.turn.remaining=3;s.turn.elapsed=0;
+    s.fire=()=>false;s.beforePlayerFire=()=>false;s.stationTrace=()=>null;
+    let mode,aim;
+    s.steerFlight=(ship,target)=>{if(ship===e)aim={...target};};
+    s.adjustFlightSpeed=(ship,target,point,options)=>{if(ship===e)mode=options.mode;};
+    s.tick(.1);
+    assert.equal(s.enemyPressesAdvantage(),true);
+    assert.equal(s.enemyRetreating,false);assert.equal(s.enemyMind.runAwaySince,null);
+    assert.equal(mode,'pursuit');assert.equal(aim.x,p.x);assert.equal(aim.z,p.z);
+    assert.deepEqual(s.turn.spent.enemy,{phaser:2,torpedo:1});
+    p.hull=25;assert.equal(s.enemyPressesAdvantage(),false,'emergency retreat returns above the red alert threshold');
+    p.hull=24;s.freeFlight=true;assert.equal(s.enemyPressesAdvantage(),false);
+  }
 });
 
 test('Yorktown commits offensive power against wounded Enterprise despite its own moderate damage or return maneuver',()=>{

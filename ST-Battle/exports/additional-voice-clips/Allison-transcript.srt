@@ -1,0 +1,80 @@
+0
+00:00:00,000 --> 00:00:02,000
+Direct hit to Yorktown.
+
+1
+00:00:03,200 --> 00:00:05,200
+We've lost the port engine.
+
+2
+00:00:06,800 --> 00:00:09,200
+We've lost the starboard engine.
+
+3
+00:00:11,000 --> 00:00:12,000
+We missed.
+
+4
+00:00:13,600 --> 00:00:15,200
+They're out of range.
+
+5
+00:00:16,600 --> 00:00:18,200
+They're back in range.
+
+6
+00:00:19,600 --> 00:00:20,600
+I'll try.
+
+7
+00:00:22,000 --> 00:00:23,600
+That might be hard.
+
+8
+00:00:25,000 --> 00:00:26,400
+We took a direct hit.
+
+9
+00:00:26,400 --> 00:00:27,600
+Direct hit.
+
+10
+00:00:28,600 --> 00:00:29,800
+I'll do what I can.
+
+11
+00:00:29,952 --> 00:00:34,952
+We took a direct hit.
+
+12
+00:00:34,952 --> 00:00:37,952
+We're losing power.
+
+13
+00:00:37,952 --> 00:00:39,952
+On screen.
+
+14
+00:00:39,952 --> 00:00:41,952
+No response.
+
+15
+00:00:41,952 --> 00:00:44,952
+They're jamming our frequencies.
+
+16
+00:00:44,952 --> 00:00:48,952
+Shields down to percent.
+
+17
+00:00:48,952 --> 00:00:52,952
+Fazors offline.
+
+18
+00:00:52,952 --> 00:00:55,952
+Warp drive is down.
+
+19
+00:00:55,952 --> 00:00:57,952
+Brace for Impact.
+

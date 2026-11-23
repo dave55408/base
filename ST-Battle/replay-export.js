@@ -56,34 +56,22 @@
   }
   const capture=window.BattleReplayCapture=new AudioCapture();
   class ReplayExporter{
-    constructor({hd=false}={}){this.hd=hd;this.frameRate=hd?60:30;this.speech=new Map();this.urls=[];this.controller=new AbortController();this.cancelled=false;this.recording=false;}
+    constructor({hd=false}={}){this.hd=hd;this.frameRate=hd?60:30;this.urls=[];this.controller=new AbortController();this.cancelled=false;this.recording=false;}
     static supported(){return !!window.MediaRecorder&&!!window.HTMLCanvasElement?.prototype.captureStream;}
     async prepare(record){
       await capture.open();
       const mp4=this.hd?['video/mp4;codecs=avc1.640034,mp4a.40.2','video/mp4;codecs=avc1.420034,mp4a.40.2']:['video/mp4;codecs=avc1.42001E,mp4a.40.2'];
       this.mime=[...mp4,'video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/mp4','video/webm'].find(type=>window.MediaRecorder.isTypeSupported(type));
       if(!this.mime)throw Error('This browser cannot record a supported replay video format.');
-      const missing=[];
-      for(const {event} of record.events){
-        if(event.type!=='bridge-dialogue')continue;
-        const text=event.order||event.reply,speaker=event.order?'captain':event.speaker||'helm',key=speaker+'\n'+text;
-        if(!event.clip&&!window.BattleVoiceClips?.[key]&&!missing.some(line=>line.key===key))missing.push({key,text,speaker});
-      }
-      if(!this.mime.startsWith('video/mp4')||missing.length){
-        if(!/^https?:$/.test(window.location.protocol))throw Error('Start ST Battle with its local server to export MP4 and synthesized dialogue.');
+      if(!this.mime.startsWith('video/mp4')){
+        if(!/^https?:$/.test(window.location.protocol))throw Error('Start ST Battle with its local server to export MP4.');
         const response=await fetch('/api/replay/capabilities',{signal:this.controller.signal});if(!response.ok)throw Error('Restart the ST Battle server to enable replay export.');
         const capabilities=await response.json();
-        if(!this.mime.startsWith('video/mp4')&&!capabilities.mp4)throw Error('MP4 conversion needs the installed FFmpeg encoder. Restart the local game server.');
-        if(missing.length&&!capabilities.speech)throw Error('Synthesized dialogue export needs Windows speech and FFmpeg on the local game server.');
-      }
-      for(const line of missing){
-        const response=await fetch('/api/replay/speech',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:line.text,speaker:line.speaker}),signal:this.controller.signal});
-        if(!response.ok)throw Error('Could not prepare synthesized replay dialogue.');
-        const url=URL.createObjectURL(await response.blob());this.urls.push(url);this.speech.set(line.key,url);
+        if(!capabilities.mp4)throw Error('MP4 conversion needs the installed FFmpeg encoder. Restart the local game server.');
       }
       if(this.cancelled)throw Error('Export cancelled.');
     }
-    clipFor(line){return this.speech.get((line.order?'captain':line.speaker||'helm')+'\n'+(line.order||line.reply));}
+    clipFor(line){return window.BattleVoiceClips?.[(line.order?'captain':line.speaker||'helm')+'\n'+(line.order||line.reply)];}
     start(canvas){
       if(this.cancelled)throw Error('Export cancelled.');
       const scale=Math.min(1,(this.hd?3840:1920)/canvas.width,(this.hd?2160:1080)/canvas.height);

@@ -1,0 +1,439 @@
+{
+  "referenceMedianLUFS": -15.64,
+  "targetLUFS": -16,
+  "playbackVolume": 0.85,
+  "matched": [
+    {
+      "file": "assets/Adjusting range_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.63,
+      "afterLUFS": -15.99,
+      "truePeakDBTP": -4.06,
+      "compressed": true,
+      "bytes": 18140
+    },
+    {
+      "file": "assets/Brace for impact!_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -24.5,
+      "afterLUFS": -16,
+      "truePeakDBTP": -3.73,
+      "compressed": true,
+      "bytes": 20708
+    },
+    {
+      "file": "assets/Climbing_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -21.66,
+      "afterLUFS": -15.97,
+      "truePeakDBTP": -4.39,
+      "compressed": true,
+      "bytes": 9044
+    },
+    {
+      "file": "assets/Closing, Captain_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.65,
+      "afterLUFS": -16.24,
+      "truePeakDBTP": -1.5,
+      "compressed": true,
+      "bytes": 19268
+    },
+    {
+      "file": "assets/Cloud tops. Correcting altitude_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.06,
+      "afterLUFS": -16.02,
+      "truePeakDBTP": -2.86,
+      "compressed": true,
+      "bytes": 32780
+    },
+    {
+      "file": "assets/Coming to port_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.67,
+      "afterLUFS": -15.94,
+      "truePeakDBTP": -2.95,
+      "compressed": true,
+      "bytes": 13220
+    },
+    {
+      "file": "assets/Coming to starboard_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -22.42,
+      "afterLUFS": -15.99,
+      "truePeakDBTP": -4.04,
+      "compressed": true,
+      "bytes": 14900
+    },
+    {
+      "file": "assets/Course set. Brace_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -24.53,
+      "afterLUFS": -15.99,
+      "truePeakDBTP": -3.69,
+      "compressed": true,
+      "bytes": 27116
+    },
+    {
+      "file": "assets/Course updated_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -24.17,
+      "afterLUFS": -16,
+      "truePeakDBTP": -3.11,
+      "compressed": true,
+      "bytes": 15764
+    },
+    {
+      "file": "assets/Descending_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -22.63,
+      "afterLUFS": -15.98,
+      "truePeakDBTP": -5.51,
+      "compressed": true,
+      "bytes": 12668
+    },
+    {
+      "file": "assets/Direct hit to Yorktown!_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -21.66,
+      "afterLUFS": -16.01,
+      "truePeakDBTP": -4.12,
+      "compressed": true,
+      "bytes": 21068
+    },
+    {
+      "file": "assets/Direct Hit!_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.55,
+      "afterLUFS": -16.01,
+      "truePeakDBTP": -3.23,
+      "compressed": true,
+      "bytes": 11660
+    },
+    {
+      "file": "assets/Helm lost!_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -19.99,
+      "afterLUFS": -16,
+      "truePeakDBTP": -2.5,
+      "compressed": false,
+      "bytes": 13580
+    },
+    {
+      "file": "assets/Hull hit!_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.17,
+      "afterLUFS": -15.99,
+      "truePeakDBTP": -3.47,
+      "compressed": true,
+      "bytes": 12668
+    },
+    {
+      "file": "assets/I'll do what I can_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -25.42,
+      "afterLUFS": -16.02,
+      "truePeakDBTP": -2.35,
+      "compressed": false,
+      "bytes": 14300
+    },
+    {
+      "file": "assets/I'll try_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -21.82,
+      "afterLUFS": -15.97,
+      "truePeakDBTP": -2.29,
+      "compressed": true,
+      "bytes": 12164
+    },
+    {
+      "file": "assets/In cover. Holding six seconds_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -25.46,
+      "afterLUFS": -15.99,
+      "truePeakDBTP": -3.55,
+      "compressed": true,
+      "bytes": 33908
+    },
+    {
+      "file": "assets/Making for cover_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -24.11,
+      "afterLUFS": -16,
+      "truePeakDBTP": -3.06,
+      "compressed": true,
+      "bytes": 17012
+    },
+    {
+      "file": "assets/Maneuvers complete. Awaiting orders_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.86,
+      "afterLUFS": -15.99,
+      "truePeakDBTP": -5.02,
+      "compressed": true,
+      "bytes": 35204
+    },
+    {
+      "file": "assets/Maneuvers complete. Breaking away_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -24,
+      "afterLUFS": -16.02,
+      "truePeakDBTP": -3.98,
+      "compressed": true,
+      "bytes": 27980
+    },
+    {
+      "file": "assets/Manual control. Standing by_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23,
+      "afterLUFS": -16,
+      "truePeakDBTP": -3.59,
+      "compressed": true,
+      "bytes": 33020
+    },
+    {
+      "file": "assets/Matching course_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -24.61,
+      "afterLUFS": -16.02,
+      "truePeakDBTP": -2.77,
+      "compressed": true,
+      "bytes": 16964
+    },
+    {
+      "file": "assets/Moving astern_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -22.27,
+      "afterLUFS": -15.99,
+      "truePeakDBTP": -2.85,
+      "compressed": false,
+      "bytes": 15452
+    },
+    {
+      "file": "assets/No cover. Attacking_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.52,
+      "afterLUFS": -16,
+      "truePeakDBTP": -2.32,
+      "compressed": true,
+      "bytes": 22412
+    },
+    {
+      "file": "assets/No relative movement. Next maneuver_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.54,
+      "afterLUFS": -16.03,
+      "truePeakDBTP": -4.91,
+      "compressed": true,
+      "bytes": 34172
+    },
+    {
+      "file": "assets/No response. They're jamming our frequencies_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -24.02,
+      "afterLUFS": -16.05,
+      "truePeakDBTP": -3.62,
+      "compressed": true,
+      "bytes": 39764
+    },
+    {
+      "file": "assets/On screen_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -22.98,
+      "afterLUFS": -15.96,
+      "truePeakDBTP": -5.02,
+      "compressed": true,
+      "bytes": 12332
+    },
+    {
+      "file": "assets/Phasers offline!_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -22.71,
+      "afterLUFS": -16,
+      "truePeakDBTP": -4.74,
+      "compressed": true,
+      "bytes": 21404
+    },
+    {
+      "file": "assets/Pursuit course_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -26.98,
+      "afterLUFS": -16,
+      "truePeakDBTP": -4.53,
+      "compressed": true,
+      "bytes": 17636
+    },
+    {
+      "file": "assets/Shields down to [X] percent!_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -21.56,
+      "afterLUFS": -16.01,
+      "truePeakDBTP": -5.53,
+      "compressed": true,
+      "bytes": 28052
+    },
+    {
+      "file": "assets/Station collision. Deflecting_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -25.53,
+      "afterLUFS": -16.01,
+      "truePeakDBTP": -2.7,
+      "compressed": true,
+      "bytes": 29132
+    },
+    {
+      "file": "assets/That might be hard_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -25.49,
+      "afterLUFS": -16.02,
+      "truePeakDBTP": -3.43,
+      "compressed": true,
+      "bytes": 15476
+    },
+    {
+      "file": "assets/They're back in range_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.11,
+      "afterLUFS": -15.98,
+      "truePeakDBTP": -3.18,
+      "compressed": true,
+      "bytes": 15908
+    },
+    {
+      "file": "assets/They're out of range_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -22.42,
+      "afterLUFS": -15.99,
+      "truePeakDBTP": -3.23,
+      "compressed": true,
+      "bytes": 13988
+    },
+    {
+      "file": "assets/Torpedo incoming!_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.29,
+      "afterLUFS": -15.99,
+      "truePeakDBTP": -4.44,
+      "compressed": true,
+      "bytes": 18644
+    },
+    {
+      "file": "assets/Warp blocked by K7. Change heading_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -24.65,
+      "afterLUFS": -16.04,
+      "truePeakDBTP": -3.71,
+      "compressed": true,
+      "bytes": 36572
+    },
+    {
+      "file": "assets/Warp blocked by planet. Change heading_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -25.3,
+      "afterLUFS": -16.05,
+      "truePeakDBTP": -2.25,
+      "compressed": true,
+      "bytes": 34028
+    },
+    {
+      "file": "assets/Warp complete. Charge spent_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.13,
+      "afterLUFS": -15.99,
+      "truePeakDBTP": -2.85,
+      "compressed": true,
+      "bytes": 32708
+    },
+    {
+      "file": "assets/Warp complete_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -26.33,
+      "afterLUFS": -15.99,
+      "truePeakDBTP": -3.87,
+      "compressed": true,
+      "bytes": 16724
+    },
+    {
+      "file": "assets/Warp drive is down!_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -19.19,
+      "afterLUFS": -15.98,
+      "truePeakDBTP": -3.78,
+      "compressed": true,
+      "bytes": 19676
+    },
+    {
+      "file": "assets/We missed!_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -18.97,
+      "afterLUFS": -16.01,
+      "truePeakDBTP": -3.43,
+      "compressed": false,
+      "bytes": 10436
+    },
+    {
+      "file": "assets/We took a direct hit! (take 2)_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -25.79,
+      "afterLUFS": -16.01,
+      "truePeakDBTP": -3.32,
+      "compressed": true,
+      "bytes": 20372
+    },
+    {
+      "file": "assets/We took a direct hit!_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -24.49,
+      "afterLUFS": -15.99,
+      "truePeakDBTP": -4.7,
+      "compressed": true,
+      "bytes": 16604
+    },
+    {
+      "file": "assets/We're losing power_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.19,
+      "afterLUFS": -16,
+      "truePeakDBTP": -4.85,
+      "compressed": true,
+      "bytes": 17372
+    },
+    {
+      "file": "assets/We've lost the port engine!_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.75,
+      "afterLUFS": -15.99,
+      "truePeakDBTP": -4.73,
+      "compressed": true,
+      "bytes": 24356
+    },
+    {
+      "file": "assets/We've lost the starboard engine!_Allision.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -21.17,
+      "afterLUFS": -16.01,
+      "truePeakDBTP": -5.77,
+      "compressed": true,
+      "bytes": 27836
+    },
+    {
+      "file": "assets/Withdrawing_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -23.32,
+      "afterLUFS": -16.02,
+      "truePeakDBTP": -3.65,
+      "compressed": true,
+      "bytes": 9740
+    },
+    {
+      "file": "assets/Yorktown disabled_Allison.mp3",
+      "targetLUFS": -16,
+      "beforeLUFS": -21.9,
+      "afterLUFS": -15.99,
+      "truePeakDBTP": -4.89,
+      "compressed": true,
+      "bytes": 22388
+    }
+  ]
+}

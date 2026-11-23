@@ -1,8 +1,12 @@
 /* Selected local recordings; loaded after the generated voice manifest. */
 Object.assign(window.BattleVoiceClips, {
-  "allison\nDirect hit to Yorktown!": "assets/voices/allison-direct-hit-synth.mp3",
-  "allison\nWe've lost the port engine!": "assets/voices/allison-port-engine-lost-synth.mp3",
-  "allison\nWe've lost the starboard engine!": "assets/voices/allison-starboard-engine-lost-synth.mp3",
+  "captain\nCaptain Declan, commanding Enterprise. Yorktown's captain has gone rogue and is hunting us near K7. We must disable her. All hands—battle stations!": "assets/Welcome introduction_short_Declan.mp3",
+  "captain\nYorktown's closing. Shields up. Helm, take us in...": "assets/Yorktown's closing. Shields up. Helm, take us in_Declan.mp3",
+  "captain\nI gave my best...": "assets/I gave my best_Declan.mp3",
+  "captain\nWe gave it our all...": "assets/We gave it our all_Declan.mp3",
+  "allison\nDirect hit to Yorktown!": "assets/Direct hit to Yorktown!_Allision.mp3",
+  "allison\nWe've lost the port engine!": "assets/We've lost the port engine!_Allision.mp3",
+  "allison\nWe've lost the starboard engine!": "assets/We've lost the starboard engine!_Allision.mp3",
   "helm\nBreaking away.": "assets/Breaking away_Erica.mp3",
   "helm\nClosing, Captain.": "assets/Closing, Captain_Erica.mp3",
   "helm\nComing to port.": "assets/Coming to port_Allison.mp3",
@@ -13,7 +17,7 @@ Object.assign(window.BattleVoiceClips, {
   "helm\nMaking for cover.": "assets/Making for cover_Allison.mp3",
   "helm\nCourse set. Brace.": "assets/Course set. Brace_Erica.mp3",
   "helm\nMatching course.": "assets/Matching course_Erica.mp3",
-  "helm\nPursuit course.": "assets/Pursuit course_Erica.mp3",
+  "helm\nPursuit course.": "assets/Pursuit course_Allison.mp3",
   "helm\nAdjusting range.": "assets/Adjusting range_Erica.mp3",
   "helm\nWithdrawing.": "assets/Withdrawing_Erica.mp3",
   "helm\nCloud tops. Correcting altitude.": "assets/Cloud tops. Correcting altitude_Erica.mp3",
@@ -65,6 +69,30 @@ Object.assign(window.BattleVoiceClips, {
   "helm\nPort shields took a hit": "assets/Port shields took a hit.mp3",
   "helm\nDorsal shields took a hit": "assets/Dorsal shields took a hit.mp3",
   "helm\nVentral shields took a hit": "assets/Ventral shields took a hit.mp3",
-  "helm\nWe're not going to last long": "assets/We're not going to last long.mp3",
-  "helm\nI've got a bad feeling about this": "assets/I've got a bad feeling about this.mp3"
+  "helm\nWe're not going to last long": "assets/We're not going to last long.mp3"
 });
+
+// New rendered responses replace synthesized dialogue for either helm role.
+for (const [text, file] of [
+  ['Direct hit to Yorktown!', 'Direct hit to Yorktown!'],
+  ["We've lost the port engine!", "We've lost the port engine!"],
+  ["We've lost the starboard engine!", "We've lost the starboard engine!"],
+  ['We missed!', 'We missed!'],
+  ["They're out of range.", "They're out of range"],
+  ["They're back in range.", "They're back in range"],
+  ["I'll try...", "I'll try"],
+  ['That might be hard...', 'That might be hard'],
+  ['That might be hard.', 'That might be hard'],
+  ['We took a direct hit!', 'We took a direct hit!'],
+  ['Direct Hit!', 'Direct Hit!'],
+  ["I'll do what I can...", "I'll do what I can"],
+  ["We're losing power.", "We're losing power"],
+  ['On screen.', 'On screen'],
+  ["No response. They're jamming our frequencies.", "No response. They're jamming our frequencies"],
+  ['Shields down to [X] percent!', 'Shields down to [X] percent!'],
+  ['Phasers offline!', 'Phasers offline!'],
+  ['Warp drive is down!', 'Warp drive is down!'],
+  ['Brace for impact!', 'Brace for impact!'],
+]) {
+  for (const role of ['allison', 'helm']) window.BattleVoiceClips[role + '\n' + text] = 'assets/' + file + '_Allision.mp3';
+}

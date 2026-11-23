@@ -31,13 +31,13 @@ test('all four offline reports follow actual system outages and become invalid w
     assert(warnings.update(sim).some(line=>line.text===label+' are offline'));
   }
 });
-test('overall shield collapse and escalating hull damage use the three matching warnings',()=>{
+test('overall shield collapse and critical hull damage warn without the removed bad-feeling line',()=>{
   const {sim,warnings}=harness();for(const arc of B.arcs)sim.player.shields[arc]=20;
   assert(warnings.update(sim).some(line=>line.text==='Shields at critical level'));
   for(const arc of B.arcs)sim.player.shields[arc]=0;
   assert(warnings.update(sim).some(line=>line.text==='Shields are offline'));
-  sim.player.hull=45;const uneasy=warnings.update(sim).find(line=>line.text==="I've got a bad feeling about this");assert(uneasy);
-  sim.player.hull=24;assert.equal(uneasy.valid(),false);
+  sim.player.hull=45;assert(!warnings.update(sim).some(line=>/bad feeling/i.test(line.text)));
+  sim.player.hull=24;
   assert(warnings.update(sim).some(line=>line.text==="We're not going to last long"));
   sim.time=60;assert.equal(warnings.update(sim).length,0,'persistent damage stays latched after cooldown');
 });
@@ -53,8 +53,8 @@ test('every new Erica warning resolves to its packaged recording',()=>{
   const context={window:{BattleVoiceClips:{}}};vm.createContext(context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../assets/voices/voice-overrides.js'),'utf8'),context);
   const clips=context.window.BattleVoiceClips;
-  const names=['The shields are taking damage','Shields at critical level','Sensors are offline','Shields are offline','Engines are offline','Weapons are offline',...Object.values(labels).flatMap(label=>[label+' shields at critical',label+' shields took a hit']),"We're not going to last long","I've got a bad feeling about this"];
-  assert.equal(names.length,20);
+  const names=['The shields are taking damage','Shields at critical level','Sensors are offline','Shields are offline','Engines are offline','Weapons are offline',...Object.values(labels).flatMap(label=>[label+' shields at critical',label+' shields took a hit']),"We're not going to last long"];
+  assert.equal(names.length,19);assert.equal(clips["helm\nI've got a bad feeling about this"],undefined);
   for(const name of names){assert.equal(clips['helm\n'+name],'assets/'+name+'.mp3');assert(fs.statSync(path.join(__dirname,'..',clips['helm\n'+name])).size>0);}
 });
 
@@ -78,7 +78,7 @@ test('range report does not announce an initial distant target, Free Flight, or 
 });
 
 
-test('Allison announces return to range once with a synthesized speaker and cancels stale return reports',()=>{
+test('Allison announces return to range once and cancels stale return reports',()=>{
   const sim=new B.Simulation(),warnings=new Warnings();sim.running=true;Object.assign(sim.player,{x:2000,y:0,z:0});Object.assign(sim.enemy,{x:2000,y:0,z:-1800});warnings.update(sim);
   sim.enemy.z=-2000;assert(warnings.update(sim).some(line=>line.text==="They're out of range."));
   sim.enemy.z=-1840;sim.time=5;const back=warnings.update(sim).find(line=>line.text==="They're back in range.");assert(back);assert.equal(back.speaker,'allison');assert(back.valid());

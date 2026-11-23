@@ -21,9 +21,11 @@ test('HD export preserves 4K, requests 60 fps and uses the high-quality encoder 
  assert.equal(e.canvas.width,3840);assert.equal(e.canvas.height,2160);assert.equal(e.canvas.fps,60);assert.equal(e.recorder.options.videoBitsPerSecond,50000000);assert.equal(e.recorder.options.audioBitsPerSecond,320000);
  e.stop();await e.mp4(await done);assert.equal(f.fetches.find(c=>c.url.endsWith('/mp4')).options.headers['X-Replay-Quality'],'hd');e.dispose();
 });
-test('native MP4 passes through and missing synthesized lines are cached by speaker',async()=>{
+test('native MP4 uses recorded dialogue and never requests synthesized missing lines',async()=>{
  const f=fixture(true),e=new f.Exporter(),event={type:'bridge-dialogue',speaker:'allison',reply:"They're back in range."};
- await e.prepare({events:[{event},{event}]});assert.equal(f.fetches.filter(call=>call.url.endsWith('/speech')).length,1);assert.equal(e.clipFor(event),'blob:speech');
+ f.window.BattleVoiceClips={['allison\n'+event.reply]:"assets/They're back in range_Allision.mp3"};
+ await e.prepare({events:[{event},{event},{event:{type:'bridge-dialogue',reply:'Unknown line'}}]});
+ assert.equal(f.fetches.length,0);assert.equal(e.clipFor(event),"assets/They're back in range_Allision.mp3");assert.equal(e.clipFor({reply:'Unknown line'}),undefined);
  const blob=new Blob(['native'],{type:'video/mp4'});assert.equal(await e.mp4(blob),blob);assert(!f.fetches.some(call=>call.url.endsWith('/mp4')));e.dispose();
 });
 test('cancelling a recording releases its tracks and prevents conversion',async()=>{

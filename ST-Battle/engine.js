@@ -7,12 +7,21 @@
   const systems=['engines','shields','weapons','sensors'];
   const Replay=typeof module==='object'&&module.exports?require('./replay.js'):globalThis.BattleReplay;
   const DESTRUCTION_DURATION=Replay?.DESTRUCTION_DURATION??5;
-  const targets={hull:'Primary hull',engines:'Impulse engines',mainEngines:'Main engines',bridge:'Bridge',shields:'Shield generators',weapons:'Weapons',sensors:'Sensors',reactor:'Reactor',...Object.fromEntries(arcs.map(a=>['shield-'+a,a[0].toUpperCase()+a.slice(1)+' shield']))};
+  const targets={hull:'Primary hull',engines:'Impulse engines',mainEngines:'Warp engines',bridge:'Bridge',shields:'Shield generators',weapons:'Weapons',sensors:'Sensors',reactor:'Reactor',...Object.fromEntries(arcs.map(a=>['shield-'+a,a[0].toUpperCase()+a.slice(1)+' shield']))};
   const weaponSpecs={phaser:{name:'Phaser',energy:28,reserve:3,maxRange:1500,optimal:[500,1000]},torpedo:{name:'Torpedo',energy:24,reserve:1.5,maxRange:1900,optimal:[300,700]}};
   const maneuvers={direct:{name:'Direct assault',description:'Close head-on, fire your sequence, then break away.'},port:{name:'Curving attack — to port',description:'Sweep to your port side before turning in to attack.'},starboard:{name:'Curving attack — to starboard',description:'Sweep to your starboard side before turning in to attack.'},above:{name:'Attack from above',description:'Climb above Yorktown, then dive into your attack run.'},below:{name:'Attack from below',description:'Descend below Yorktown, then climb into your attack run.'},behind:{name:'Attack from behind',description:'Sweep around Yorktown, get astern, then fire from behind.'},hide:{name:'Hide then direct assault',description:'Seek cover behind K7, wait six seconds, then attack.'},ram:{name:'Ram',description:'Attempt a high-speed collision. A solid impact causes massive damage to both ships.'},close:{name:'Close battle',description:'Match Yorktown\'s course and speed. Both ships can fire in any direction.'},chase:{name:'Chase',description:'Follow Yorktown at a distance without withdrawing, even after assigned attacks are spent.'},distance:{name:'Keep your distance',description:'Hold near your selected firing range and pull away when Yorktown closes in.'},flee:{name:'Flee and effect repairs',description:'Withdraw during your share of the turn. Divert power and repair the most damaged areas with available parts.'}};
   const DEFAULT_SALVO=Object.freeze({phaser:2,torpedo:1}),ATTACK_COUNT=3;
   const TURN={execution:30,planning:30,approach:12,attack:12,disengage:3,withdraw:30,review:30};
   const COMBO=Object.freeze({window:6,systemMultiplier:1.5});
+  const ENEMY_PERSONALITIES=Object.freeze({
+    aggressive:{name:'Aggressive',range:.82,retreatHull:18,styles:{press:6,flank:3,standoff:1},targets:{hull:5,weapons:2,engines:1}},
+    flanker:{name:'Flanker',range:1,retreatHull:25,styles:{press:2,flank:6,standoff:2},targets:{hull:3,weapons:3,engines:2}},
+    hunter:{name:'Engine hunter',range:.95,retreatHull:25,styles:{press:4,flank:5,standoff:1},targets:{hull:1,weapons:2,mainEngines:7}},
+    cautious:{name:'Cautious',range:1.25,retreatHull:38,styles:{press:1,flank:3,standoff:6},targets:{hull:2,weapons:5,engines:3}}
+  });
+  const COMBAT_VARIATION=Object.freeze({damage:.1,failureChance:.12,failureDuration:4,failureCooldown:12});
+  // Shared by both ships: shield management matters more than raw damage rolls.
+  const VULNERABILITY=Object.freeze({exposedHull:1.5,penetratingHull:1.15,subsystems:1.2,shieldRecharge:.8});
   const PLANET={name:'Mars',x:-13000,y:-3000,z:-18000,radius:2800,atmosphere:60};
   const direction=s=>({x:Math.sin(s.heading*RAD)*Math.cos(s.pitch*RAD),y:Math.sin(s.pitch*RAD),z:-Math.cos(s.heading*RAD)*Math.cos(s.pitch*RAD)});
   const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
@@ -25,6 +34,65 @@
     const f=v.x*d.x+v.y*d.y+v.z*d.z,r=v.x*Math.cos(h)+v.z*Math.sin(h),u=-v.x*Math.sin(h)*Math.sin(p)+v.y*Math.cos(p)+v.z*Math.cos(h)*Math.sin(p);
     if(Math.abs(u)>Math.max(Math.abs(f),Math.abs(r)))return u>0?'dorsal':'ventral';
     if(Math.abs(f)>Math.abs(r))return f>0?'fore':'aft';return r>0?'starboard':'port';
+  }
+  // Compound oriented boxes follow the rendered model (scale 57, local Z offset 25).
+  // Saucer strips preserve its round outline without filling the spaces beside the hull.
+  const SHIP_CONTACT_PARTS=[];
+  for(let i=0;i<12;i++){
+    const a=-.69+i*1.38/12,b=a+1.38/12,near=Math.min(Math.abs(a),Math.abs(b));
+    SHIP_CONTACT_PARTS.push({part:'saucer',center:[0,.35,-1.12+(a+b)/2],half:[Math.sqrt(.69**2-near**2),.14,(b-a)/2]});
+  }
+  SHIP_CONTACT_PARTS.push(
+    {part:'bridge',center:[0,.51,-1.12],half:[.18,.07,.18]},
+    {part:'sensor dome',center:[0,.205,-1.12],half:[.22,.075,.22]},
+    {part:'hull',center:[0,.02,-.15],half:[.16,.16,.625]},
+    {part:'neck',center:[0,.235,-.54],half:[.04,.16,.245]}
+  );
+  for(const [side,sign] of [['port',-1],['starboard',1]]){
+    SHIP_CONTACT_PARTS.push({part:'nacelle',side,center:[sign*.56,.53,.135],half:[.105,.105,.815]});
+    for(let i=0;i<4;i++){
+      const t=(i+.5)/4;
+      SHIP_CONTACT_PARTS.push({part:'pylon',side,center:[sign*(.075+.475*t),.05+.46*t,-.05+.22*t],half:[.08,.075,.12]});
+    }
+  }
+  const dot3=(a,b)=>a.x*b.x+a.y*b.y+a.z*b.z;
+  function shipCollisionShapes(ship){
+    const h=ship.heading*RAD,p=(ship.pitch||0)*RAD,b=ship.bank||0,ch=Math.cos(h),sh=Math.sin(h),cp=Math.cos(p),sp=Math.sin(p),cb=Math.cos(b),sb=Math.sin(b);
+    const axes=[{x:ch*cb-sh*sp*sb,y:cp*sb,z:sh*cb+ch*sp*sb},{x:-ch*sb-sh*sp*cb,y:cp*cb,z:-sh*sb+ch*sp*cb},{x:-sh*cp,y:-sp,z:ch*cp}];
+    return SHIP_CONTACT_PARTS.filter(part=>!part.side||!ship.detachedNacelles?.[part.side]).map(part=>{
+      const local=part.center.map(v=>v*57);local[2]+=25;
+      const center={x:ship.x,y:ship.y,z:ship.z};
+      for(let i=0;i<3;i++)for(const axis of ['x','y','z'])center[axis]+=axes[i][axis]*local[i];
+      const half=part.half.map(v=>v*57+.4),extent={};
+      for(const axis of ['x','y','z'])extent[axis]=half.reduce((sum,h,i)=>sum+h*Math.abs(axes[i][axis]),0);
+      return {part:part.part,side:part.side,center,axes,half,extent};
+    });
+  }
+  function collisionAxes(aa,bb){
+    const axes=[...aa[0].axes,...bb[0].axes];
+    for(const u of aa[0].axes)for(const v of bb[0].axes){
+      const n={x:u.y*v.z-u.z*v.y,y:u.z*v.x-u.x*v.z,z:u.x*v.y-u.y*v.x},len=Math.hypot(n.x,n.y,n.z);
+      if(len>1e-7)axes.push({x:n.x/len,y:n.y/len,z:n.z/len});
+    }
+    return axes;
+  }
+  function shipContact(a,b,padding=0){
+    if(distance(a,b)>260+padding)return null;
+    const aa=shipCollisionShapes(a),bb=shipCollisionShapes(b),axes=collisionAxes(aa,bb);
+    let deepest=null;
+    for(const u of aa)for(const v of bb){
+      const delta={x:v.center.x-u.center.x,y:v.center.y-u.center.y,z:v.center.z-u.center.z};
+      if(['x','y','z'].some(axis=>Math.abs(delta[axis])>u.extent[axis]+v.extent[axis]+padding*2))continue;
+      let depth=Infinity,normal=null;
+      for(const n of axes){
+        const r=box=>box.half.reduce((sum,h,i)=>sum+(h+padding/2)*Math.abs(dot3(box.axes[i],n)),0);
+        const projection=dot3(delta,n),overlap=r(u)+r(v)-Math.abs(projection);
+        if(overlap<=0){normal=null;break;}
+        if(overlap<depth){depth=overlap;const sign=projection<0?-1:1;normal={x:n.x*sign,y:n.y*sign,z:n.z*sign};}
+      }
+      if(normal&&(!deepest||depth>deepest.depth))deepest={depth,normal,parts:[u.part,v.part],pos:{x:(u.center.x+v.center.x)/2,y:(u.center.y+v.center.y)/2,z:(u.center.z+v.center.z)/2}};
+    }
+    return deepest;
   }
   function ship(name,x,y,z,heading){return {name,x,y,z,heading,pitch:0,bank:0,turnRate:0,throttle:0,speed:MIN_IMPULSE_SPEED,hull:100,reactor:100,
     integrity:{engines:100,shields:100,weapons:100,sensors:100,bridge:100,mainEngines:100},power:{engines:24,shields:30,weapons:30,sensors:16},
@@ -61,7 +129,31 @@
   class Simulation{
     constructor(seed=97,{turnBased=true,randomStart=false}={}){this.seed=seed;this.turnBased=turnBased;this.randomStart=randomStart;this.reset();}
     random(){this.seed=(Math.imul(this.seed,1664525)+1013904223)>>>0;return this.seed/4294967296;}
-    reset(){if(this.freeFlight)this.turnBased=this.combatTurnBased;this.freeFlight=false;this.lastReplay=null;this.replayRecording=null;this.station=makeK7();this.planet={...PLANET};this.lastPlanetWarning=-10;this.player=ship('Enterprise',0,0,150,0);this.enemy=ship('Yorktown',380,150,-1600,168);this.enemy.throttle=45;this.enemyRetreating=false;this.shipsTouching=false;this.enemyMind={nextThink:0,lastKnown:null,evadeUntil:0,threatId:null,waitingOrder:null,waitingSince:0};this.warpUsed=false;this.time=0;this.running=false;this.result=null;this.events=[];this.log=[];this.projectiles=[];this.target='hull';this.environment='nebula';this.scanUntil=0;this.aiShot=6;this.aiTorp=11;this.hits=0;this.shots=0;this.resetBattleStats();this.initTurns();if(this.randomStart)this.randomizeStartingPositions();this.message('COMMAND','Yorktown is hunting you. All stations, stand by.');}
+    get enemyPersonalityProfile(){return ENEMY_PERSONALITIES[this.enemyPersonality]||ENEMY_PERSONALITIES.flanker;}
+    setEnemyPersonality(selection){
+      if(this.result||!Object.hasOwn(ENEMY_PERSONALITIES,selection))return false;
+      if(selection===this.enemyPersonality)return true;
+      this.enemyPersonality=selection;
+      this.enemyMind.nextTactic=-1;this.enemyMind.nextThink=0;this.enemyMind.appliedTactic=null;
+      this.chooseEnemyTactics();
+      if(this.running&&this.turnBased&&this.maneuvering&&!this.freeFlight)this.thinkEnemy();
+      return true;
+    }
+    weightedChoice(entries){
+      let roll=this.random()*entries.reduce((sum,[,weight])=>sum+weight,0);
+      for(const [value,weight] of entries){roll-=weight;if(roll<0)return value;}
+      return entries[entries.length-1][0];
+    }
+    chooseEnemyTactics(){
+      const m=this.enemyMind;if(this.time<(m.nextTactic??-1))return;
+      const profile=this.enemyPersonalityProfile,e=this.enemy;
+      const styles=Object.entries(profile.styles).map(([style,weight])=>[style,weight*(style==='standoff'&&(e.capacitor<35||e.heat>70)?3:1)]);
+      m.style=this.weightedChoice(styles);m.arcRoll=this.random();
+      m.preferredTarget=this.enemyHasContact(true)?this.weightedChoice(Object.entries(profile.targets)):'hull';
+      m.rangeScale=profile.range*({press:.9,flank:1,standoff:1.12}[m.style]);
+      m.nextTactic=this.time+6+this.random()*4;
+    }
+    reset(){if(this.freeFlight)this.turnBased=this.combatTurnBased;this.freeFlight=false;this.lastReplay=null;this.replayRecording=null;this.station=makeK7();this.planet={...PLANET};this.lastPlanetWarning=-10;this.player=ship('Enterprise',0,0,150,0);this.enemy=ship('Yorktown',380,150,-1600,168);this.enemy.throttle=45;this.enemyRetreating=false;this.shipsTouching=false;this.enemyMind={nextThink:0,lastKnown:null,evadeUntil:0,threatId:null,waitingOrder:null,waitingSince:0};this.warpUsed=false;this.time=0;this.running=false;this.result=null;this.events=[];this.log=[];this.projectiles=[];this.target='hull';this.environment='nebula';this.scanUntil=0;this.aiShot=6;this.aiTorp=11;this.hits=0;this.shots=0;this.resetBattleStats();this.initTurns();if(this.randomStart)this.randomizeStartingPositions();this.enemyPersonality=this.weightedChoice(Object.keys(ENEMY_PERSONALITIES).map(key=>[key,1]));this.message('COMMAND','Yorktown is hunting you. All stations, stand by.');}
     resetBattleStats(){
       this.captainEnabled=false;this.captainStatus='';this.playerMind={nextThink:0,lastKnown:null,arc:null,order:null,waitingSince:0,failedRoutes:{}};
       this.difficulty??='captain';this.battleStats={score:0,chain:0,bestChain:0,lastScoredAt:-Infinity,optimalHits:0,victoryBonus:0};
@@ -148,7 +240,7 @@
       const intactOutput=output*hardware/Math.min(hardware,factor);
       return Math.max(.08,Math.min(clamp(output/24,minimum,maximum),clamp(intactOutput/24,minimum,maximum)*factor));
     }
-    output(s,key){return s.power[key]*s.reactor/100*s.integrity[key]/100*(.5+s.integrity.bridge/200)*(key==='engines'?Math.min(.35+s.integrity.mainEngines*.0065,this.nacelleSpeedFactor(s)):1);}
+    output(s,key){if((s.systemFailures?.[key]||0)>this.time)return 0;return s.power[key]*s.reactor/100*s.integrity[key]/100*(.5+s.integrity.bridge/200)*(key==='engines'?Math.min(.35+s.integrity.mainEngines*.0065,this.nacelleSpeedFactor(s)):1);}
     initTurns(){
       this.turn={number:1,phase:'planning',remaining:TURN.planning,elapsed:0,revisions:2,
         draft:Array(ATTACK_COUNT).fill(null),draftManeuvers:[null,null,null],draftManeuver:null,maneuvers:null,stageIndex:0,maneuver:null,navigation:null,orders:null,enemyOrders:null,spent:{player:{phaser:0,torpedo:0},enemy:{phaser:0,torpedo:0}},offArcSpent:{player:false,enemy:false},baseline:null,report:null};
@@ -171,6 +263,7 @@
       if(!this.turnBased||this.freeFlight||this.result||!['planning','review'].includes(this.turn.phase))return false;
       const presets={
         timid:{routes:['distance','hide','flee'],shots:[['phaser','weapons',1400,0],['phaser','weapons',1200,1],['torpedo','engines',1600,1]]},
+        disabling:{routes:['port','close','behind'],shots:[['phaser','weapons',900,0],['phaser','weapons',800,1],['torpedo','engines',650,1]]},
         strong:{routes:['port','distance','chase'],shots:[['phaser','shields',1000,0],['phaser','weapons',1200,1],['torpedo','hull',1400,2]]},
         aggressive:{routes:['direct','close','chase'],shots:[['phaser','weapons',700,0],['phaser','bridge',550,1],['torpedo','reactor',650,2]]},
         berserk:{routes:['direct','close','ram'],shots:[['phaser','weapons',500,0],['phaser','bridge',400,1],['torpedo','reactor',300,1]]}
@@ -187,13 +280,13 @@
       const finishNow=seen.detailed&&seen.hull<=1&&seen.shields[facing(seen,p)]<25&&distance(p,seen)<=700&&angle(p,seen)<28&&p.torpedoes>0&&p.capacitor>=24&&p.cooldown.torpedo===0&&p.integrity.weapons>=10&&p.reactor>=25&&!this.stationTrace(p,seen);
       const emergency=!finishNow&&repairable&&(p.hull<32||p.integrity.weapons<10||p.integrity.engines<12||p.integrity.mainEngines<15||p.integrity.sensors<10||p.reactor<25);
       const noWeapons=p.integrity.weapons<10;
-      if(emergency||noWeapons){
+      if(emergency||noWeapons&&repairable){
         Object.assign(this.turn,{draft:Array(ATTACK_COUNT).fill(null),draftManeuvers:['flee',null,null],draftManeuver:'flee'});
         this.captainStatus=repairable?'Withdraw, recharge shields and repair the weakest essential system.':'Disengage: preserve Enterprise while weapons or hull are critical.';return true;
       }
       const arc=seen.detailed?this.captainAttackArc(seen):null;
       const candidates=['direct','port','starboard','above','below','behind','hide'].map(route=>({route,score:this.captainRouteScore(route,seen,arc)})).sort((a,b)=>a.score-b.score);
-      const first=candidates[0].route,routes=[first,null,null],internal=this.captainInternalTarget(seen),breached=seen.detailed&&seen.shields[arc]<25;
+      const first=noWeapons?'close':candidates[0].route,routes=[first,null,null],internal=this.captainInternalTarget(seen),breached=seen.detailed&&seen.shields[arc]<25;
       const phaseTarget=seen.detailed&&!breached?'shield-'+arc:internal;
       const fleeing=this.captainTargetEscaping(seen),longRange=fleeing&&p.integrity.engines<60;
       const cautious=p.hull<50||p.capacitor<35||p.heat>70;
@@ -205,7 +298,7 @@
       if(arc)for(const order of draft)order.attackArc=arc;
       if(!this.planReady(draft,routes))return false;
       Object.assign(this.turn,{draft,draftManeuvers:routes,draftManeuver:first});this.playerMind.arc=arc;
-      this.captainStatus=!seen.contact?'Restore sensors and close on the last known contact.':breached?'Exploit the '+arc+' breach; '+internal+' targeted.':'Open the '+(arc||'facing')+' shield, then hit '+internal+'.';return true;
+      this.captainStatus=noWeapons?'Weapons disabled. Holding close contact.':!seen.contact?'Restore sensors and close on the last known contact.':breached?'Exploit the '+arc+' breach; '+internal+' targeted.':'Open the '+(arc||'facing')+' shield, then hit '+internal+'.';return true;
     }
     captainObservation(){
       const p=this.player,m=this.playerMind;
@@ -294,6 +387,7 @@
       return this.previewAttackArc;
     }
     planEnemy(){
+      this.chooseEnemyTactics();
       if(this.previewNacelleBreakoff&&this.previewEngineSide()){
 
         return [{weapon:'phaser',range:1000},{weapon:'phaser',range:900},{weapon:'torpedo',range:800}].map(order=>({...order,target:'mainEngines',attackArc:this.previewAttackArc}));
@@ -303,7 +397,7 @@
       if(this.enemyHasContact())this.rememberEnemyContact();
       const phasers=[{weapon:'phaser',target,range:1000},{weapon:'phaser',target,range:750}],torpedo={weapon:'torpedo',target:internal,range:650};
       const bursts=Array.from({length:DEFAULT_SALVO.phaser},(_,i)=>({...phasers[i%phasers.length]})),torpedoes=Array.from({length:DEFAULT_SALVO.torpedo},()=>({...torpedo}));
-      return (detailed&&shield<25?[...torpedoes,...bursts]:[...bursts,...torpedoes]).map(order=>({...order,attackArc:detailed?arc:null}));
+      return (detailed&&shield<25?[...torpedoes,...bursts]:[...bursts,...torpedoes]).map(order=>({...order,tactical:true,baseRange:order.range,range:clamp(Math.round(order.range*this.enemyMind.rangeScale/25)*25,400,weaponSpecs[order.weapon].maxRange-50),attackArc:detailed?arc:null}));
     }
     enemyHasContact(detailed=false){return this.range<2000&&this.enemy.integrity.sensors>12&&this.output(this.enemy,'sensors')>=(detailed?10:3.5);}
     rememberEnemyContact(){const p=this.player;this.enemyMind.lastKnown={x:p.x,y:p.y,z:p.z,heading:p.heading,pitch:p.pitch,speed:p.speed,at:this.time};}
@@ -313,20 +407,37 @@
       const e=this.enemy,d=direction(e);return {x:e.x+d.x*1000,y:e.y+d.y*1000,z:e.z+d.z*1000,heading:e.heading,pitch:e.pitch,speed:0};
     }
     enemyAttackArc(){
+      const engineSide=this.enemyWarpEngineSide();if(engineSide)return engineSide;
       const p=this.player,e=this.enemy,exposed=facing(p,e),offset={fore:0,starboard:90,aft:180,port:270,dorsal:0,ventral:0};
-      let best=exposed,score=Infinity;
+      const candidates=[];
       for(const arc of arcs){
         const a=(p.heading+offset[arc])*RAD,vertical=arc==='dorsal'||arc==='ventral';
         const point={x:p.x+(vertical?0:Math.sin(a)*650),y:p.y+(arc==='dorsal'?650:arc==='ventral'?-650:0),z:p.z-(vertical?0:Math.cos(a)*650)};
-        const cost=p.shields[arc]+(arc===exposed?-18:20)+angle(e,point)*.12+(this.stationTrace(e,point,60)?35:0);
-        if(cost<score){best=arc;score=cost;}
-      }return best;
+        const flankBonus=this.enemyMind.style==='flank'&&['aft','port','starboard'].includes(arc)?30:0;
+        const cost=p.shields[arc]+(arc===exposed?-18:20)+angle(e,point)*.12+(this.stationTrace(e,point,60)?35:0)-flankBonus;
+        candidates.push({arc,cost});
+      }
+      candidates.sort((a,b)=>a.cost-b.cost);
+      const strong=candidates.filter(candidate=>candidate.cost<=candidates[0].cost+12).slice(0,3);
+      return strong[Math.min(strong.length-1,Math.floor((this.enemyMind.arcRoll??0)**2*strong.length))].arc;
+    }
+    enemyWarpEngineSide(){
+      if(this.enemyPersonality!=='hunter'||!this.enemyHasContact(true))return null;
+      const p=this.player,m=this.enemyMind,lost=p.detachedNacelles;
+      if(lost.port&&lost.starboard){m.warpEngineSide=null;return null;}
+      if(!m.warpEngineSide||lost[m.warpEngineSide]){
+        const right=(this.enemy.x-p.x)*Math.cos(p.heading*RAD)+(this.enemy.z-p.z)*Math.sin(p.heading*RAD);
+        m.warpEngineSide=lost.port?'starboard':lost.starboard?'port':p.shields.port===p.shields.starboard?(right<0?'port':'starboard'):p.shields.port<p.shields.starboard?'port':'starboard';
+      }
+      return m.warpEngineSide;
     }
     enemyInternalTarget(){
+      if(this.enemyWarpEngineSide())return 'mainEngines';
       const p=this.player;if(p.hull<35)return 'hull';
-      const candidates=['weapons','engines','reactor','bridge','mainEngines','sensors'].filter(key=>(key==='reactor'?p.reactor:p.integrity[key])>8);
+      const candidates=['weapons','engines','reactor','bridge','mainEngines','sensors'].filter(key=>(key!=='mainEngines'||!p.detachedNacelles.port||!p.detachedNacelles.starboard)&&(key==='reactor'?p.reactor:p.integrity[key])>8);
       const weak=candidates.sort((a,b)=>(a==='reactor'?p.reactor:p.integrity[a])-(b==='reactor'?p.reactor:p.integrity[b]))[0];
-      return weak&&(weak==='reactor'?p.reactor:p.integrity[weak])<60?weak:'hull';
+      const preferred=this.enemyMind.preferredTarget==='mainEngines'&&p.detachedNacelles.port&&p.detachedNacelles.starboard?'hull':this.enemyMind.preferredTarget;
+      return weak&&(weak==='reactor'?p.reactor:p.integrity[weak])<60?weak:preferred||'hull';
     }
     reengageEnemy(){
       const m=this.enemyMind,choices=['port','starboard','above','below','behind'].filter(key=>key!==m.returnManeuver);
@@ -345,11 +456,13 @@
     }
     enemyPressesAdvantage(){
       const p=this.player,e=this.enemy;
+      // Enterprise red alert overrides even Yorktown's emergency retreat.
+      if(!this.freeFlight&&p.hull>0&&p.hull<25)return true;
       const vulnerable=p.hull<99.99||p.reactor<99.99||Object.values(p.integrity).some(value=>value<99.99)||Object.values(p.detachedNacelles||{}).some(Boolean)||Object.values(p.shields).some(value=>value<25);
       return !this.freeFlight&&p.hull>0&&e.hull>=15&&e.integrity.weapons>=10&&vulnerable;
     }
     thinkEnemy(){
-      const e=this.enemy,p=this.player,m=this.enemyMind;if(this.time<m.nextThink)return;m.nextThink=this.time+.75;
+      const e=this.enemy,p=this.player,m=this.enemyMind;if(this.time<m.nextThink)return;m.nextThink=this.time+.75;this.chooseEnemyTactics();
       const contact=this.enemyHasContact(),detailed=this.enemyHasContact(true);if(contact)this.rememberEnemyContact();
       const pressing=this.enemyPressesAdvantage();if(pressing)this.enemyRetreating=false;
       const threat=contact?p:this.enemyTrack(),exposed=facing(e,threat),order=this.nextOrder(e);
@@ -368,7 +481,7 @@
         const h=e.heading*RAD,side=e.shields.port>=e.shields.starboard?1:-1;
         m.evadeAim={x:e.x+Math.cos(h)*600*side,y:e.y,z:e.z+Math.sin(h)*600*side};m.evadeUntil=this.time+2.2;
       }
-      if(this.enemyRetreating&&e.hull>=35&&e.integrity.engines>=40&&e.integrity.weapons>=30){this.enemyRetreating=false;this.message('TACTICAL','Yorktown has stabilized and is re-engaging.');}
+      if(this.enemyRetreating&&e.hull>=Math.max(35,this.enemyPersonalityProfile.retreatHull+10)&&e.integrity.engines>=40&&e.integrity.weapons>=30){this.enemyRetreating=false;this.message('TACTICAL','Yorktown has stabilized and is re-engaging.');}
       let profile,stance;
       if(this.enemyRetreating){profile={engines:45,shields:35,weapons:10,sensors:10};stance='RETREATING';}
       else if(!pressing&&m.reengageUntil>this.time){profile={engines:34,shields:28,weapons:26,sensors:12};stance='RE-ENGAGING';}
@@ -378,9 +491,23 @@
       else if(order&&this.range<=order.range+120&&angle(e,p)<45){profile={engines:20,shields:24,weapons:44,sensors:12};stance='ATTACKING';}
       else{profile={engines:40,shields:22,weapons:26,sensors:12};stance='PURSUING';}
       Object.assign(e.power,profile);e.tactic=stance;
+      if(!this.enemyRetreating&&contact&&!pressing&&m.evadeUntil<=this.time){
+        if(m.style==='standoff')redistribute(e.power,'shields',Math.max(e.power.shields,34));
+        else if(m.style==='press')redistribute(e.power,'weapons',Math.max(e.power.weapons,34));
+      }
       if(order!==m.waitingOrder){m.waitingOrder=order;m.waitingSince=this.time;}
       if(detailed&&order){
         const current=facing(p,e),breached=p.shields[current]<25;
+        // Refresh only unspent orders; decisions never reset the firing budget.
+        if(m.appliedTactic!==m.nextTactic){
+          m.appliedTactic=m.nextTactic;
+          for(const pending of this.turn.enemyOrders||[])if(pending.status==='pending'&&pending.tactical){
+            const base=pending.baseRange;
+            pending.range=clamp(Math.round(base*m.rangeScale/25)*25,400,weaponSpecs[pending.weapon].maxRange-50);
+            pending.attackArc=this.enemyAttackArc();
+            pending.target=pending.weapon==='phaser'&&p.shields[pending.attackArc]>=25?'shield-'+pending.attackArc:this.enemyInternalTarget();
+          }
+        }
         if(order.weapon==='torpedo'||breached){order.target=this.enemyInternalTarget();if(breached)order.attackArc=current;}
         else if(order.weapon==='phaser'&&p.shields[current]<60){order.target='shield-'+current;order.attackArc=current;}
         if(order.weapon==='torpedo'){
@@ -388,6 +515,8 @@
           if(away>.5&&p.speed>e.speed*.9)order.range=Math.max(order.range,Math.min(1700,this.range+50));
         }
         if(this.time-m.waitingSince>10){order.attackArc=angle(e,p)<45&&this.range<=order.range+300?current:this.enemyAttackArc();if(order.target.startsWith('shield-'))order.target='shield-'+order.attackArc;}
+        const engineSide=this.enemyWarpEngineSide();
+        if(engineSide){order.attackArc=engineSide;order.target=order.weapon==='phaser'&&p.shields[engineSide]>=25?'shield-'+engineSide:'mainEngines';}
         if(this.previewNacelleBreakoff){order.target='mainEngines';order.attackArc=this.previewEngineSide();}
       }
     }
@@ -606,7 +735,7 @@
     autoHelm(dt,keys={}){
       const t=this.turn,p=this.player,e=this.enemy,n=t.navigation;if(!n)return;
       n.elapsed+=dt;let aim=e;
-      n.retiring=this.nextStageIndex()<0&&!['flee','chase'].includes(t.maneuver)&&t.stageCompletedAt!==null;
+      n.retiring=false;
       if(t.phase==='disengage'||t.maneuver==='flee'||n.retiring){
         const d=direction(p),v={x:p.x-e.x,y:p.y-e.y,z:p.z-e.z};if(Math.hypot(v.x,v.y,v.z)<1)Object.assign(v,d);
         aim={x:p.x+v.x,y:p.y+v.y+150,z:p.z+v.z};
@@ -728,15 +857,13 @@
           const next=this.nextStageIndex();
           if(next>=0)this.startStage(next);
           else{
-            if(t.cleanupDeadline===null)t.cleanupDeadline=this.time+(t.maneuver==='flee'||stalled?0:2);
+            if(t.cleanupDeadline===null)t.cleanupDeadline=this.time+(t.maneuver==='flee'||stalled?0:.5);
             if(this.time>=t.cleanupDeadline||!this.nextOrder(this.enemy)||this.enemyRetreating){
               for(const pending of t.enemyOrders)if(pending.status==='pending')pending.status='skipped';
-              if(t.maneuver==='chase'){
-                if(this.projectiles.length===0)this.finishPass();
-                return true;
-              }
-              const retreat=t.maneuver==='flee';this.restoreFlightPower();this.setPhase('disengage');if(retreat)t.remaining=0;
-              this.message('HELM',n.aborted?'Maneuver aborted. Breaking away.':'Selected maneuvers complete. Automatic breakaway before damage review.');
+              // Resolve live projectiles in place instead of adding a withdrawal leg.
+              const handoff=stalled||['flee','chase'].includes(t.maneuver)?0:.5;
+              if(this.projectiles.length===0&&this.time-t.stageCompletedAt>=handoff)this.finishPass();
+              return true;
             }
           }
         }
@@ -744,6 +871,30 @@
         this.finishPass();
       }
       return true;
+    }
+    resolveShipCollision(previousPositions){
+      const p=this.player,e=this.enemy,ships=[p,e],steps=ships.map(s=>{
+        const before=previousPositions?.[s.name]||s;
+        return {x:s.x-before.x,y:s.y-before.y,z:s.z-before.z};
+      });
+      // Sample movement for thin-component contacts without changing either ship's motion.
+      const travel=steps.map(step=>Math.hypot(step.x,step.y,step.z)),count=Math.max(1,Math.ceil((travel[0]+travel[1])/4));
+      if(distance(p,e)>260+travel[0]+travel[1]){this.shipsTouching=false;return;}
+      let impact=null,closing=0;
+      for(let step=0;step<=count;step++){
+        const samples=ships.map((ship,i)=>({...ship,x:ship.x-steps[i].x*(1-step/count),y:ship.y-steps[i].y*(1-step/count),z:ship.z-steps[i].z*(1-step/count)}));
+        const contact=shipContact(...samples);
+        if(contact){
+          impact=contact;const [a,b]=samples,pd=direction(p),ed=direction(e),r=distance(a,b)||1;
+          closing=((pd.x*p.speed-ed.x*e.speed)*(b.x-a.x)+(pd.y*p.speed-ed.y*e.speed)*(b.y-a.y)+(pd.z*p.speed-ed.z*e.speed)*(b.z-a.z))/r;
+          break;
+        }
+      }
+      if(impact&&!this.shipsTouching){
+        this.ramImpact(closing);
+        this.events.push({type:'ship-collision',ship:p.name,other:e.name,pos:impact.pos});
+      }
+      this.shipsTouching=!!impact||!!shipContact(p,e,3);
     }
     ramImpact(closingSpeed){
       const t=this.turn;if(this.freeFlight||this.result||!this.turnBased||t.maneuver!=='ram'||!['approach','attack'].includes(t.phase)||t.remaining<=0||t.navigation?.rammed||closingSpeed<60)return false;
@@ -896,6 +1047,8 @@
     }
     damage(target,source,amount,weapon,aim,hit=null){
       if(this.freeFlight||this.result)return;
+      const damageRoll=amount>0&&Object.hasOwn(weaponSpecs,weapon)?1+(this.random()*2-1)*COMBAT_VARIATION.damage:1;
+      amount*=damageRoll;
       if(source===this.enemy)amount*=this.difficultyProfile.enemyDamage;
       const arc=facing(target,source),shield=target.shields[arc],hullBefore=target.hull;
       const opening=target.phaserCombo;
@@ -914,28 +1067,49 @@
       // Weakened shields leak sooner, and an overloaded hit can penetrate immediately.
       const protection=combo?Math.min(shield,20):shield;
       const penetration=protection<40?.65+(40-protection)/80:Math.max(0,shieldDamage-protection)/Math.max(shieldDamage,1)*.7;
-      const calculatedHullDamage=amount*penetration*(weapon==='torpedo'?1.35:.65)*.18*(aim==='hull'?1.35:1);
+      const hullMultiplier=protection<25?VULNERABILITY.exposedHull:VULNERABILITY.penetratingHull;
+      const calculatedHullDamage=amount*penetration*(weapon==='torpedo'?1.35:.65)*.18*(aim==='hull'?1.35:1)*hullMultiplier;
       target.hull=clamp(target.hull-calculatedHullDamage);
       const hullDamage=hullBefore-target.hull;
       this.drawEnergy(target,(shield-target.shields[arc])*.035+Math.min(hullDamage,hullBefore)*.6);
       let system=null;
       if(hullDamage>0){
         const available=[...systems,'reactor','bridge','mainEngines'];system=hit&&available.includes(hit.component)?hit.component:aim&&aim!=='hull'&&!shieldAim&&Object.hasOwn(targets,aim)&&this.random()<.78?aim:available[Math.floor(this.random()*available.length)];
-        const systemDamage=hullDamage*(combo?COMBO.systemMultiplier:1);
+        // Internal bulkheads soften the escalation: +20% system damage, not +50%.
+        const systemDamage=hullDamage/hullMultiplier*VULNERABILITY.subsystems*(combo?COMBO.systemMultiplier:1);
         if(system==='reactor')target.reactor=clamp(target.reactor-systemDamage,12,100);
         else target.integrity[system]=clamp(target.integrity[system]-systemDamage*1.8);
         // Damage to power conduits also cuts total available output.
         target.reactor=clamp(target.reactor-systemDamage*.12,12,100);
       }
+      let failure=null;
+      if(hullDamage>0&&target.hull>0&&target.shields[arc]===0&&this.time>=(target.nextSystemFailure??0)&&this.random()<COMBAT_VARIATION.failureChance){
+        const candidates=systems.filter(key=>key!=='shields'&&target.integrity[key]>12&&this.output(target,key)>3.5);
+        if(candidates.length){
+          failure=candidates.includes(system)?system:candidates[Math.floor(this.random()*candidates.length)];
+          target.systemFailures??={};target.systemFailures[failure]=this.time+COMBAT_VARIATION.failureDuration;
+          target.nextSystemFailure=this.time+COMBAT_VARIATION.failureCooldown;
+          this.events.push({type:'system-failure',ship:target.name,system:failure,until:target.systemFailures[failure],duration:COMBAT_VARIATION.failureDuration});
+          this.message(target===this.player?'DAMAGE':'TACTICAL',`${target.name}: ${failure} temporarily offline after shield breach. Rerouting power (${COMBAT_VARIATION.failureDuration}s).`);
+        }
+      }
       let scorePoints=0;
       if(source===this.player){this.hits++;scorePoints=this.scoreHit(shield-target.shields[arc],Math.min(hullDamage,hullBefore),weapon);}
       else if(target===this.player){this.battleStats.chain=0;this.battleStats.lastScoredAt=-Infinity;}
-      this.events.push({type:'impact',ship:target.name,arc,hullDamage,amount,weapon,system,hit,scorePoints,chain:this.activeChain,combo,shieldBroken:shield>0&&target.shields[arc]===0,shieldDepleted:target.shields[arc]===0});
+      this.events.push({type:'impact',ship:target.name,arc,hullDamage,amount,weapon,system,hit,damageRoll,failure,scorePoints,chain:this.activeChain,combo,shieldBroken:shield>0&&target.shields[arc]===0,shieldDepleted:target.shields[arc]===0});
       if(hullDamage>0&&['port','starboard'].includes(hit?.pylonSide)&&!target.detachedNacelles?.[hit.pylonSide]){
 
         target.detachedNacelles??={port:false,starboard:false};target.detachedNacelles[hit.pylonSide]=true;
         target.integrity.mainEngines=Math.min(target.integrity.mainEngines,100-50*Object.values(target.detachedNacelles).filter(Boolean).length);
         this.events.push({type:'nacelle-detached',ship:target.name,side:hit.pylonSide,point:hit.point});
+        if(target===this.player&&this.enemyPersonality==='hunter'){
+          this.enemyMind.nextThink=0;this.enemyMind.appliedTactic=null;
+          const side=this.enemyWarpEngineSide();
+          if(this.enemyHasContact(true))for(const order of this.turn.enemyOrders||[])if(order.status==='pending'){
+            order.attackArc=side||this.enemyAttackArc();
+            order.target=side?(order.weapon==='phaser'&&target.shields[side]>=25?'shield-'+side:'mainEngines'):this.enemyInternalTarget();
+          }
+        }
         if(target===this.player&&this.previewNacelleBreakoff){
           const remaining=this.previewEngineSide();
           if(!remaining)this.previewNacelleBreakoff=false;
@@ -972,6 +1146,10 @@
       if(this.turnBased&&!this.advanceTurn(dt))return;
       if(this.result||!this.maneuvering){this.captureReplay(true);return;}
       this.time+=dt;
+      for(const ship of [this.player,this.enemy])for(const [system,until] of Object.entries(ship.systemFailures||{}))if(until<=this.time){
+        delete ship.systemFailures[system];this.events.push({type:'system-restored',ship:ship.name,system});
+        this.message(ship===this.player?'DAMAGE':'TACTICAL',`${ship.name}: ${system} power restored.`);
+      }
       const p=this.player,e=this.enemy;
       if(keys.more||keys.less||p.throttle!==0)p.fullStop=false;
       if(keys.stop)this.stopEnterprise();
@@ -1001,13 +1179,13 @@
       if(Math.abs(p.speed)<MIN_IMPULSE_SPEED)p.speed=Math.sign(desired)*MIN_IMPULSE_SPEED;
       }
       const pressing=this.enemyPressesAdvantage();if(pressing)this.enemyRetreating=false;
-      if(!pressing&&!this.freeFlight&&e.hull<25&&!this.enemyRetreating&&this.time>=(this.enemyMind.reengageUntil||0)){
+      if(!pressing&&!this.freeFlight&&e.hull<this.enemyPersonalityProfile.retreatHull&&!this.enemyRetreating&&this.time>=(this.enemyMind.reengageUntil||0)){
         this.enemyRetreating=true;
         Object.assign(e.power,{engines:45,shields:35,weapons:10,sensors:10});
         e.repair='engines';
         this.message('TACTICAL','Yorktown is badly damaged and attempting to retreat.');
       }
-      const m=this.enemyMind,runningAway=!pressing&&!this.freeFlight&&this.time>=(m.reengageUntil||0)&&(this.enemyRetreating||this.turnBased&&(this.turn.phase==='disengage'||!this.nextOrder(e)));
+      const m=this.enemyMind,runningAway=!pressing&&!this.freeFlight&&this.time>=(m.reengageUntil||0)&&this.enemyRetreating;
       if(runningAway){m.runAwaySince??=this.time;if(this.time-m.runAwaySince>=10-1e-8)this.reengageEnemy();}
       else m.runAwaySince=null;
       const enemyReturning=!pressing&&!this.freeFlight&&m.reengageUntil>this.time;
@@ -1019,7 +1197,7 @@
       const attackRun=range<1450&&(this.aiShot<1.5||this.aiTorp<1.5);
       const away={x:e.x+(e.x-enemyTarget.x),y:e.y+(e.y-enemyTarget.y),z:e.z+(e.z-enemyTarget.z)};
       if(distance(enemyTarget,e)<1){const d=direction(e);away.x=e.x+d.x*1000;away.y=e.y+d.y*1000;away.z=e.z+d.z*1000;}
-      let aim=enemyReturning?enemyTarget:this.enemyRetreating||!pressing&&this.turnBased&&(this.turn.phase==='disengage'||!this.nextOrder(e))?away:this.turnBased?enemyTarget:pressing||attackRun?p:waypoint;
+      let aim=enemyReturning?enemyTarget:this.enemyRetreating?away:this.turnBased?enemyTarget:pressing||attackRun?p:waypoint;
       if(this.freeFlight){const o=this.freeFlightOrbit,a=o.angle+.25;aim={x:this.station.x+Math.cos(a)*o.radius,y:this.station.y+o.height,z:this.station.z+Math.sin(a)*o.radius};}
       const enemyOrder=this.nextOrder(e);let enemyPositioning=!enemyLocked;
       if(this.turnBased&&enemyLocked&&this.turn.phase!=='disengage'&&!this.enemyRetreating&&enemyOrder&&(enemyOrder.attackArc||enemyOrder.target.startsWith('shield-'))){
@@ -1043,7 +1221,7 @@
       const rate=26*this.flightMobility(e,.1,1.5);
       if(!this.freeFlight)this.steerFlight(e,aim,dt,rate,18);
       if(this.turnBased){
-        const mode=enemyReturning?'position':this.enemyRetreating?'escape':this.turn.phase==='disengage'||!enemyOrder?(pressing?'pursuit':'breakaway'):enemyPositioning||enemyAvoiding?'position':'attack';
+        const mode=enemyReturning?'position':this.enemyRetreating?'escape':this.turn.phase==='disengage'||!enemyOrder?'pursuit':enemyPositioning||enemyAvoiding?'position':'attack';
         this.adjustFlightSpeed(e,enemyTarget,aim,{mode,order:enemyOrder,avoiding:enemyAvoiding,turnRate:rate},dt);
       }else this.easeFlightSpeed(e,this.freeFlight?Math.max(MIN_IMPULSE_SPEED,55*this.nacelleSpeedFactor(e)):Math.max(MIN_IMPULSE_SPEED,(this.enemyRetreating?110:range>700?70:range<240?20:43)*this.flightMobility(e,.1,1.5)*IMPULSE_SPEED_MULTIPLIER),dt);
       if(p.fullStop){p.speed=0;p.throttle=0;p.flightAcceleration=0;}
@@ -1055,24 +1233,11 @@
         const capacitorBefore=s.capacitor,shieldsBefore=arcs.reduce((sum,a)=>sum+s.shields[a],0),partsBefore=s.repairBudget;
         const reserveSupply=(.25+.75*clamp(s.energyReserve/15,0,1))*this.nacelleSpeedFactor(s);
         s.capacitor=clamp(s.capacitor+this.output(s,'weapons')*.42*reserveSupply*dt);s.heat=Math.max(0,s.heat-dt*(5+this.output(s,'weapons')*.12));
-        for(const a of arcs)s.shields[a]=clamp(s.shields[a]+this.output(s,'shields')*.03*reserveSupply*(this.turnBased?.3:1)*(s.bias[a]/16.667)*dt*(this.time-s.lastHit>3?1:.18));
+        for(const a of arcs)s.shields[a]=clamp(s.shields[a]+this.output(s,'shields')*.03*VULNERABILITY.shieldRecharge*reserveSupply*(this.turnBased?.3:1)*(s.bias[a]/16.667)*dt*(this.time-s.lastHit>3?1:.18));
         if(s.repairBudget>0&&this.time-s.lastHit>6){const key=s.repair,current=key==='hull'?s.hull:key==='reactor'?s.reactor:s.integrity[key],gain=Math.min(100-current,dt*(key==='hull'?.35:.65),s.repairBudget);if(key==='reactor')s.reactor+=gain;else if(key==='hull')s.hull+=gain;else s.integrity[key]+=gain;s.repairBudget-=gain;}
         this.updateEnergy(s,dt,s.capacitor-capacitorBefore,arcs.reduce((sum,a)=>sum+s.shields[a],0)-shieldsBefore,partsBefore-s.repairBudget);
       }
-      const separation=distance(p,e);
-      if(separation>120)this.shipsTouching=false;
-      if(separation<100){
-        if(!this.shipsTouching){
-          const pd=direction(p),ed=direction(e),r=separation||1;
-          const closing=((pd.x*p.speed-ed.x*e.speed)*(e.x-p.x)+(pd.y*p.speed-ed.y*e.speed)*(e.y-p.y)+(pd.z*p.speed-ed.z*e.speed)*(e.z-p.z))/r;
-          this.ramImpact(closing);
-        }
-        if(!this.shipsTouching)this.events.push({type:'ship-collision',ship:p.name,other:e.name,pos:{x:(p.x+e.x)/2,y:(p.y+e.y)/2,z:(p.z+e.z)/2}});
-        this.shipsTouching=true;
-        const dx=e.x-p.x||1,dy=e.y-p.y,dz=e.z-p.z,len=Math.hypot(dx,dy,dz);
-        if(this.freeFlight){p.x=e.x-dx/len*100;p.y=e.y-dy/len*100;p.z=e.z-dz/len*100;}
-        else{e.x=p.x+dx/len*100;e.y=p.y+dy/len*100;e.z=p.z+dz/len*100;}
-      }
+      this.resolveShipCollision(previousPositions);
       // Yorktown tracks through a low-visibility region, but needs a closer fire solution.
       this.aiShot-=dt;this.aiTorp-=dt;
       if(!this.turnBased&&(!this.enemyRetreating||angle(e,p)>90&&this.inFiringArc('phaser',e,p))&&this.aiShot<=0&&range<(this.environment==='nebula'?1250:1500)&&this.fire('phaser',e,p))this.aiShot=4.2;
@@ -1101,5 +1266,5 @@
       this.captureReplay();
     }
   }
-  return {Simulation,COMBO,DEFAULT_SALVO,ATTACK_COUNT,TURN,PLANET,targets,weaponSpecs,maneuvers,PHASER_DURATION,DESTRUCTION_DURATION,MIN_IMPULSE_SPEED,K7_ROTATION_RATE,targetingColor,makeK7,clamp,wrap,delta,direction,distance,bearing,elevation,angle,facing,redistribute,arcs,systems};
+  return {Simulation,shipCollisionShapes,shipContact,ENEMY_PERSONALITIES,COMBAT_VARIATION,VULNERABILITY,COMBO,DEFAULT_SALVO,ATTACK_COUNT,TURN,PLANET,targets,weaponSpecs,maneuvers,PHASER_DURATION,DESTRUCTION_DURATION,MIN_IMPULSE_SPEED,K7_ROTATION_RATE,targetingColor,makeK7,clamp,wrap,delta,direction,distance,bearing,elevation,angle,facing,redistribute,arcs,systems};
 });

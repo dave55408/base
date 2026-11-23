@@ -1,0 +1,5 @@
+Captain Geffen personnel portrait edit
+Tool: built-in image_gen
+Saved asset: assets/crew/geffen.png
+
+Edit the supplied Captain Geffen personnel portrait for ST Battle. Keep the same recognizable fictional man, olive skin, black hair with silver temples, angular clean-shaven face, mustard gold uniform and insignia, square chest-up composition, navy starship bridge, bold ink outlines, flat cel shading and printed-paper texture. Change primarily his facial expression so he looks kind of crazy: intense wide gray eyes with smaller pupils, one eyebrow raised and the other sharply lowered, a crooked slightly toothy mischievous grin, a few subtly unruly strands of hair. He should read as a dangerously gleeful rogue captain, slightly unhinged and overconfident, still believable as a personnel portrait. Moderate expression, not grotesque or horror. Preserve the art quality, lighting, background and uniform. No text or watermark. Output square PNG.

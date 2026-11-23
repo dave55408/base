@@ -1092,7 +1092,9 @@ window.BattleScene=class{
     const localSource=model.worldToLocal(origin.clone()),side=localSource.x<0?-1:1;
     const anchors={hull:[0,.3,-1.12],bridge:[0,.55,-1.12],engines:[0,.375,-.445],mainEngines:[side*.56,.53,.1+(to.userData.nacelleAftOffset||0)],reactor:[0,.02,-.02],shields:[0,.1,-.58+(to.userData.nacelleAftOffset||0)],weapons:[side*.4,.32,-1.3],sensors:[0,.15,-1.12]};
     const previewPylon=this.sim.previewNacelleBreakoff&&shooter===this.sim.enemy&&target===this.sim.player&&!this.sim.freeFlight;
-    const pylon=previewPylon?to.userData.breakupParts.find(part=>part.userData.pylonSide===(this.sim.previewAttackArc|| (side<0?'port':'starboard'))):null;
+    const hunterPylon=aim==='mainEngines'&&this.sim.enemyPersonality==='hunter'&&shooter===this.sim.enemy&&target===this.sim.player&&this.sim.enemyHasContact(true)?this.sim.enemyMind.warpEngineSide:null;
+    const pylonSide=previewPylon?(this.sim.previewAttackArc||(side<0?'port':'starboard')):hunterPylon;
+    const pylon=pylonSide?to.userData.breakupParts.find(part=>part.userData.pylonSide===pylonSide):null;
     const selected=pylon?pylon.position.toArray():anchors[aim]||anchors.hull,endpoint=model.localToWorld(new T.Vector3(...selected));
     const result=projectileEnd?this.traceHull(to,origin,new T.Vector3(projectileEnd.x,projectileEnd.y,projectileEnd.z)):this.traceHull(to,origin,endpoint)||this.traceHull(to,origin,model.localToWorld(new T.Vector3(...anchors.hull)));
     if(!result)return undefined;

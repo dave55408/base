@@ -38,12 +38,177 @@ function interfaceHarness(options={}){
   const context={Battle:TestBattle,BattleReplay:Replay,BattleScene:Scene,window:{},document,console,performance:{now:()=>0},devicePixelRatio:1,setTimeout:fn=>{timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id),addEventListener:(name,fn)=>handlers[name]=fn,requestAnimationFrame:fn=>frame=fn};
   context.window.addEventListener=context.addEventListener;
   Object.assign(context.window,options.window||{});
-  vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(root,'target-diagram.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(root,'planner.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(root,'replay-view.js'),'utf8'),context);for(const file of ['bridge-dialogue.js','assets/voices/voice-clips.js','bridge-voices.js','bridge-warnings.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(root,'app.js'),'utf8'),context);
+  vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(root,'target-diagram.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(root,'planner.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(root,'replay-view.js'),'utf8'),context);for(const file of ['bridge-dialogue.js','assets/voices/voice-clips.js','bridge-voices.js','bridge-warnings.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context);if(options.narration)vm.runInContext(fs.readFileSync(path.join(root,'captain-narration.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(root,'app.js'),'utf8'),context);
   context.window.battle.turnBased=options.turnBased??false;
   if(options.voiceClips)context.window.BattleVoiceClips=options.voiceClips;
   const key=(key,code='')=>({key,code,preventDefault(){},target:{tagName:'BODY'},repeat:false});
   return {sim:context.window.battle,scene:context.window.battleScene,replay:context.window.battleReplay,elements,handlers,document,runTimers:()=>{const callbacks=[...timers.values()];timers.clear();for(const fn of callbacks)fn();},step:ms=>frame(ms),key};
 }
+
+
+function renderedHarness(players,options={}){
+  const manifest={window:{BattleVoiceClips:{}}};
+  vm.runInNewContext(fs.readFileSync(path.join(root,'assets/voices/voice-overrides.js'),'utf8'),manifest);
+  class Audio{constructor(url){this.url=url;if(url==='assets/IntroMusic.mp3')options.introMusicPlayers?.push(this);else players.push(this);}play(){return Promise.resolve();}pause(){this.paused=true;}}
+  return interfaceHarness({...options,voiceClips:manifest.window.BattleVoiceClips,window:{...options.window,Audio,speechSynthesis:{speak(){assert.fail('must not synthesize');}}}});
+}
+
+test('Yorktown personality dropdown shows the rolled personality and allows manual selection',()=>{
+  const h=interfaceHarness({turnBased:true}),e=h.elements,s=h.sim;
+  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+  const selector=html.match(/<select id="yorktown-personality"[^>]*>(.*?)<\/select>/)[1];
+  assert(!selector.includes('value="random"'));assert.equal((selector.match(/<option /g)||[]).length,4);
+  assert.equal(e['yorktown-personality'].value,s.enemyPersonality);
+  for(const choice of ['cautious','hunter','aggressive','flanker']){
+    e['yorktown-personality'].onchange({target:{value:choice}});
+    assert.equal(s.enemyPersonality,choice);assert.equal(e['yorktown-personality'].value,choice);
+  }
+  e['quick-battle'].onclick();e['yorktown-personality'].onchange({target:{value:'cautious'}});
+  assert.equal(s.enemyPersonality,'cautious');
+  e['quick-rematch'].onclick();assert.equal(e['yorktown-personality'].value,s.enemyPersonality);
+});
+
+test('Declan welcome yields to one fight opening before normal bridge dialogue without holding battle',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true,narration:true});h.sim.tick=()=>{};
+  assert.equal(players[0].url,'assets/Welcome introduction_short_Declan.mp3');
+  h.elements['quick-battle'].onclick();assert.equal(players[0].paused,true);assert.equal(h.sim.running,true);
+  h.step(60);const opening=players.at(-1);assert.match(opening.url,/Yorktown's closing.*_Declan\.mp3$/);
+  assert.equal(h.elements['captain-dialogue'].hidden,false);assert.equal(h.elements['helm-reply'].textContent,'');
+  const count=players.length;h.step(3060);assert.equal(players.length,count,'normal dialogue cannot overlap the opening');
+  opening.onended();h.step(3120);assert.equal(players.at(-1).url,'assets/Come to port_Declan.mp3');
+  players.at(-1).onended();h.runTimers();players.at(-1).onended();
+  h.sim.finishPass();h.elements['quick-battle'].onclick();h.step(3180);
+  assert.equal(players.filter(audio=>/Yorktown's closing/.test(audio.url)).length,1,'later turns do not repeat the opening');
+  h.elements['quick-rematch'].onclick();h.step(3240);
+  assert.equal(players.filter(audio=>/Yorktown's closing/.test(audio.url)).length,2,'a new fight gets a new opening');
+});
+
+test('welcome narration survives idle UI refreshes and can be replayed explicitly',async()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true,narration:true});
+  await new Promise(setImmediate);const intro=players[0];assert.equal(intro.paused,undefined);
+  for(let i=1;i<=30;i++)h.step(i*120);
+  assert.notEqual(intro.paused,true,'standby UI refresh must not stop the welcome narration');
+  assert.equal(players.length,1,'refreshes do not create duplicate introductions');
+  h.handlers.keydown({...h.key('Enter','Enter'),target:{id:'play-welcome-intro',tagName:'BUTTON'}});
+  assert.equal(h.sim.running,false,'keyboard activation of the introduction must not start combat');
+  h.elements['play-welcome-intro'].onclick();assert.equal(intro.paused,true);
+  assert.equal(players.length,2);assert.equal(players[1].url,'assets/Welcome introduction_short_Declan.mp3');
+  await new Promise(setImmediate);h.step(3720);assert.notEqual(players[1].paused,true);
+  h.elements['quick-battle'].onclick();assert.equal(players[1].paused,true,'leaving welcome still stops narration');
+});
+
+test('welcome IntroMusic plays at sixty percent, survives refresh and voice mute, and stops for combat',async()=>{
+  const players=[],introMusicPlayers=[],h=renderedHarness(players,{turnBased:true,narration:true,introMusicPlayers});h.sim.tick=()=>{};
+  assert.equal(players[0].url,'assets/Welcome introduction_short_Declan.mp3');
+  const music=introMusicPlayers[0];assert.equal(music.url,'assets/IntroMusic.mp3');assert.equal(music.volume,.6);
+  await new Promise(setImmediate);h.step(120);h.step(240);assert.notEqual(music.paused,true);
+  h.elements['voices-mute'].onclick();h.step(360);assert.notEqual(music.paused,true);
+  h.elements['quick-battle'].onclick();assert.equal(music.paused,true);
+});
+
+test('ColdOpen continues through welcome refreshes and voice mute, then stops for the fight',async()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true,narration:true});h.sim.tick=()=>{};
+  await new Promise(setImmediate);players[0].onended();await new Promise(setImmediate);
+  const music=players[1];assert.equal(music.url,'assets/ColdOpenHit.mp3');
+  for(let i=1;i<=10;i++)h.step(i*120);assert.notEqual(music.paused,true);
+  h.elements['voices-mute'].onclick();h.step(1320);assert.notEqual(music.paused,true);
+  h.elements['quick-battle'].onclick();assert.equal(music.paused,true);
+});
+
+test('Declan farewell follows Helm lost without overlap and suppresses other post-defeat dialogue',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true,narration:true});h.sim.tick=()=>{};
+  h.elements['quick-battle'].onclick();h.step(60);const opening=players.at(-1);
+  for(const arc of B.arcs)h.sim.player.shields[arc]=0;h.sim.player.hull=1;
+  h.sim.damage(h.sim.player,h.sim.enemy,999,'torpedo','hull');h.step(120);
+  assert.equal(opening.paused,true);const lost=players.at(-1);assert.equal(lost.url,'assets/Helm lost!_Erica.mp3');
+  const count=players.length;h.step(180);assert.equal(players.length,count);
+  lost.onended();h.step(240);assert.equal(players.length,count);h.step(1679);assert.equal(players.length,count,'farewell waits 1.5 seconds after Helm lost ends');
+  h.step(1680);const farewell=players.at(-1);
+  assert(['assets/I gave my best_Declan.mp3','assets/We gave it our all_Declan.mp3'].includes(farewell.url));
+  assert.match(h.elements['helm-order'].textContent,/^(I gave my best|We gave it our all)/);
+  assert.equal(h.elements['helm-reply'].textContent,'');
+  assert(h.sim.lastReplay.events.some(({event})=>event.type==='bridge-dialogue'&&/^(I gave my best|We gave it our all)/.test(event.order)));
+  farewell.onended();h.sim.events.push({type:'warp'},{type:'destroyed',ship:'Yorktown'});h.step(1740);
+  assert.equal(players.at(-1),farewell,'other queued or later reports stay silent after the farewell');
+});
+
+test('replay also pauses 1.5 seconds between Helm lost and Declan final statement',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true,narration:true});
+  h.replay.active=true;h.replay.player={paused:false,ended:false,state:h.sim};h.replay.tick=()=>{};
+  h.replay.options.dialogue({order:'',reply:'Helm lost!'});
+  h.replay.options.dialogue({order:'I gave my best...',reply:''});
+  h.step(100);const lost=players.at(-1);assert.equal(lost.url,'assets/Helm lost!_Erica.mp3');
+  const count=players.length;lost.onended();h.step(1599);assert.equal(players.length,count);
+  h.step(1600);assert.equal(players.at(-1).url,'assets/I gave my best_Declan.mp3');
+});
+
+test('muting voices suppresses welcome and fight narration without queuing an opening for later turns',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true,narration:true});h.sim.tick=()=>{};
+  h.elements['voices-mute'].onclick();assert.equal(players[0].paused,true);
+  h.elements['quick-battle'].onclick();h.step(60);h.step(3060);
+  assert.equal(players.length,1);h.elements['voices-mute'].onclick();h.sim.finishPass();h.elements['quick-battle'].onclick();h.step(3120);
+  assert(!players.some(audio=>/Yorktown's closing/.test(audio.url)));
+});
+
+test('a long Declan fight opening does not hold weapons after the initial three seconds',async()=>{
+  const players=[];
+  class AudioContext{constructor(){this.state='running';}resume(){return Promise.resolve();}}
+  class WeaponAudio{setEnabled(){}stopAll(){}}
+  class FiringVoices{prepare(){assert.fail('opening narration must not gate a shot');}}
+  const h=renderedHarness(players,{turnBased:true,narration:true,window:{AudioContext,BattleWeaponAudio:WeaponAudio,BattleFiringVoices:FiringVoices}});
+  h.sim.tick=()=>{};h.handlers['document:pointerdown']();await new Promise(setImmediate);
+  h.elements['quick-battle'].onclick();h.step(60);h.step(4000);
+  assert.match(players.at(-1).url,/Yorktown's closing/);assert.equal(h.sim.beforePlayerFire('phaser',true),true);
+});
+
+test('difficult commands use Allison recordings while ordinary orders keep their normal acknowledgments',()=>{
+  for(const problem of ['healthy','engines','weapons','sensors','empty-magazine','no-parts']){
+    const players=[],h=renderedHarness(players,{turnBased:true}),s=h.sim;s.tick=()=>{};s.running=true;
+    if(problem==='no-parts'){s.player.repairBudget=0;s.selectManeuver('flee');}
+    else{
+      s.applyPlanPreset('strong');
+      if(['engines','weapons','sensors'].includes(problem))s.player.integrity[problem]=0;
+      if(problem==='empty-magazine'){
+        s.player.torpedoes=0;
+        for(let i=0;i<3;i++)s.updateStep(i,{weapon:'torpedo',target:'engines',range:650,maneuvers:[0,1,2]});
+      }
+    }
+    assert(s.commitOrders());h.step(60);
+    assert.equal(h.elements['helm-reply'].textContent,problem==='healthy'?'Coming to port.':"I'll do what I can...",problem);
+    players.at(-1).onended();h.runTimers();
+    assert.equal(players.at(-1).url,problem==='healthy'?'assets/Coming to port_Allison.mp3':"assets/I'll do what I can_Allision.mp3",problem);
+    assert.equal(players.at(-1).volume,.85);players.at(-1).onended();
+    if(problem==='weapons'){
+      h.step(120);assert.equal(players.at(-1).url,'assets/Weapons are offline.mp3');players.at(-1).onended();
+      s.startStage(1);h.step(180);
+      assert.equal(h.elements['helm-reply'].textContent,"I'll try...");
+      assert.equal(h.elements['helm-speaker'].textContent,'HELM (Allison)');
+      players.at(-1).onended();h.runTimers();assert.equal(players.at(-1).url,"assets/I'll try_Allision.mp3");
+      assert(s.turn.orders.every(order=>order.status==='pending'),'a cautious reply does not cancel or execute the orders');
+      players.at(-1).onended();s.startStage(2);h.step(240);
+      assert.equal(h.elements['helm-reply'].textContent,"That might be hard... I'll try...");
+      players.at(-1).onended();h.runTimers();assert.equal(players.at(-1).url,'assets/That might be hard_Allision.mp3');
+      players.at(-1).onended();h.runTimers();assert.equal(players.at(-1).url,"assets/I'll try_Allision.mp3");
+      const replies=s.replayRecording.record.events.filter(({event})=>event.type==='bridge-dialogue').map(({event})=>event.reply).filter(Boolean);
+      assert.deepEqual(Array.from(replies.slice(-2)),['That might be hard...',"I'll try..."],'replays keep both recordings in order');
+    }
+  }
+});
+
+test('Helm labels identify Allison and Erica as recorded responses change',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
+  h.elements['quick-battle'].onclick();h.step(3060);
+  assert.equal(h.elements['helm-speaker'].textContent,'HELM (Allison)');
+  assert.equal(h.elements['helm-speaker'].attrs['data-voice'],'allison');
+  players.at(-1).onended();h.runTimers();players.at(-1).onended();
+  h.sim.events.push({type:'warp'});h.step(3200);
+  assert.equal(h.elements['helm-speaker'].textContent,'HELM (Erica)');
+  assert.equal(h.elements['helm-speaker'].attrs['data-voice'],'erica');
+  players.at(-1).onended();
+  h.sim.events.push({type:'torpedo-missed',from:'Enterprise',target:'Yorktown'});h.step(3260);
+  assert.equal(h.elements['helm-speaker'].textContent,'HELM (Allison)');
+  assert.equal(h.elements['helm-reply'].textContent,'We missed!');
+});
 
 test('Quick Battle offers difficulty, starts a complete plan, and Quick Rematch preserves difficulty',()=>{
   const {sim,elements:e}=interfaceHarness({turnBased:true});assert.equal(e['launch-card'].hidden,false);
@@ -76,9 +241,9 @@ test('blocked local storage does not prevent quick play or debrief',()=>{
   h.elements['quick-battle'].onclick();h.sim.selfDestruct();for(let i=1;i<=270;i++)h.step(i*60);assert.equal(h.elements.result.hidden,false);
 });
 
-test('Wary, Strong, Aggressive and Berserk fill complete editable drafts at the top of the planner',()=>{
-  const routes={timid:['distance','hide','flee'],strong:['port','distance','chase'],aggressive:['direct','close','chase'],berserk:['direct','close','ram']};
-  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(html.indexOf('id="preset-timid"')<html.indexOf('<nav class="wizard-steps"'));
+test('Quick settings fill complete editable drafts at the top of the planner',()=>{
+  const routes={timid:['distance','hide','flee'],disabling:['port','close','behind'],strong:['port','distance','chase'],aggressive:['direct','close','chase'],berserk:['direct','close','ram']};
+  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(html.indexOf('id="preset-timid"')<html.indexOf('id="preset-disabling"'));assert(html.indexOf('id="preset-disabling"')<html.indexOf('id="preset-strong"'));assert(html.indexOf('id="preset-strong"')<html.indexOf('<nav class="wizard-steps"'));
   for(const style of Object.keys(routes)){
     const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();
     const original=JSON.stringify(sim.turn.draft);e['preset-'+style].onclick();
@@ -100,7 +265,7 @@ test('preset plans can be customized or cancelled without changing live orders',
 });
 
 test('live quick settings remain transactional and respect the revision budget',()=>{
-  for(const style of ['timid','strong','aggressive','berserk']){
+  for(const style of ['timid','disabling','strong','aggressive','berserk']){
     const {sim,elements:e}=interfaceHarness({turnBased:true});e['quick-battle'].onclick();e['open-planner'].onclick();
     const before=JSON.stringify(sim.turn),budget=sim.turn.revisions;
     e['preset-'+style].onclick();assert.equal(JSON.stringify(sim.turn),before);
@@ -109,7 +274,7 @@ test('live quick settings remain transactional and respect the revision budget',
     e['open-planner'].onclick();e['preset-'+style].onclick();e['wizard-apply'].onclick();
     assert.equal(e['plan-wizard'].open,false);assert(sim.turn.revisions>=0);assert(sim.turn.revisions<=budget);
     if(style!=='strong')assert.equal(sim.turn.revisions,0,'a different preset uses the two available edits');
-    if(!sim.turn.revisions){e['open-planner'].onclick();for(const key of ['timid','strong','aggressive','berserk'])assert.equal(e['preset-'+key].disabled,true);}
+    if(!sim.turn.revisions){e['open-planner'].onclick();for(const key of ['timid','disabling','strong','aggressive','berserk'])assert.equal(e['preset-'+key].disabled,true);}
   }
 });
 
@@ -247,12 +412,12 @@ test('battle starts immediately while voices wait three seconds, including remat
     h.elements['quick-battle'].onclick();assert.equal(intros.length,1);
     const positions=JSON.stringify([h.sim.player.x,h.sim.player.y,h.sim.player.z,h.sim.enemy.x,h.sim.enemy.y,h.sim.enemy.z]),remaining=h.sim.turn.remaining;
     h.step(60);assert(h.sim.time>0);assert(h.sim.turn.remaining<remaining);assert.equal(audio.length+spoken.length,0);
-    h.step(2999);assert.equal(audio.length+spoken.length,0);h.step(3000);assert(audio.length+spoken.length>0);
+    h.step(2999);assert.equal(audio.length+spoken.length,0);h.step(3000);assert.equal(spoken.length,0);assert.equal(audio.length>0,recorded);
     assert.notEqual(JSON.stringify([h.sim.player.x,h.sim.player.y,h.sim.player.z,h.sim.enemy.x,h.sim.enemy.y,h.sim.enemy.z]),positions);
     const count=audio.length+spoken.length;
     h.elements['quick-rematch'].onclick();assert.equal(intros.length,2);h.step(3060);
     assert(h.sim.time>0);assert.equal(audio.length+spoken.length,count);
-    h.step(6000);assert(audio.length+spoken.length>count,'rematches delay only voices, not battle');
+    h.step(6000);assert.equal(spoken.length,0);assert.equal(audio.length>count,recorded,'rematches delay only recorded voices, not battle');
   }
 });
 
@@ -917,7 +1082,7 @@ test('Reset clears the complete planner draft and permits a fresh plan without c
   e['wizard-reset'].onclick();
   assert.equal(e['plan-wizard'].open,true);assert.equal(e['wizard-commit'].disabled,true);
   assert.equal(e['done-maneuvers'].disabled,true);assert.equal(e['attack-range'].value,1000);
-  for(const style of ['timid','strong','aggressive','berserk'])assert.equal(e['preset-'+style].attrs['aria-pressed'],'false');
+  for(const style of ['timid','disabling','strong','aggressive','berserk'])assert.equal(e['preset-'+style].attrs['aria-pressed'],'false');
   for(const key of Object.keys(B.maneuvers))assert.equal(e['maneuver-'+key].attrs['aria-pressed'],'false');
   for(const target of Object.keys(B.targets))assert.equal(e['target-'+target].attrs['aria-pressed'],'false');
   for(const weapon of ['phaser','torpedo'])assert.equal(e['choose-'+weapon].attrs['aria-pressed'],'false');
@@ -968,7 +1133,7 @@ test('Yorktown strategy toggles and follows the actual attack plan through execu
   assert.match(e['yorktown-strategy-orders'].children[0].children[1].textContent,/NEXT/);
   sim.running=false;orders[0].status='fired';orders[1].target='engines';orders[1].range=1250;
   sim.enemyMind.evadeUntil=sim.time+10;step(150);
-  assert.equal(e['yorktown-strategy-tactic'].textContent,'Evasive maneuver');
+  assert.equal(e['yorktown-strategy-tactic'].textContent,'Evasive maneuver');assert.equal(e['yorktown-personality'].value,sim.enemyPersonality);
   assert.equal(e['yorktown-strategy-orders'].children.length,1);
   assert.match(e['yorktown-strategy-orders'].children[0].children[1].textContent,/12.5 km \/ NEXT/);
   assert(e['yorktown-strategy-orders'].children[0].children[0].textContent.includes(B.targets.engines));
@@ -998,7 +1163,7 @@ test('Yorktown shows the current attack out of the actual plan total',()=>{
 
 test('Every quick setting returns to maneuver review even when selected from an attack page',()=>{
   const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();
-  for(const style of ['timid','strong','aggressive','berserk']){
+  for(const style of ['timid','disabling','strong','aggressive','berserk']){
     e['preset-strong'].onclick();e['plan-step-1'].onclick();
     assert.equal(e['plan-wizard'].attrs['data-view'],'attacks');
     e['preset-'+style].onclick();
@@ -1031,10 +1196,10 @@ test('helm conversations follow event order and clear on reset',()=>{
   assert.equal(e['helm-reply'].textContent,'');
   e['quick-battle'].onclick();h.step(60);
   assert.equal(e['helm-dialogue'].hidden,false);
-  assert.match(e['helm-order'].textContent,/CAPTAIN.*port/);
+  assert.match(e['helm-order'].textContent,/port/);assert.equal(e['captain-dialogue'].hidden,false);
   assert.match(e['helm-reply'].textContent,/Coming to port/);
   h.sim.events.push({type:'impact',ship:'Enterprise',hullDamage:5});h.step(120);
-  assert.match(e['helm-reply'].textContent,/Hull hit/);assert.equal(e['helm-order'].textContent,'');
+  assert.match(e['helm-reply'].textContent,/Hull hit/);assert.equal(e['helm-order'].textContent,'');assert.equal(e['captain-dialogue'].hidden,true);
   h.sim.finishPass();h.step(180);
   assert.match(e['helm-reply'].textContent,/Awaiting orders/,'without audio, the next completed event can display immediately');
   for(let i=4;i<110;i++)h.step(i*60);
@@ -1059,6 +1224,60 @@ test('incoming torpedo alerts disappear with the projectile and cannot play late
       assert(h.elements['helm-dialogue'].hidden||h.elements['helm-reply'].textContent!=='Torpedo incoming!','an expired queued alert never appears later');
     }
   }
+});
+
+test('incoming warnings require a nearby closing trajectory, sensors, and an unobstructed path',()=>{
+  for(const mode of ['incoming','passed','wide','distant','blind','blocked','practice','no-projectile']){
+    const h=interfaceHarness({turnBased:true});h.sim.tick=()=>{};
+    Object.assign(h.sim.player,{x:6000,y:0,z:0,heading:0,pitch:0,speed:0});
+    Object.assign(h.sim.enemy,{x:6000,y:0,z:-1800});
+    h.elements['quick-battle'].onclick();h.step(3060);
+    const shot={id:mode,from:'Yorktown',target:'Enterprise',pos:{x:6000,y:0,z:-900},heading:180,pitch:0,life:0,maxLife:8};
+    if(mode==='passed')shot.heading=0;
+    if(mode==='wide')shot.pos.x+=500;
+    if(mode==='distant')shot.pos.z=-1700;
+    if(mode==='blind')h.sim.player.integrity.sensors=0;
+    if(mode==='blocked')h.sim.stationTrace=()=>({t:.5});
+    if(mode==='practice')shot.practice=true;
+    if(mode!=='no-projectile')h.sim.projectiles.push(shot);
+    h.sim.events.push({type:'launch',from:'Yorktown',to:'Enterprise'});h.step(3120);
+    assert.equal(h.elements['helm-reply'].textContent==='Torpedo incoming!',mode==='incoming',mode);
+    if(mode==='distant'){
+      shot.pos.z=-900;h.step(3180);
+      assert.equal(h.elements['helm-reply'].textContent,'Torpedo incoming!','a far launch is announced only when it becomes a nearby threat');
+    }
+  }
+});
+
+test('a torpedo that turns away while queued is silent and a cleared active warning stops playing',()=>{
+  for(const queued of [true,false]){
+    const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
+    Object.assign(h.sim.player,{x:6000,y:0,z:0,heading:0,pitch:0,speed:0});
+    h.elements['quick-battle'].onclick();h.step(3060);
+    if(!queued){players.at(-1).onended();h.runTimers();players.at(-1).onended();}
+    const shot={id:'turn-away',from:'Yorktown',target:'Enterprise',pos:{x:6000,y:0,z:-900},heading:180,pitch:0,life:0,maxLife:8};
+    h.sim.projectiles.push(shot);h.step(3120);
+    const alert=players.find(audio=>audio.url.includes('Torpedo incoming'));
+    assert.equal(!!alert,!queued);
+    shot.heading=0;h.step(3180);
+    if(queued){
+      players.at(-1).onended();h.runTimers();players.at(-1).onended();h.step(3240);
+      assert(!players.some(audio=>audio.url.includes('Torpedo incoming')));
+    }else assert.equal(alert.paused,true);
+  }
+});
+
+test('Hull hit ignores shield-only, enemy and practice impacts and expires behind a long conversation',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
+  h.elements['quick-battle'].onclick();h.step(3060);
+  h.sim.events.push({type:'impact',ship:'Enterprise',hullDamage:5});h.step(3120);
+  h.step(6200);players.at(-1).onended();h.runTimers();players.at(-1).onended();h.step(6260);
+  assert(!players.some(audio=>audio.url.includes('Hull hit')),'expired hull damage must not be narrated later');
+  const before=players.length;
+  h.sim.events.push({type:'impact',ship:'Enterprise',hullDamage:0},{type:'impact',ship:'Yorktown',hullDamage:5},{type:'impact',ship:'Enterprise',hullDamage:5,practice:true});h.step(6320);
+  assert.equal(players.length,before);
+  h.sim.events.push({type:'impact',ship:'Enterprise',hullDamage:5});h.step(6380);
+  assert.equal(players.at(-1).url,'assets/Hull hit!_Erica.mp3','a fresh confirmed hit still plays');
 });
 
 test('free flight helm acknowledges manual control and repeated warnings are spaced out',()=>{
@@ -1107,17 +1326,16 @@ test('dialogue mute stops voices while keeping weapons and ambience enabled, and
   h.sim.events.push({type:'warp'});h.step(180);assert.equal(players.at(-1).url,'assets/Warp complete_Erica.mp3');
 });
 
-test('voice mute cancels browser speech and releases a pending firing command without losing the manual shot',async()=>{
-  const players=[];let cancelled=0;
+test('voice mute stops recorded speech and releases a pending firing command without losing the manual shot',async()=>{
+  const players=[];
   class Audio{constructor(url){this.url=url;players.push(this);}play(){return Promise.resolve();}pause(){this.paused=true;}}
   class AudioContext{constructor(){this.state='running';this.currentTime=0;}async resume(){}}
   class WeaponAudio{setEnabled(){}stopAll(){}playPhaser(){}playHit(){}playBreak(){}}
   const firing={window:{Audio}};vm.createContext(firing);vm.runInContext(fs.readFileSync(path.join(root,'firing-voices.js'),'utf8'),firing);
-  const spoken=[];
-  const h=interfaceHarness({window:{AudioContext,Audio,BattleWeaponAudio:WeaponAudio,BattleFiringVoices:firing.window.BattleFiringVoices,SpeechSynthesisUtterance:class{constructor(text){this.text=text;}},speechSynthesis:{getVoices:()=>[],speak:line=>spoken.push(line),cancel(){cancelled++;}}}});
+  const h=renderedHarness(players,{window:{AudioContext,BattleWeaponAudio:WeaponAudio,BattleFiringVoices:firing.window.BattleFiringVoices}});
   h.handlers['document:pointerdown']();await Promise.resolve();await Promise.resolve();
-  h.elements['launch-practice'].onclick();h.step(60);assert(spoken.length>0);
-  h.elements['voices-mute'].onclick();assert(cancelled>0);
+  h.elements['launch-practice'].onclick();h.step(60);assert(players.length>0);
+  const active=players.at(-1);h.elements['voices-mute'].onclick();assert(active.paused);
   h.sim.freeFlight=false;Object.assign(h.sim.enemy,{x:h.sim.player.x,y:h.sim.player.y,z:h.sim.player.z-600});
   Object.assign(h.sim.station,{x:1e6,y:1e6,z:1e6,parts:[]});
   h.elements['voices-mute'].onclick();h.elements.phaser.onclick();assert.equal(h.sim.shots,0);
@@ -1126,15 +1344,15 @@ test('voice mute cancels browser speech and releases a pending firing command wi
   late();h.step(180);assert.equal(h.sim.shots,1,'voice mute allows the pending shot to proceed silently');
 });
 
-test('skipping a maneuver announces continuation and only the final aborted maneuver announces breakaway',()=>{
+test('skipping maneuvers announces continuation and finishes without an automatic breakaway',()=>{
   for(const reason of ['stall','timeout']){
     const h=interfaceHarness({turnBased:true});h.sim.tick=()=>{};h.elements['quick-battle'].onclick();h.step(60);h.sim.fire=()=>false;
     if(reason==='stall')h.sim.turn.navigation.relativeStalled=true;else h.sim.turn.remaining=0;
     h.sim.advanceTurn(0);assert.equal(h.sim.turn.stageIndex,1);h.step(120);
     assert.equal(h.elements['helm-reply'].textContent,reason==='stall'?'No relative movement. Next maneuver.':'Course updated.');
     h.step(180);h.sim.turn.maneuvers[2]='ram';h.sim.startStage(2);h.step(240);
-    h.sim.turn.remaining=0;h.sim.enemyRetreating=true;h.sim.advanceTurn(0);assert.equal(h.sim.turn.phase,'disengage');h.step(300);
-    assert.equal(h.elements['helm-reply'].textContent,'Breaking away.');
+    h.sim.turn.remaining=0;h.sim.enemyRetreating=true;h.sim.advanceTurn(0);h.sim.time+=.5;h.sim.advanceTurn(.5);assert.equal(h.sim.turn.phase,'review');h.step(300);
+    assert.equal(h.elements['helm-reply'].textContent,'Maneuvers complete. Awaiting orders.');
   }
 });
 
@@ -1243,6 +1461,53 @@ test('expired firing opportunities cannot produce spoken torpedo orders or block
   }
 });
 
+test('engine-loss reports wait half a second then play over a captain command and outrank queued chatter',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
+  h.elements['quick-battle'].onclick();h.step(3060);const captain=players.at(-1);
+  assert.match(captain.url,/_Declan\.mp3$/);
+  h.sim.events.push({type:'warp'},{type:'impact',ship:'Enterprise',hullDamage:1},{type:'nacelle-detached',ship:'Enterprise',side:'port'});
+  h.step(3120);assert.equal(players.at(-1),captain);
+  h.step(3619);assert.equal(players.at(-1),captain,'alert waits the full half second');
+  h.step(3620);const alert=players.at(-1);
+  assert.equal(alert.url,"assets/We've lost the port engine!_Allision.mp3");
+  assert.notEqual(captain.paused,true,'the urgent report can speak over the command');
+  assert.equal(h.elements['helm-reply'].textContent,"We've lost the port engine!");
+  assert.equal(h.elements['helm-speaker'].textContent,'HELM (Allison)');
+  h.sim.events.push({type:'nacelle-detached',ship:'Enterprise',side:'starboard'});h.step(3680);h.step(4180);
+  assert.equal(players.at(-1),alert,'the second engine alert waits for the first');
+  alert.onended();h.step(4240);
+  assert.equal(players.at(-1).url,"assets/We've lost the starboard engine!_Allision.mp3");
+  assert.equal(h.elements['helm-reply'].textContent,"We've lost the starboard engine!");
+  const record=h.sim.replayRecording.record.events.filter(e=>e.event.type==='bridge-dialogue'&&/lost the .* engine/.test(e.event.reply));
+  assert.equal(record.length,2,'each urgent report is recorded when it plays');
+});
+
+test('engine-loss alerts bypass opening silence and stop with voice mute or Enterprise destruction',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
+  h.elements['quick-battle'].onclick();h.step(60);assert.equal(players.length,0);
+  h.sim.events.push({type:'nacelle-detached',ship:'Enterprise',side:'port'});h.step(120);assert.equal(players.length,0);h.step(619);assert.equal(players.length,0);h.step(620);
+  const port=players.at(-1);assert.equal(port.url,"assets/We've lost the port engine!_Allision.mp3");
+  h.elements['voices-mute'].onclick();assert.equal(port.paused,true);
+  const count=players.length;h.sim.events.push({type:'nacelle-detached',ship:'Enterprise',side:'starboard'});h.step(680);
+  assert.equal(players.length,count);h.elements['voices-mute'].onclick();h.step(740);
+  assert.equal(players.length,count,'muted alerts are not spoken late');
+  h.sim.events.push({type:'nacelle-detached',ship:'Enterprise',side:'starboard'});h.step(800);h.step(1300);
+  const starboard=players.at(-1);assert.equal(starboard.url,"assets/We've lost the starboard engine!_Allision.mp3");
+  h.sim.events.push({type:'destroyed',ship:'Enterprise'});h.sim.result='defeat';h.step(1360);
+  assert.equal(starboard.paused,true);assert.equal(players.at(-1).url,'assets/Helm lost!_Erica.mp3');
+});
+
+test('replay engine-loss reports overlap recorded dialogue and remain muted when replay pauses',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
+  h.replay.active=true;h.replay.player={paused:false,ended:false,state:{player:h.sim.player,enemy:h.sim.enemy}};h.replay.tick=()=>{};
+  h.replay.options.dialogue({order:'Come to port.',reply:'',speaker:'captain'});h.step(60);
+  const captain=players.at(-1);assert.equal(captain.url,'assets/Come to port_Declan.mp3');
+  h.replay.options.dialogue({order:'',reply:"We've lost the port engine!",speaker:'allison'});h.step(120);
+  const alert=players.at(-1);assert.equal(alert.url,"assets/We've lost the port engine!_Allision.mp3");
+  assert.notEqual(captain.paused,true);
+  h.replay.player.paused=true;h.step(180);assert.equal(alert.paused,true);
+});
+
 test('Enterprise destruction immediately plays Helm lost and silences every other voice until a new game',()=>{
   const players=[],manifest={window:{BattleVoiceClips:{}}};vm.createContext(manifest);
   vm.runInContext(fs.readFileSync(path.join(root,'assets/voices/voice-overrides.js'),'utf8'),manifest);
@@ -1284,20 +1549,15 @@ test('damage warnings play the selected Erica recording through the real dialogu
   assert.equal(players.length,count,'muted system failures never start an audio clip');
 });
 
-test('captain and helm voices play by default, respect mute, and resume for new dialogue',async()=>{
-  const spoken=[];let cancelled=0;
-  const captain={name:'Microsoft David',lang:'en-US'},helm={name:'Microsoft Zira',lang:'en-US'};
-  class AudioContext{constructor(){this.state='running';this.currentTime=0;}async resume(){}createOscillator(){return {type:'sine',frequency:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(node){return node;},start(){},stop(){}};}createGain(){return {gain:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(node){return node;}};}}
-  class WeaponAudio{setEnabled(){}stopAll(){}playHit(){}}
-  const h=interfaceHarness({turnBased:true,window:{AudioContext,BattleWeaponAudio:WeaponAudio,SpeechSynthesisUtterance:class{constructor(text){this.text=text;}},speechSynthesis:{getVoices:()=>[captain,helm],speak:line=>spoken.push(line),cancel(){cancelled++;}}}});
+test('captain and helm recordings play by default, respect mute, and resume for new dialogue',async()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
   h.elements['quick-battle'].onclick();h.step(3060);
-  assert.equal(h.elements['helm-dialogue'].hidden,false);assert.match(h.elements['helm-reply'].textContent,/Coming to port/);
-  assert(spoken.some(line=>line.voice===captain));spoken.find(line=>line.voice===captain).onend();h.runTimers();assert(spoken.some(line=>line.voice===helm));
-  const beforeMute=spoken.length;await h.elements.audio.onclick();assert(cancelled>0);
-  h.sim.events.push({type:'impact',ship:'Enterprise',hullDamage:5});h.step(3120);
-  assert.match(h.elements['helm-reply'].textContent,/Hull hit/);assert.equal(spoken.length,beforeMute);
-  await h.elements.audio.onclick();h.sim.events.push({type:'destroyed',ship:'Yorktown'});h.step(3180);
-  assert(spoken.length>beforeMute);assert.match(spoken.at(-1).text,/Yorktown disabled/);
+  assert.equal(h.elements['helm-dialogue'].hidden,false);assert.match(players.at(-1).url,/_Declan.mp3$/);
+  players.at(-1).onended();h.runTimers();assert.match(players.at(-1).url,/_Allison.mp3$/);
+  const active=players.at(-1),before=players.length;h.elements['voices-mute'].onclick();assert(active.paused);
+  h.sim.events.push({type:'impact',ship:'Enterprise',hullDamage:5});h.step(3120);assert.equal(players.length,before);
+  h.elements['voices-mute'].onclick();h.sim.events.push({type:'destroyed',ship:'Yorktown'});h.step(3180);
+  assert.equal(players.at(-1).url,'assets/Yorktown disabled_Erica.mp3');
 });
 
  test('Engineering displays reserve percentage, accessible meter, low warning and paused flow',()=>{
@@ -1320,34 +1580,28 @@ test('fight music is silent in live gameplay and enabled during replay playback 
 });
 
 
-test('consecutive bridge phrases are skipped for recordings and synthesis, and can return after another phrase',()=>{
-  for(const recorded of [false,true]){
-    const spoken=[];
-    class Audio{constructor(url){this.url=url;}play(){spoken.push(this);return Promise.resolve();}pause(){}}
-    const speechSynthesis={getVoices:()=>[],speak:utterance=>spoken.push(utterance),cancel(){}};
-    const clips=recorded?{'captain\nCome to port.':'captain.mp3','helm\nComing to port.':'port.mp3','helm\nWarp complete.':'warp.mp3','helm\nHull hit!':'hull.mp3'}:undefined;
-    const h=interfaceHarness({turnBased:true,voiceClips:clips,window:{...(recorded?{Audio}:{}),speechSynthesis,SpeechSynthesisUtterance:class{constructor(text){this.text=text;}}}});h.sim.tick=()=>{};
-    h.elements['quick-battle'].onclick();h.step(3060);
-    const finish=()=>{const last=spoken.at(-1);if(recorded)last.onended();else last.onend();};
-    finish();h.runTimers();finish();
-    h.sim.events.push({type:'warp'},{type:'warp'},{type:'impact',ship:'Enterprise',hullDamage:1},{type:'warp'});
-    h.step(3200);assert.equal(spoken.length,3);finish();
-    h.step(3260);assert.equal(spoken.length,3,'adjacent duplicate is silent');
-    h.step(3320);assert.equal(spoken.length,4);finish();
-    h.step(3380);assert.equal(spoken.length,5,'a phrase may return after a different line');
-  }
+test('consecutive recorded bridge phrases are skipped and can return after another phrase',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
+  h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();
+  h.sim.events.push({type:'warp'},{type:'warp'},{type:'impact',ship:'Enterprise',hullDamage:1},{type:'warp'});
+  h.step(3200);assert.equal(players.length,3);players.at(-1).onended();
+  h.step(3260);assert.equal(players.length,3);
+  h.step(3320);assert.equal(players.length,4);players.at(-1).onended();
+  h.step(3380);assert.equal(players.length,5);
 });
 
 
 test('Allison reports confirmed torpedo hits on Yorktown, not launches, misses, phasers or practice shots',()=>{
-  const spoken=[],allison={name:'Allison',lang:'en-US'},erica={name:'Zira',lang:'en-US'};
-  const h=interfaceHarness({turnBased:true,window:{speechSynthesis:{getVoices:()=>[erica,allison],speak:line=>spoken.push(line),cancel(){}},SpeechSynthesisUtterance:class{constructor(text){this.text=text;}}}});h.sim.tick=()=>{};
-  h.elements['quick-battle'].onclick();h.step(3060);spoken.at(-1).onend();h.runTimers();spoken.at(-1).onend();const before=spoken.length;
+  const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
+  h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();const before=players.length;
   h.sim.events.push({type:'launch',from:'Enterprise',practice:true},{type:'impact',ship:'Yorktown',weapon:'phaser',amount:20,hullDamage:0},{type:'impact',ship:'Yorktown',weapon:'torpedo',amount:0,hullDamage:0},{type:'impact',ship:'Yorktown',weapon:'torpedo',amount:20,hullDamage:0,practice:true},{type:'impact',ship:'Enterprise',weapon:'torpedo',amount:20,hullDamage:0});
-  h.step(3200);assert.equal(spoken.length,before);
+  h.step(3200);assert.equal(players.length,before);
   h.sim.events.push({type:'impact',ship:'Yorktown',weapon:'torpedo',amount:20,hullDamage:0});h.step(3260);
-  assert.equal(spoken.at(-1).text,'Direct hit to Yorktown!');assert.equal(spoken.at(-1).voice,allison);assert.equal(spoken.at(-1).volume,1);spoken.at(-1).onend();
-  h.sim.events.push({type:'impact',ship:'Yorktown',weapon:'torpedo',amount:20,hullDamage:10});h.step(3320);assert.equal(spoken.length,before+1,'back-to-back confirmations are not repeated');
+  assert.equal(players.at(-1).url,'assets/Direct hit to Yorktown!_Allision.mp3');assert.equal(players.at(-1).volume,.85);players.at(-1).onended();
+  h.sim.events.push({type:'impact',ship:'Yorktown',weapon:'torpedo',amount:20,hullDamage:10});h.step(3320);
+  assert.equal(players.length,before+2);assert.equal(players.at(-1).url,'assets/Direct Hit!_Allision.mp3');players.at(-1).onended();
+  h.sim.events.push({type:'impact',ship:'Yorktown',weapon:'torpedo',amount:20,hullDamage:0});h.step(3380);
+  assert.equal(players.length,before+3);assert.equal(players.at(-1).url,'assets/Direct hit to Yorktown!_Allision.mp3');
 });
 
 
@@ -1361,22 +1615,21 @@ test('Enterprise destruction requests music fade in gameplay and in the recorded
 });
 
 
-test('Yorktown leaving weapons range speaks Allison report with a synthesized female voice',()=>{
-  const spoken=[],female={name:'Microsoft Aria',lang:'en-US'},other={name:'Microsoft Zira',lang:'en-US'};
-  const h=interfaceHarness({turnBased:true,window:{speechSynthesis:{getVoices:()=>[other,female],speak:line=>spoken.push(line),cancel(){}},SpeechSynthesisUtterance:class{constructor(text){this.text=text;}}}});h.sim.tick=()=>{};
+test('Yorktown leaving and returning to range plays the new Allison recordings',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
   Object.assign(h.sim.player,{x:2000,y:0,z:0});Object.assign(h.sim.enemy,{x:2000,y:0,z:-1800});
-  h.elements['quick-battle'].onclick();h.step(3060);spoken.at(-1).onend();h.runTimers();spoken.at(-1).onend();
-  h.sim.enemy.z=-1950;h.step(3200);assert.equal(spoken.at(-1).text,"They're out of range.");assert.equal(spoken.at(-1).voice,female);assert.equal(spoken.at(-1).volume,1);
+  h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();
+  h.sim.enemy.z=-1950;h.step(3200);assert.equal(players.at(-1).url,"assets/They're out of range_Allision.mp3");assert.equal(players.at(-1).volume,.85);players.at(-1).onended();
+  h.sim.enemy.z=-1800;h.step(3260);assert.equal(players.at(-1).url,"assets/They're back in range_Allision.mp3");
 });
 
 
 test('Allison says We missed only for Enterprise torpedo misses, with no consecutive repeat',()=>{
-  const spoken=[],allison={name:'Allison',lang:'en-US'};
-  const h=interfaceHarness({turnBased:true,window:{speechSynthesis:{getVoices:()=>[{name:'Zira',lang:'en-US'},allison],speak:line=>spoken.push(line),cancel(){}},SpeechSynthesisUtterance:class{constructor(text){this.text=text;}}}});h.sim.tick=()=>{};
-  h.elements['quick-battle'].onclick();h.step(3060);spoken.at(-1).onend();h.runTimers();spoken.at(-1).onend();const before=spoken.length;
-  h.sim.events.push({type:'torpedo-missed',from:'Yorktown',target:'Enterprise'},{type:'torpedo-missed',from:'Enterprise',target:'Yorktown',practice:true});h.step(3200);assert.equal(spoken.length,before);
-  h.sim.events.push({type:'torpedo-missed',from:'Enterprise',target:'Yorktown'});h.step(3260);assert.equal(spoken.at(-1).text,'We missed!');assert.equal(spoken.at(-1).voice,allison);spoken.at(-1).onend();
-  h.sim.events.push({type:'torpedo-missed',from:'Enterprise',target:'Yorktown'});h.step(3320);assert.equal(spoken.length,before+1);
+  const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
+  h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();const before=players.length;
+  h.sim.events.push({type:'torpedo-missed',from:'Yorktown',target:'Enterprise'},{type:'torpedo-missed',from:'Enterprise',target:'Yorktown',practice:true});h.step(3200);assert.equal(players.length,before);
+  h.sim.events.push({type:'torpedo-missed',from:'Enterprise',target:'Yorktown'});h.step(3260);assert.equal(players.at(-1).url,'assets/We missed!_Allision.mp3');players.at(-1).onended();
+  h.sim.events.push({type:'torpedo-missed',from:'Enterprise',target:'Yorktown'});h.step(3320);assert.equal(players.length,before+1);
 });
 
 
@@ -1396,19 +1649,19 @@ test('recorded captain commands and helm responses play sequentially in replay w
 });
 
 
-test('Hide HUD messages starts checked and the temporary Yorktown engine preview is enabled',()=>{
+test('Hide HUD messages starts checked and Yorktown uses its normal tactical targeting',()=>{
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8');assert.match(html,/<input id="hide-hud-messages" type="checkbox" checked>/);
-  const h=interfaceHarness({turnBased:true});assert.equal(h.sim.previewNacelleBreakoff,true);h.elements['quick-battle'].onclick();assert(h.sim.turn.enemyOrders.every(order=>order.target==='mainEngines'));
+  const h=interfaceHarness({turnBased:true});assert.equal(h.sim.previewNacelleBreakoff,false);h.elements['quick-battle'].onclick();assert(h.sim.turn.enemyOrders.some(order=>order.target!=='mainEngines'));assert(h.sim.enemyPersonalityProfile.name);
 });
 
 
-test('Allison uses local female synthesized clips for direct hits and each Enterprise engine-loss report',()=>{
+test('Allison uses rendered updates for direct hits and each Enterprise engine-loss report',()=>{
   const players=[],manifest={window:{BattleVoiceClips:{}}};vm.createContext(manifest);vm.runInContext(fs.readFileSync(path.join(root,'assets/voices/voice-overrides.js'),'utf8'),manifest);
   class Audio{constructor(url){this.url=url;players.push(this);}play(){return Promise.resolve();}pause(){}}
   const h=interfaceHarness({turnBased:true,voiceClips:manifest.window.BattleVoiceClips,window:{Audio}});h.sim.tick=()=>{};
   h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();let now=3200;
-  for(const [event,file] of [[{type:'impact',ship:'Yorktown',weapon:'torpedo',amount:10,hullDamage:0},'allison-direct-hit-synth.mp3'],[{type:'nacelle-detached',ship:'Enterprise',side:'port'},'allison-port-engine-lost-synth.mp3'],[{type:'nacelle-detached',ship:'Enterprise',side:'starboard'},'allison-starboard-engine-lost-synth.mp3']]){
-    h.sim.events.push(event);h.step(now);now+=60;const audio=players.at(-1);assert.equal(audio.url,'assets/voices/'+file);assert.equal(audio.volume,1);assert(fs.statSync(path.join(root,audio.url)).size>1000);audio.onended();
+  for(const [event,file] of [[{type:'impact',ship:'Yorktown',weapon:'torpedo',amount:10,hullDamage:0},'Direct hit to Yorktown!_Allision.mp3'],[{type:'nacelle-detached',ship:'Enterprise',side:'port'},"We've lost the port engine!_Allision.mp3"],[{type:'nacelle-detached',ship:'Enterprise',side:'starboard'},"We've lost the starboard engine!_Allision.mp3"]]){
+    h.sim.events.push(event);h.step(now);if(event.type==='nacelle-detached'){now+=500;h.step(now);}now+=60;const audio=players.at(-1);assert.equal(audio.url,'assets/'+file);assert.equal(audio.volume,.85);assert(fs.statSync(path.join(root,audio.url)).size>1000);audio.onended();
   }
   const count=players.length;h.sim.events.push({type:'nacelle-detached',ship:'Yorktown',side:'port'});h.step(now);assert.equal(players.length,count,'enemy engine loss does not announce our engine loss');
 });

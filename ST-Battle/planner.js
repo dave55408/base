@@ -5,7 +5,7 @@
     constructor(sim,onCommit,onChange){
       this.sim=sim;this.onCommit=onCommit;this.onChange=onChange;this.index=0;this.maneuverIndex=0;this.view='maneuver';this.selection={weapon:null,target:null,range:1000};
       this.$=id=>document.getElementById(id);this.dialog=this.$('plan-wizard');
-      for(const style of ['timid','strong','aggressive','berserk'])this.$('preset-'+style).onclick=()=>{
+      for(const style of ['timid','disabling','strong','aggressive','berserk'])this.$('preset-'+style).onclick=()=>{
         if(!this.applyQuickSetting(style))return;
         this.selectedPreset=style;this.presetSignature=JSON.stringify([this.editor.turn.draftManeuvers,this.editor.turn.draft]);
         this.maneuverIndex=this.openWasPlanning?0:this.sim.turn.stageIndex;this.editingManeuver=this.openWasPlanning?null:this.maneuverIndex;
@@ -257,7 +257,7 @@
       const preview=[...t.draft];if(!choosing&&!flee)preview[this.index]=selected;
       const ready=s.planReady(preview);
       const presetUnchanged=this.presetSignature===JSON.stringify([t.draftManeuvers,t.draft]);
-      for(const style of ['timid','strong','aggressive','berserk']){
+      for(const style of ['timid','disabling','strong','aggressive','berserk']){
         const button=this.$('preset-'+style);button.disabled=!!s.result||stale||!planning&&this.sim.turn.revisions<=0;
         button.setAttribute('aria-pressed',String(presetUnchanged&&this.selectedPreset===style));
         button.title=planning?'Fill the draft with this plan; review or customize before Commit':'Stage this quick setting for the remaining plan within the available revisions; review before Apply';

@@ -64,11 +64,12 @@ test('missed stages advance within one pass; projectiles resolve before final re
   s.turn.orders.forEach(v=>v.range=300);s.player.heading=180;
   for(let stage=0;stage<3;stage++){
     assert.equal(s.turn.stageIndex,stage);s.turn.remaining=0;
-    if(stage<2)advance(s,1.6);else advance(s,2.2);
+    if(stage<2)advance(s,1.6);else{ s.projectiles.push({id:'pending',from:s.player.name,target:s.enemy.name,pos:{x:5000,y:5000,z:5000},life:0,maxLife:8,strength:1,targetSystem:'hull',heading:0,pitch:0});advance(s,2.2);}
   }
-  assert(s.turn.orders.every(v=>v.status==='skipped'));assert.equal(s.turn.number,1);assert.equal(s.turn.phase,'disengage');
-  s.turn.remaining=0;s.projectiles.push({id:'pending',from:s.player.name,target:s.enemy.name,pos:{x:5000,y:5000,z:5000},life:7.9,maxLife:8,strength:1,targetSystem:'hull',heading:0,pitch:0});
-  s.tick(.05);assert.equal(s.turn.phase,'disengage');advance(s,.2);assert.equal(s.turn.phase,'review');assert.equal(s.projectiles.length,0);
+  assert(s.turn.orders.every(v=>v.status==='skipped'));assert.equal(s.turn.number,1);assert.notEqual(s.turn.phase,'review');
+  assert(!s.events.some(event=>event.type==='phase'&&event.phase==='disengage'));
+  s.turn.remaining=0;s.projectiles[0].life=7.9;
+  s.tick(.05);assert.notEqual(s.turn.phase,'review');advance(s,.2);assert.equal(s.turn.phase,'review');assert.equal(s.projectiles.length,0);
   const before=JSON.stringify(s.player);advance(s,1);assert.equal(JSON.stringify(s.player),before);
   assert.equal(s.commitOrders(),true);assert.equal(s.turn.number,2);assert.equal(s.turn.stageIndex,0);
 });

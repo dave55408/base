@@ -10,10 +10,10 @@ async function player(clips={}){
 }
 const clips={'captain\nCome to port.':'cedar.mp3','helm\nComing to port.':'marin.mp3'};
 const line={order:'Come to port.',reply:'Coming to port.'};
-test('Allison clips play louder while Erica and captain recordings keep their existing volume',async()=>{
+test('Allison, Erica and captain recordings use the same playback volume',async()=>{
   const h=await player({'captain\nCome to port.':'assets/Come to port_Declan.mp3','helm\nComing to port.':'assets/Coming to port_Allison.mp3','helm\nHull hit!':'assets/Hull hit!_Erica.mp3'});
   h.voice.play(line);assert.equal(h.players[0].volume,.85);
-  h.players[0].onended();h.tick(500);assert.equal(h.players[1].volume,1);
+  h.players[0].onended();h.tick(500);assert.equal(h.players[1].volume,.85);
   h.voice.play({reply:'Hull hit!'});assert.equal(h.players[2].volume,.85);
 });
 test('recorded dialogue plays captain then helm without overlapping',async()=>{
@@ -27,31 +27,46 @@ test('muting or interruption stops audio and cancels the old reply',async()=>{
   h.voice.play(line);h.players[1].onended();h.tick(250);h.voice.stop();h.tick(250);
   assert.equal(h.players.length,2,'muting during the reply pause cancels the scheduled helm clip');
 });
-test('unrecorded dialogue uses browser speech and failed recordings fall back only for remaining dialogue',async()=>{
+test('unrecorded dialogue stays silent and failed recordings never invoke synthesis',async()=>{
   const h=await player(clips);assert.equal(h.voice.play({order:'Unknown order',reply:''}),false);assert.equal(h.players.length,0);
-  let fallback;h.voice.play(line,value=>fallback=value);h.players[0].onended();h.tick(500);h.players[1].onerror();
-  assert.equal(fallback.order,'');assert.equal(fallback.reply,'Coming to port.');assert(h.players[1].paused);
+  let completed=0;h.voice.play(line,()=>assert.fail('must not synthesize'),()=>completed++);h.players[0].onended();h.tick(500);h.players[1].onerror();
+  assert.equal(completed,1);assert(h.players[1].paused);
 });
-test('a synthesized captain finishes before a recorded helm reply, and interruption cancels continuation',async()=>{
+test('a missing captain recording is skipped and interruption cancels the pending helm recording',async()=>{
   const h=await player({'helm\nComing to port.':'allison.mp3'});
-  let finish,spoken;
-  assert(h.voice.play(line,(value,done)=>{spoken=value;finish=done;}));
-  assert.equal(spoken.order,'Come to port.');assert.equal(spoken.reply,'');assert.equal(h.players.length,0);
-  finish();h.tick(500);assert.equal(h.players.length,1);assert.equal(h.players[0].url,'allison.mp3');
-  h.voice.play(line,(value,done)=>{finish=done;});h.voice.stop();finish();h.tick(500);
-  assert.equal(h.players.length,1,'a cancelled synthesis cannot start a recording');
+  assert(h.voice.play(line,()=>assert.fail('must not synthesize')));
+  assert.equal(h.players.length,0);
+  h.tick(500);assert.equal(h.players.length,1);assert.equal(h.players[0].url,'allison.mp3');
+  h.voice.play(line,()=>assert.fail('must not synthesize'));h.voice.stop();h.tick(500);
+  assert.equal(h.players.length,1,'a cancelled reply cannot start a recording');
 });
-test('a novel helm reply is synthesized after the recorded captain without repeating the order',async()=>{
-  const h=await player(clips);let spoken;
-  h.voice.play({order:line.order,reply:'New warning.'},value=>spoken=value);
-  assert.equal(spoken,undefined);h.players[0].onended();h.tick(500);
-  assert.equal(spoken.order,'');assert.equal(spoken.reply,'New warning.');
+test('a novel helm reply completes silently after the recorded captain',async()=>{
+  const h=await player(clips);let completed=0;
+  h.voice.play({order:line.order,reply:'New warning.'},()=>assert.fail('must not synthesize'),()=>completed++);
+  assert.equal(completed,0);h.players[0].onended();h.tick(500);
+  assert.equal(completed,1);assert.equal(h.players.length,1);
 });
-test('local helm selections use the six Allison exceptions and Erica for the other 23 phrases',async()=>{
+
+test('a command acknowledgment cannot play after its maneuver becomes stale',async()=>{
+  const h=await player({'captain\nCome to port.':'captain.mp3',"allison\nI'll try...":'try.mp3'});let valid=true,completed=0;
+  h.voice.play({order:'Come to port.',reply:"I'll try...",speaker:'allison',valid:()=>valid},null,()=>completed++);
+  h.players[0].onended();valid=false;h.tick(500);
+  assert.equal(h.players.length,1);assert.equal(completed,1);
+});
+
+test('Allison plays That might be hard followed by Ill try sequentially and can be interrupted between clips',async()=>{
+  const h=await player({'allison\nThat might be hard...':'hard.mp3',"allison\nI'll try...":'try.mp3'});let completed=0;
+  const response={speaker:'allison',reply:"That might be hard... I'll try...",replies:['That might be hard...',"I'll try..."]};
+  h.voice.play(response,null,()=>completed++);assert.equal(h.players[0].url,'hard.mp3');
+  h.players[0].onended();h.tick(199);assert.equal(h.players.length,1);
+  h.tick(1);assert.equal(h.players[1].url,'try.mp3');h.players[1].onended();assert.equal(completed,1);
+  h.voice.play(response);h.players[2].onended();h.voice.stop();h.tick(200);assert.equal(h.players.length,3);
+});
+test('local helm selections use the seven Allison exceptions and Erica for the other 22 phrases',async()=>{
   const context={window:{BattleVoiceClips:{'captain\nAttack run.':'declan.mp3'}}};
   vm.runInNewContext(await fs.readFile(path.join(__dirname,'../assets/voices/voice-overrides.js'),'utf8'),context);
   const selections=context.window.BattleVoiceClips;
-  const exceptions=new Set(['Coming to port.','Coming to starboard.','Climbing.','Descending.','Moving astern.','Making for cover.']);
+  const exceptions=new Set(['Coming to port.','Coming to starboard.','Climbing.','Descending.','Moving astern.','Making for cover.','Pursuit course.']);
   let count=0;
   for(const {role,text} of catalog.lines())if(role==='helm'){
     const file=selections[role+'\n'+text];
@@ -65,7 +80,14 @@ test('local helm selections use the six Allison exceptions and Erica for the oth
     assert.equal(file,'assets/'+text.replace(/\.$/,'')+'_Declan.mp3');
     assert((await fs.stat(path.join(__dirname,'..',file))).size>0);captainCount++;
   }
-  assert.equal(captainCount,14);assert.equal(Object.keys(selections).length,67);
+  assert.equal(captainCount,14);
+  for(const [key,file] of Object.entries(selections)){
+    assert(!file.includes('-synth.mp3'),key);
+    assert((await fs.stat(path.join(__dirname,'..',file))).size>0,key);
+  }
+  for(const role of ['allison','helm'])for(const text of ['We missed!',"They're out of range.","They're back in range.",'Direct hit to Yorktown!',"We've lost the port engine!","We've lost the starboard engine!"]){
+    assert.match(selections[role+'\n'+text],/_Allision\.mp3$/);
+  }
 });
 test('voice generation maps Cedar to captain and Marin to helm, saves offline clips and skips completed files',async t=>{
   const directory=await fs.mkdtemp(path.join(os.tmpdir(),'st-battle-voices-'));

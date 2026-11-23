@@ -1,0 +1,7 @@
+Tool: built-in image_gen, edit mode
+Reference: assets/crew/allison-vulcan-black-hair.png
+Saved asset: assets/crew/allison-vulcan-fuller.png
+
+Use case: identity-preserve portrait edit.
+Edit this existing portrait of adult Vulcan Lieutenant Allison to give her a naturally curvy, somewhat overweight build. Make her visible upper body noticeably fuller, with softly rounded shoulders, fuller upper arms, a broader and softer waist and torso, and natural proportional curves beneath her properly fitted blue uniform. Keep the depiction professional and ordinary, with realistic balanced proportions rather than exaggeration. Slight natural fullness in cheeks and neck may support her build, while keeping her face clearly recognizable.
+Preserve her black ponytail and swept fringe, green eyes, freckle-free complexion, pointed Vulcan ear, sharply angled eyebrows, calm closed-mouth expression, apparent adult age, skin tone, blue Starfleet uniform and badge, pose, square crop, starship bridge background, warm rim light and cyan edge light. Match the original clean thick ink contours, flat-color cartoon shading and subtle print texture. Do not add cleavage or change the uniform neckline. No new objects, text or borders. Keep the opaque background. The change should read as a fuller-bodied version of the same officer.

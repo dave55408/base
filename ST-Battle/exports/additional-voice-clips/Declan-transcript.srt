@@ -1,0 +1,36 @@
+0
+00:00:00,000 --> 00:00:02,000
+Open hailing frequencies.
+
+1
+00:00:03,600 --> 00:00:06,600
+Red alert, all hands, battle stations.
+
+2
+00:00:08,000 --> 00:00:10,600
+Shields up, raised shields.
+
+3
+00:00:12,000 --> 00:00:13,600
+Evasive manoeuvres.
+
+4
+00:00:15,000 --> 00:00:18,600
+Divert auxiliary power to forward shields.
+
+5
+00:00:20,000 --> 00:00:21,800
+Lock faces on target.
+
+6
+00:00:23,000 --> 00:00:25,400
+Arm photon torpedoes.
+
+7
+00:00:27,000 --> 00:00:28,500
+Target their weapons.
+
+8
+00:00:29,952 --> 00:00:49,952
+Target their engines, target their shields, target their shields, fire, fire at will, fire everything we've got, damage report,
+

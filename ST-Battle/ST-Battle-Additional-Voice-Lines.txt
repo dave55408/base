@@ -1,0 +1,12 @@
+“Direct hit to Yorktown!” 1s
+“We’ve lost the port engine!” 1s
+“We’ve lost the starboard engine!” 1s
+“We missed!” 1s
+“They’re out of range.” 1s
+“They’re back in range.” 1s
+I'll try... 1s
+That might be hard. 1s
+Direct Hit! 1s
+I'll do what I can... 1s
+We took a direct hit! 1s
+We're losing power. 1s

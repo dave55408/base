@@ -69,7 +69,8 @@ test('flight recorder captures the entire three-maneuver pass, projectiles, and 
 test('cinematic playback never changes live battle data or recorded data and delivers events once',()=>{
   const s=pass(),before=snapshot(s),record=JSON.stringify(s.lastReplay),player=new Replay.Player(s.lastReplay,s),events=[];
   for(let i=0;i<10000&&!player.ended;i++){const frame=player.advance(.05);events.push(...frame.events);assert(Number.isFinite(player.state.player.x));}
-  assert(player.ended);assert.equal(events.length,s.lastReplay.events.length);assert.equal(snapshot(s),before);assert.equal(JSON.stringify(s.lastReplay),record);
+  const visible=s.lastReplay.events.filter(entry=>player.sequences.some(sequence=>entry.at>=sequence.start&&entry.at<=sequence.end)).map(entry=>entry.event);
+  assert(player.ended);assert.deepEqual(events,visible);assert.equal(snapshot(s),before);assert.equal(JSON.stringify(s.lastReplay),record);
   assert.notEqual(player.state.player,s.player);assert.notEqual(player.state.station,s.station);
 });
 

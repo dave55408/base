@@ -1,0 +1,9 @@
+Tool: built-in image_gen, edit mode
+Reference: assets/crew/allison.png
+Saved asset: assets/crew/allison-vulcan.png
+
+Use case: identity-preserve image edit.
+Asset type: square character portrait for an existing Star Trek game personnel file.
+Primary request: Make Lieutenant Allison a Vulcan, editing this exact existing illustrated portrait.
+Keep her recognizable: same face shape, red/auburn ponytail and swept fringe, green eyes, freckles, blue Starfleet uniform, badge, body pose, framing, bridge background, rich flat colors, heavy clean ink contours, subtle print texture, warm rim light and cyan edge light. Preserve the original square composition and the established cartoon illustration style. Do not replace her with another character.
+Change only the features needed to clearly read as a Vulcan: make her visible ear distinctly pointed in the classic Vulcan shape, naturally integrated with her hair, and give her clean upward-angled Vulcan eyebrows. Change the broad smile into a subtle closed-mouth, composed, thoughtful expression. Keep her apparent age and femininity. Retain her red hair and freckles rather than giving her a different identity. No text, no added objects, no borders. Full opaque background matching the reference.

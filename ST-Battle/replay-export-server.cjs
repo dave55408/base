@@ -41,29 +41,21 @@ function createReplayExportHandler({root=__dirname,ffmpegPath,execute=run}={}){
     if(!['/api/replay/capabilities','/api/replay/mp4','/api/replay/speech'].includes(pathname))return false;
     const json=(status,value)=>{if(!res.destroyed){res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(value));}};
     if(req.headers.origin){try{if(new URL(req.headers.origin).host!==req.headers.host){json(403,{error:'Replay export requires the local game page.'});return true;}}catch{json(403,{error:'Invalid origin.'});return true;}}
-    if(pathname==='/api/replay/capabilities'&&req.method==='GET'){json(200,{mp4:!!encoder(),speech:process.platform==='win32'&&!!encoder()});return true;}
+    if(pathname==='/api/replay/capabilities'&&req.method==='GET'){json(200,{mp4:!!encoder(),speech:false});return true;}
+    if(pathname==='/api/replay/speech'){json(410,{error:'Synthesized dialogue has been replaced by recorded voice clips.'});return true;}
     if(req.method!=='POST'){json(405,{error:'Method not allowed.'});return true;}
     if(!encoder()){json(503,{error:'MP4 conversion needs FFmpeg on this computer. Set FFMPEG_PATH or install FFmpeg.'});return true;}
-    const speech=pathname.endsWith('/speech'),hd=req.headers['x-replay-quality']==='hd',type=(req.headers['content-type']||'').split(';')[0];
-    if(type!==(speech?'application/json':'video/webm')){json(415,{error:'Unsupported replay media type.'});return true;}
-    if(speech&&process.platform!=='win32'){json(503,{error:'Local synthesized replay dialogue requires Windows speech.'});return true;}
+    const hd=req.headers['x-replay-quality']==='hd',type=(req.headers['content-type']||'').split(';')[0];
+    if(type!=='video/webm'){json(415,{error:'Unsupported replay media type.'});return true;}
     let directory;const controller=new AbortController();
     const abort=()=>{if(!res.writableEnded)controller.abort();};res.on('close',abort);
     try{
       const tempRoot=path.join(root,'exports','.tmp');await fs.mkdir(tempRoot,{recursive:true});directory=await fs.mkdtemp(path.join(tempRoot,'replay-'));
-      const input=path.join(directory,speech?'speech.json':'input.webm'),output=path.join(directory,speech?'voice.mp3':'replay.mp4');
-      await receive(req,input,speech?8192:(hd?512:256)*1024*1024);
-      if(speech){
-        let data;try{data=JSON.parse(await fs.readFile(input,'utf8'));}catch{const error=new Error('Invalid speech request.');error.status=400;throw error;}
-        if(typeof data.text!=='string'||!data.text.trim()||data.text.length>300||!['captain','helm','allison'].includes(data.speaker)){const error=new Error('Invalid replay dialogue.');error.status=400;throw error;}
-        const wave=path.join(directory,'voice.wav');
-        await execute('powershell.exe',['-NoProfile','-NonInteractive','-File',path.join(__dirname,'replay-speech.ps1'),'-InputFile',input,'-OutputFile',wave],{signal:controller.signal,timeout:20000});
-        await execute(encoder(),['-hide_banner','-loglevel','error','-i',wave,'-af','loudnorm=I=-18:TP=-2:LRA=7','-c:a','libmp3lame','-q:a','2',output],{signal:controller.signal});
-      }else{
-        await execute(encoder(),['-hide_banner','-loglevel','error','-i',input,'-vf','scale=trunc(iw/2)*2:trunc(ih/2)*2','-c:v','libx264','-preset',hd?'medium':'veryfast','-crf',hd?'16':'20','-pix_fmt','yuv420p','-c:a','aac','-b:a',hd?'320k':'160k','-movflags','+faststart',output],{signal:controller.signal});
-      }
-      const data=await fs.readFile(output);res.writeHead(200,{'Content-Type':speech?'audio/mpeg':'video/mp4','Content-Length':data.length,'Cache-Control':'no-store',...(!speech?{'Content-Disposition':'attachment; filename="ST-Battle-Replay.mp4"'}:{})});res.end(data);
-    }catch(error){if(!controller.signal.aborted)json(error.status||500,{error:error.status?error.message:'Replay export failed. Check that FFmpeg and local speech are available.'});}
+      const input=path.join(directory,'input.webm'),output=path.join(directory,'replay.mp4');
+      await receive(req,input,(hd?512:256)*1024*1024);
+      await execute(encoder(),['-hide_banner','-loglevel','error','-i',input,'-vf','scale=trunc(iw/2)*2:trunc(ih/2)*2','-c:v','libx264','-preset',hd?'medium':'veryfast','-crf',hd?'16':'20','-pix_fmt','yuv420p','-c:a','aac','-b:a',hd?'320k':'160k','-movflags','+faststart',output],{signal:controller.signal});
+      const data=await fs.readFile(output);res.writeHead(200,{'Content-Type':'video/mp4','Content-Length':data.length,'Cache-Control':'no-store','Content-Disposition':'attachment; filename="ST-Battle-Replay.mp4"'});res.end(data);
+    }catch(error){if(!controller.signal.aborted)json(error.status||500,{error:error.status?error.message:'Replay export failed. Check that FFmpeg is available.'});}
     finally{res.off('close',abort);if(directory)await fs.rm(directory,{recursive:true,force:true});}
     return true;
   };

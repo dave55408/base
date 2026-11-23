@@ -1,0 +1,7 @@
+Tool: built-in image_gen, edit mode
+Reference: assets/crew/allison-vulcan.png
+Saved asset: assets/crew/allison-vulcan-black-hair.png
+
+Use case: precise-object-edit, identity-preserving portrait edit.
+Edit the supplied portrait of Vulcan Lieutenant Allison with exactly two changes: make all of her red/auburn hair a rich natural black, and remove every freckle from her cheeks, nose, forehead and any visible skin. Keep the ponytail and swept fringe exactly the same shape. Black hair may retain subtle cool blue reflections and the existing warm rim light, but its base color must clearly be black, with no orange or red patches. Skin should have an even, freckle-free complexion while retaining the existing subtle illustration/print grain.
+Preserve her identity, face shape, green eyes, pointed Vulcan ear, sharply angled Vulcan eyebrows, calm closed-mouth expression, skin tone, blue uniform, badge, pose, bridge background, square framing, clean thick ink contours, shading and established cartoon style. No new objects, no text, no border. Keep the opaque background. Change only hair color and freckles.

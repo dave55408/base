@@ -31,7 +31,8 @@ test('export endpoints reject foreign origins, unsupported inputs, oversized and
   [{method:'POST',headers:{'Content-Type':'text/plain'},body:'x'},415],
   [{method:'POST',headers:{'Content-Type':'video/webm'},body:''},400],
  ]){const response=await fetch(url+'/api/replay/mp4',options);assert.equal(response.status,status);await response.text();}
- const response=await fetch(url+'/api/replay/speech',{method:'POST',headers:{'Content-Type':'application/json'},body:'x'.repeat(8193)});assert.equal(response.status,process.platform==='win32'?413:503);await response.text();
+ const response=await fetch(url+'/api/replay/speech',{method:'POST',headers:{'Content-Type':'application/json'},body:'x'.repeat(8193)});assert.equal(response.status,410);await response.text();
+ const capabilities=await (await fetch(url+'/api/replay/capabilities')).json();assert.equal(capabilities.speech,false);
 });
 test('encoding failures report a useful error and remove temporary media',async t=>{
  const {root,url}=await fixture(t,async()=>{throw Error('encoder failed');});

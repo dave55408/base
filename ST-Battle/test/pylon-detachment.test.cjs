@@ -73,6 +73,25 @@ test('temporary engine preview aims real Yorktown fire at a pylon and switches s
 });
 
 
+test('engine hunter fire physically reaches its selected warp pylon without the preview',()=>{
+  const scene=sceneHarness(),sim=scene.sim=new B.Simulation(97);sim.setEnemyPersonality('hunter');
+  Object.assign(sim.player,{x:6000,y:0,z:0,heading:0});Object.assign(sim.enemy,{x:5300,y:0,z:0,heading:90});
+  for(const arc of B.arcs)sim.player.shields[arc]=0;
+  sim.resolveWeaponHit=(...args)=>scene.resolveWeaponHit(...args);
+  sim.running=true;sim.applyPlanPreset('strong');assert(sim.commitOrders());
+  const side=sim.enemyWarpEngineSide();assert.equal(side,'port');
+  let hit=false;
+  for(let i=0;i<700&&!sim.result&&!sim.player.detachedNacelles[side];i++){
+    sim.tick(.05);
+    hit ||= sim.events.some(e=>e.type==='impact'&&e.ship==='Enterprise'&&e.hit?.pylonSide===side);
+    sim.events=[];
+    if(sim.turn.phase==='review'){sim.applyPlanPreset('strong');sim.commitOrders();}
+  }
+  assert(hit,'normal hunter targeting intersects its selected pylon');
+  assert(sim.player.detachedNacelles[side],'normal penetrating damage detaches the targeted engine');
+  assert.equal(sim.enemyWarpEngineSide(),'starboard');assert(!sim.previewNacelleBreakoff);
+});
+
 test('Yorktown retargets the remaining engine immediately and ends the preview only after both are lost',()=>{
   const sim=new B.Simulation(97);sim.previewNacelleBreakoff=true;sim.running=true;sim.applyPlanPreset('strong');sim.commitOrders();
   const first=sim.previewAttackArc,second=first==='port'?'starboard':'port';for(const arc of B.arcs)sim.player.shields[arc]=0;
@@ -94,6 +113,22 @@ test('either ship loses most of its available speed after one or both nacelles a
     ship.speed=intact;ship.flightAcceleration=0;for(let i=0;i<400;i++)sim.adjustFlightSpeed(ship,target,aim,{mode:'ram',turnRate:42},.05);
     assert(ship.speed<=Math.max(B.MIN_IMPULSE_SPEED,intact*.12)+.05,'actual velocity decelerates to the reduced limit');
   }
+});
+
+test('collision components cover the rendered hull at its actual scale, pitch and bank',()=>{
+  const scene=sceneHarness(),sim=scene.sim,T=scene.T;
+  Object.assign(sim.player,{x:6000,y:200,z:-400,heading:123,pitch:31,bank:.43});
+  const ship=scene.syncWeaponShip(sim.player),shapes=B.shipCollisionShapes(sim.player);
+  let checked=0;
+  for(const part of ship.userData.breakupParts)part.traverse(mesh=>{
+    const positions=mesh.geometry?.attributes?.position;if(!positions)return;
+    for(let i=0;i<positions.count;i+=13){
+      const point=mesh.localToWorld(new T.Vector3(positions.getX(i),positions.getY(i),positions.getZ(i)));
+      assert(shapes.some(shape=>shape.axes.every((axis,j)=>Math.abs((point.x-shape.center.x)*axis.x+(point.y-shape.center.y)*axis.y+(point.z-shape.center.z)*axis.z)<=shape.half[j]+.5)),`uncovered ${part.name||'hull'} vertex ${i}`);
+      checked++;
+    }
+  });
+  assert(checked>500,'samples the actual visible component surfaces');
 });
 
 test('manual forward and reverse thrust honor engine loss after braking',()=>{

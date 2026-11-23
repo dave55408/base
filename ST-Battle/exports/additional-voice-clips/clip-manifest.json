@@ -1,0 +1,336 @@
+[
+  {
+    "filename": "Direct hit to Yorktown!_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "Direct hit to Yorktown!",
+    "start": 0,
+    "end": 1.7620419999999999,
+    "duration": 1.762042,
+    "bytes": 21068,
+    "loudnessLUFS": -16.01
+  },
+  {
+    "filename": "We've lost the port engine!_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "We've lost the port engine!",
+    "start": 3.34575,
+    "end": 5.374167,
+    "duration": 2.028417,
+    "bytes": 24356,
+    "loudnessLUFS": -15.99
+  },
+  {
+    "filename": "We've lost the starboard engine!_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "We've lost the starboard engine!",
+    "start": 6.993708000000001,
+    "end": 9.219333,
+    "duration": 2.225625,
+    "bytes": 27836,
+    "loudnessLUFS": -16.01
+  },
+  {
+    "filename": "We missed!_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "We missed!",
+    "start": 11.088167,
+    "end": 11.95525,
+    "duration": 0.867083,
+    "bytes": 10436,
+    "loudnessLUFS": -16.01
+  },
+  {
+    "filename": "They're out of range_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "They're out of range",
+    "start": 13.805958,
+    "end": 15.060958,
+    "duration": 1.255,
+    "bytes": 13988,
+    "loudnessLUFS": -15.99
+  },
+  {
+    "filename": "They're back in range_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "They're back in range",
+    "start": 16.787333,
+    "end": 18.142875,
+    "duration": 1.355542,
+    "bytes": 15908,
+    "loudnessLUFS": -15.98
+  },
+  {
+    "filename": "I'll try_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "I'll try",
+    "start": 19.709875,
+    "end": 20.692875,
+    "duration": 0.983,
+    "bytes": 12164,
+    "loudnessLUFS": -15.97
+  },
+  {
+    "filename": "That might be hard_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "That might be hard",
+    "start": 22.141292,
+    "end": 23.508083,
+    "duration": 1.366791,
+    "bytes": 15476,
+    "loudnessLUFS": -16.02
+  },
+  {
+    "filename": "We took a direct hit!_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "We took a direct hit!",
+    "start": 25.101416999999998,
+    "end": 26.466125,
+    "duration": 1.364708,
+    "bytes": 16604,
+    "loudnessLUFS": -15.99
+  },
+  {
+    "filename": "Direct Hit!_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "Direct Hit!",
+    "start": 26.599332999999998,
+    "end": 27.546875,
+    "duration": 0.947542,
+    "bytes": 11660,
+    "loudnessLUFS": -16.01
+  },
+  {
+    "filename": "I'll do what I can_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "I'll do what I can",
+    "start": 28.788916999999998,
+    "end": 30.070542,
+    "duration": 1.281625,
+    "bytes": 14300,
+    "loudnessLUFS": -16.02
+  },
+  {
+    "filename": "We took a direct hit! (take 2)_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "We took a direct hit! (take 2)",
+    "start": 31.664042,
+    "end": 33.420666999999995,
+    "duration": 1.756625,
+    "bytes": 20372,
+    "loudnessLUFS": -16.01
+  },
+  {
+    "filename": "We're losing power_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "We're losing power",
+    "start": 35.010791999999995,
+    "end": 36.428667,
+    "duration": 1.417875,
+    "bytes": 17372,
+    "loudnessLUFS": -16
+  },
+  {
+    "filename": "On screen_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "On screen",
+    "start": 38.025917,
+    "end": 39.016208,
+    "duration": 0.990291,
+    "bytes": 12332,
+    "loudnessLUFS": -15.96
+  },
+  {
+    "filename": "No response. They're jamming our frequencies_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "No response. They're jamming our frequencies",
+    "start": 40.660624999999996,
+    "end": 43.813708,
+    "duration": 3.153083,
+    "bytes": 39764,
+    "loudnessLUFS": -16.05
+  },
+  {
+    "filename": "Shields down to [X] percent!_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "Shields down to [X] percent!",
+    "start": 45.348583,
+    "end": 47.43575,
+    "duration": 2.087167,
+    "bytes": 28052,
+    "loudnessLUFS": -16.01
+  },
+  {
+    "filename": "Phasers offline!_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "Phasers offline!",
+    "start": 49.269833,
+    "end": 51.047957999999994,
+    "duration": 1.778125,
+    "bytes": 21404,
+    "loudnessLUFS": -16
+  },
+  {
+    "filename": "Warp drive is down!_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "Warp drive is down!",
+    "start": 52.995875,
+    "end": 54.644667,
+    "duration": 1.648792,
+    "bytes": 19676,
+    "loudnessLUFS": -15.98
+  },
+  {
+    "filename": "Brace for impact!_Allision.mp3",
+    "source": "Allison_direct reponses.mp3",
+    "command": "Brace for impact!",
+    "start": 56.252958,
+    "end": 57.888541999999994,
+    "duration": 1.635584,
+    "bytes": 20708,
+    "loudnessLUFS": -16
+  },
+  {
+    "filename": "Open hailing frequencies_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Open hailing frequencies",
+    "start": 0,
+    "end": 2.098292,
+    "duration": 2.098292,
+    "bytes": 17516
+  },
+  {
+    "filename": "Red alert. All hands battle stations_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Red alert. All hands battle stations",
+    "start": 3.7029579999999997,
+    "end": 6.7652920000000005,
+    "duration": 3.062334,
+    "bytes": 25196
+  },
+  {
+    "filename": "Shields up_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Shields up",
+    "start": 8.205042,
+    "end": 9.220208,
+    "duration": 1.015166,
+    "bytes": 8876
+  },
+  {
+    "filename": "Raise shields_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Raise shields",
+    "start": 9.318042,
+    "end": 10.857583,
+    "duration": 1.539541,
+    "bytes": 13100
+  },
+  {
+    "filename": "Evasive maneuvers_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Evasive maneuvers",
+    "start": 12.273,
+    "end": 13.798458,
+    "duration": 1.525458,
+    "bytes": 12908
+  },
+  {
+    "filename": "Divert auxiliary power to forward shields_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Divert auxiliary power to forward shields",
+    "start": 15.191167,
+    "end": 18.709667,
+    "duration": 3.5185,
+    "bytes": 28844
+  },
+  {
+    "filename": "Lock phasers on target_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Lock phasers on target",
+    "start": 20.128124999999997,
+    "end": 21.944417,
+    "duration": 1.816292,
+    "bytes": 15212
+  },
+  {
+    "filename": "Arm photon torpedoes_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Arm photon torpedoes",
+    "start": 23.436291999999998,
+    "end": 25.604417,
+    "duration": 2.168125,
+    "bytes": 18092
+  },
+  {
+    "filename": "Target their weapons_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Target their weapons",
+    "start": 27.062749999999998,
+    "end": 28.662792,
+    "duration": 1.600042,
+    "bytes": 13484
+  },
+  {
+    "filename": "Target their engines_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Target their engines",
+    "start": 30.091167,
+    "end": 31.932917,
+    "duration": 1.84175,
+    "bytes": 15404
+  },
+  {
+    "filename": "Target their shields_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Target their shields",
+    "start": 33.036208,
+    "end": 34.71525,
+    "duration": 1.679042,
+    "bytes": 14060
+  },
+  {
+    "filename": "Target their shields (take 2)_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Target their shields (take 2)",
+    "start": 36.153542,
+    "end": 37.77229199999999,
+    "duration": 1.61875,
+    "bytes": 13676
+  },
+  {
+    "filename": "Fire_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Fire",
+    "start": 39.955667,
+    "end": 40.781082999999995,
+    "duration": 0.825416,
+    "bytes": 7340
+  },
+  {
+    "filename": "Fire at will_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Fire at will",
+    "start": 42.305792,
+    "end": 43.532542,
+    "duration": 1.22675,
+    "bytes": 10604
+  },
+  {
+    "filename": "Fire everything we've got_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Fire everything we've got",
+    "start": 45.073,
+    "end": 46.888749999999995,
+    "duration": 1.81575,
+    "bytes": 15212
+  },
+  {
+    "filename": "Damage report_Declan.mp3",
+    "source": "Declan_AdditonalCommands.mp3",
+    "command": "Damage report",
+    "start": 48.059875,
+    "end": 49.199166999999996,
+    "duration": 1.139292,
+    "bytes": 9836
+  }
+]

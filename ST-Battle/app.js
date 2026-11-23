@@ -2,10 +2,10 @@
   'use strict';
   const $=id=>document.getElementById(id),B=Battle,sim=window.battle=new B.Simulation((Math.random()*0x100000000)>>>0,{randomStart:true});
   // Temporary visual test: Yorktown targets both pylons until both nacelles break off.
-  const NACELLE_BREAKOFF_PREVIEW=true;sim.previewNacelleBreakoff=NACELLE_BREAKOFF_PREVIEW;
+  const NACELLE_BREAKOFF_PREVIEW=false;sim.previewNacelleBreakoff=NACELLE_BREAKOFF_PREVIEW;
   const colors={engines:'#d9aa73',shields:'#7bd3da',weapons:'#dd8278',sensors:'#ad9ac9'};
   const career=loadCareer();let welcomeDismissed=false,resultSaved=false,newBest=false,calloutUntil=0,bestGuessEnabled=false,yorktownStrategyVisible=false,introPlayed=false,voiceStartsAt=0;
-  let lastSpokenPhrase='',replayLastSpokenPhrase='',replayVoiceQueue=[],replayVoiceSpeaking=false,replayVoiceGeneration=0,replayReplyAt=0,replayVoiceAudio;
+  let lastSpokenPhrase='',replayLastSpokenPhrase='',replayVoiceQueue=[],replayVoiceSpeaking=false,replayVoiceGeneration=0,replayReplyAt=0,replayFarewellAt=0,replayVoiceAudio;
   function claimBridgePhrase(words,speaker='helm',clip){
     const phrase=String(words).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
     if(!phrase||phrase===lastSpokenPhrase)return false;lastSpokenPhrase=phrase;
@@ -16,7 +16,11 @@
     }
     return true;
   }
-  let helmUtterances=[],bridgeVoiceAudio,firingVoice,manualShots=[],helmReplyTimer=null,helmSpeechGeneration=0,helmSpeaking=false;
+  let bridgeVoiceAudio,engineLossAudio,engineLossCurrent=null,engineLossQueue=[],firingVoice,manualShots=[],helmSpeechGeneration=0,helmSpeaking=false,captainFarewellAt=0;
+  const captainNarration=window.BattleCaptainNarration?new window.BattleCaptainNarration():null;
+  function updateWelcomeNarration(retry=false){
+    captainNarration?.updateWelcome({visible:!welcomeDismissed&&!sim.running&&!sim.result&&!sim.freeFlight&&!$('launch-card').hidden,enabled:audioOn&&helmSpeechEnabled&&!document.hidden,musicEnabled:audioOn&&!document.hidden,retry});
+  }
   function loadCareer(){
     const fresh={best:0,wins:0,played:0};
     try{const saved=JSON.parse(window.localStorage?.getItem('st-battle-career')||'null');for(const key of Object.keys(fresh))if(Number.isFinite(saved?.[key])&&saved[key]>=0)fresh[key]=Math.floor(saved[key]);}catch{}
@@ -84,9 +88,9 @@
     audioOn=!audioOn;syncAudioButton();
     if(!audioOn){stopHelmSpeech();weaponAudio?.setEnabled(false);engineAudio?.setEnabled(false);yorktownEngineAudio?.setEnabled(false);redAlertAudio?.setEnabled(false);introAudio?.setEnabled(false);viewscreenAudio?.setEnabled(false);return;}
     weaponAudio?.setEnabled(true);engineAudio?.setEnabled(true);yorktownEngineAudio?.setEnabled(true);redAlertAudio?.setEnabled(true);introAudio?.setEnabled(true);viewscreenAudio?.setEnabled(true);updateViewscreenAudio();
-    if(await unlockAudio())tone(550,.18,'sine',.06,750);
+    if(await unlockAudio())tone(550,.18,'sine',.06,750);updateWelcomeNarration(true);
   }
-  document.addEventListener('pointerdown',()=>{if(audioOn)unlockAudio();},{capture:true});
+  document.addEventListener('pointerdown',()=>{if(audioOn)unlockAudio();updateWelcomeNarration(true);},{capture:true});
   function buildControls(){
     for(const arc of B.arcs){const row=document.createElement('div');row.className='shield-control';row.innerHTML=`<div class="shield-label"><label for="bias-${arc}">${arc==='starboard'?'STBD':arc}</label><b id="shield-${arc}">100%</b></div><input id="bias-${arc}" type="range" min="0" max="100" value="${sim.player.bias[arc]}" aria-label="${arc} shield recharge allocation" title="Share of shield recharge power">`;row.querySelector('input').addEventListener('input',e=>B.redistribute(sim.player.bias,arc,+e.target.value));$('shield-controls').append(row);}
     for(const key of B.systems){const row=document.createElement('div');row.className='power-row';row.style.setProperty('--system-color',colors[key]);row.innerHTML=`<label for="power-${key}"><span>${key}<small id="integrity-${key}">100% intact</small></span></label><input id="power-${key}" type="range" min="0" max="100" value="${sim.player.power[key]}" aria-label="${key} reactor allocation"><output id="output-${key}"></output>`;row.querySelector('input').addEventListener('input',e=>B.redistribute(sim.player.power,key,+e.target.value));$('power-controls').append(row);const segment=document.createElement('i');segment.id='stack-'+key;segment.style.background=colors[key];$('power-stack').append(segment);}
@@ -97,12 +101,12 @@
   }
   function begin(){if(sim.freeFlight)reset();if(sim.result)return;if(!scene){toast('The 3D viewscreen must be available before starting.');return;}sim.running=true;$('start').hidden=true;tone(450,.25,'triangle',.025,880);sim.message('CONN','Engagement underway. Yorktown closing. Helm is yours.');ui();if(sim.turnBased&&!sim.maneuvering&&!sim.planReady())planner.open();}
   function pause(){if(sim.result)return;if(!sim.freeFlight&&!sim.running&&sim.time===0){begin();return;}sim.running=!sim.running;keysClear();ui();}
-  function reset(){welcomeDismissed=false;clearHelm();introPlayed=false;voiceStartsAt=0;introAudio?.reset();resultSaved=false;newBest=false;calloutUntil=0;$('combat-callout').hidden=true;endingElapsed=0;endingStarted=false;engineAudio?.stop();yorktownEngineAudio?.stop();redAlertAudio?.stop();introAudio?.update({active:false});replayView?.close(false);weaponAudio?.stopAll(.03);sim.reset();sim.previewNacelleBreakoff=NACELLE_BREAKOFF_PREVIEW;sim.previewAttackArc=null;sim.environment=$('environment').value;$('repair-system').value='sensors';scene?.reset();camera('chase');held.clear();keysClear();$('result').hidden=true;$('start').hidden=false;document.querySelectorAll('[data-camera]').forEach(b=>b.classList.toggle('active',b.dataset.camera==='chase'));ui();}
+  function reset(){welcomeDismissed=false;clearHelm();captainNarration?.reset();introPlayed=false;voiceStartsAt=0;introAudio?.reset();resultSaved=false;newBest=false;calloutUntil=0;$('combat-callout').hidden=true;endingElapsed=0;endingStarted=false;engineAudio?.stop();yorktownEngineAudio?.stop();redAlertAudio?.stop();introAudio?.update({active:false});replayView?.close(false);weaponAudio?.stopAll(.03);sim.reset();sim.previewNacelleBreakoff=NACELLE_BREAKOFF_PREVIEW;sim.previewAttackArc=null;sim.environment=$('environment').value;$('repair-system').value='sensors';scene?.reset();camera('chase');held.clear();keysClear();$('result').hidden=true;$('start').hidden=false;document.querySelectorAll('[data-camera]').forEach(b=>b.classList.toggle('active',b.dataset.camera==='chase'));ui();}
   function keysClear(){for(const k of Object.keys(keys))keys[k]=false;held.clear();}
   function cancelFiringVoice(){firingVoice?.stop();manualShots=[];}
   sim.beforePlayerFire=(type,scheduled)=>{
     if(sim.freeFlight||!helmSpeechEnabled||!audioOn||!ctx||!window.Audio||!window.BattleFiringVoices||document.hidden||replayView?.active)return true;
-    if(lastFrame<voiceStartsAt)return true;
+    if(lastFrame<voiceStartsAt||helmCurrent?.key==='battle-opening')return true;
     if(firingVoice?.releasing?.type===type)return true;
     if(scheduled&&manualShots.length)return false;
     firingVoice??=new window.BattleFiringVoices();
@@ -146,7 +150,9 @@
   $('quick-battle').onclick=quickBattle;$('quick-rematch').onclick=()=>{reset();quickBattle();};
   $('hide-hud-messages').onchange=()=>{if($('hide-hud-messages').checked){$('combat-callout').hidden=true;calloutUntil=0;}};
   $('plan-attack').onclick=begin;
+  $('play-welcome-intro').onclick=()=>{if(!audioOn||!helmSpeechEnabled)return;captainNarration?.reset();updateWelcomeNarration(true);};
   $('close-welcome').onclick=()=>{welcomeDismissed=true;ui();$('start').focus();};
+  $('yorktown-personality').onchange=e=>{if(!replayView?.active)sim.setEnemyPersonality(e.target.value);ui();};
   $('toggle-yorktown-strategy').onclick=()=>{yorktownStrategyVisible=!yorktownStrategyVisible;ui();};
   $('launch-practice').onclick=startFreeFlight;
   for(const level of ['cadet','captain','admiral'])$('difficulty-'+level).onclick=()=>{if(sim.setDifficulty(level))ui();};
@@ -173,6 +179,12 @@
   });
   function playIntroCue(){
     if(sim.freeFlight||introPlayed)return;introPlayed=true;
+    captainNarration?.stopWelcome();
+    if(captainNarration){
+      const cue=captainNarration.chooseOpening();
+      const opening=queueHelm('battle-opening',cue.text,'',4,()=>!sim.result&&!sim.freeFlight);
+      opening.clip=cue.clip;helmQueue.pop();helmQueue.unshift(opening);
+    }
     voiceStartsAt=lastFrame+3000;
     if(audioOn&&window.BattleIntroAudio&&window.Audio){introAudio??=new window.BattleIntroAudio();introAudio.setEnabled(true);introAudio.playOnce();}
   }
@@ -196,7 +208,7 @@
   replayView=window.battleReplay=new window.BattleReplayView(sim,{
     createScene:(host,state)=>new BattleScene(host,state),stopSound:({music=true}={})=>{stopHelmSpeech();weaponAudio?.stopAll(.03);engineAudio?.stop();yorktownEngineAudio?.stop();redAlertAudio?.stop();if(music)introAudio?.update({active:false});},changed:()=>{keysClear();ui();},error:toast,
     resetDialogue:()=>{stopReplaySpeech();replayLastSpokenPhrase='';},
-    dialogue:line=>{if(line.reply==='Helm lost!')stopHelmSpeech();replayVoiceQueue.push({...line,replay:true});},voicesBusy:()=>replayVoiceSpeaking||replayVoiceQueue.length>0,
+    dialogue:line=>{if(line.reply==='Helm lost!')stopHelmSpeech();if(isEngineLossLine(line))engineLossQueue.push({...line,replay:true,valid:()=>true});else replayVoiceQueue.push({...line,replay:true});},voicesBusy:()=>replayVoiceSpeaking||replayVoiceQueue.length>0||!!engineLossCurrent||engineLossQueue.length>0,
     sound:eventSound
   });
   $('replay-audio').onclick=audio;
@@ -231,8 +243,8 @@
   const keyCode=e=>{const key=e.key||'';return key===' '?'Space':key.length===1?'Key'+key.toUpperCase():(e.code||key);};
   addEventListener('keydown',e=>{
     const code=keyCode(e);
-    if(e.target.id==='voices-mute'&&['Space','Enter'].includes(code))return;
-    if(audioOn&&!e.ctrlKey&&!e.metaKey&&!e.altKey)unlockAudio();
+    if(['voices-mute','play-welcome-intro'].includes(e.target.id)&&['Space','Enter'].includes(code))return;
+    if(audioOn&&!e.ctrlKey&&!e.metaKey&&!e.altKey){unlockAudio();updateWelcomeNarration(true);}
     if(code==='KeyF'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)&&!$('plan-wizard').open&&!$('briefing').open){e.preventDefault();if(!e.repeat)toggleFullscreen();return;}
     if(replayView?.active&&!e.ctrlKey&&!e.metaKey&&!e.altKey){if(e.repeat)return;if(code==='Escape'){e.preventDefault();replayView.close();}if(code==='KeyP'||code==='Space'){e.preventDefault();$('replay-play').onclick();}if(code==='KeyR')replayView.restart();if(code==='KeyB')audio();return;}
     if($('plan-wizard').open||$('briefing').open||e.ctrlKey||e.metaKey||e.altKey||(['SELECT','TEXTAREA'].includes(e.target.tagName)||(e.target.tagName==='INPUT'&&e.target.type==='checkbox')))return;
@@ -306,10 +318,11 @@
   }
   function meter(id,value){$(id).style.width=B.clamp(value)+'%';}
   function ui(){
-    if(!sim.running&&!sim.result)stopHelmSpeech();
+    if(!sim.running&&!sim.result)stopHelmSpeech({welcome:false});
     $('game-shell').classList.toggle('cinema-view',scene?.mode==='cinematic'&&!replayView?.active);
     const standby=!sim.freeFlight&&!sim.result&&!sim.turn.orders&&!$('start').hidden&&!planner?.dialog.open;
-    $('launch-card').hidden=!standby||welcomeDismissed;$('battle-screen').classList.toggle('standby',standby&&!welcomeDismissed);
+    $('launch-card').hidden=!standby||welcomeDismissed;$('battle-screen').classList.toggle('standby',standby&&!welcomeDismissed);updateWelcomeNarration();
+    $('play-welcome-intro').disabled=!audioOn||!helmSpeechEnabled;
     $('quick-battle').disabled=!scene;
     $('plan-attack').disabled=!scene;
     for(const level of ['cadet','captain','admiral'])$('difficulty-'+level).setAttribute('aria-pressed',String(sim.difficulty===level));
@@ -382,12 +395,14 @@
     $('yorktown-plan-progress').hidden=!detail||sim.freeFlight||!sim.turnBased||!enemyPlan.length;
     text('yorktown-plan-progress','ATTACK '+(enemyNext<0?enemyPlan.length:enemyNext+1)+' OF '+enemyPlan.length);
 
+    $('yorktown-personality').value=sim.enemyPersonality;
+    $('yorktown-personality').disabled=!!sim.result||!!replayView?.active;
     $('yorktown-strategy-details').hidden=!yorktownStrategyVisible;
     $('toggle-yorktown-strategy').setAttribute('aria-expanded',String(yorktownStrategyVisible));
     text('toggle-yorktown-strategy',yorktownStrategyVisible?'Hide Strategy':'Show Strategy');
     if(yorktownStrategyVisible){
       const mind=sim.enemyMind,returning=mind.reengageUntil>sim.time;
-      const tactic=sim.result?'Engagement complete':sim.freeFlight?'Orbiting K7':planning&&sim.turnBased?'Planning next attack':returning?'Re-engaging / '+(B.maneuvers[mind.returnManeuver]?.name||'Turning back'):sim.enemyRetreating?'Retreating and repairing':sim.turnBased&&!enemyPending?'Breaking away':mind.evadeUntil>sim.time?'Evasive maneuver':e.tactic||'Pursuing Enterprise';
+      const tactic=sim.result?'Engagement complete':sim.freeFlight?'Orbiting K7':planning&&sim.turnBased?'Planning next attack':returning?'Re-engaging / '+(B.maneuvers[mind.returnManeuver]?.name||'Turning back'):sim.enemyRetreating?'Retreating and repairing':sim.turnBased&&!enemyPending?'Holding engagement range':mind.evadeUntil>sim.time?'Evasive maneuver':e.tactic||'Pursuing Enterprise';
       text('yorktown-strategy-tactic',tactic);
       const orders=$('yorktown-strategy-orders');orders.replaceChildren();
       if(sim.freeFlight||!t.enemyOrders?.length){
@@ -396,7 +411,9 @@
         const index=enemyNext<0?enemyPlan.length-1:enemyNext,order=enemyPlan[index];
         const item=document.createElement('li'),title=document.createElement('strong'),note=document.createElement('span');
         const status=order.status==='pending'?(!enemyEnded?'NEXT':'PENDING'):(order.status||'pending').toUpperCase();
-        title.textContent='Attack '+(index+1)+': '+B.weaponSpecs[order.weapon].name+' -> '+(B.targets[order.target]||order.target);
+        const warpSide=order.attackArc;
+        const targetName=sim.enemyPersonality==='hunter'&&order.target==='mainEngines'&&['port','starboard'].includes(warpSide)?warpSide[0].toUpperCase()+warpSide.slice(1)+' warp engine':B.targets[order.target]||order.target;
+        title.textContent='Attack '+(index+1)+': '+B.weaponSpecs[order.weapon].name+' -> '+targetName;
         note.textContent='Attack '+(index+1)+' / '+(order.range/100).toFixed(1)+' km / '+status;
         item.setAttribute('data-status',status==='NEXT'?'next':order.status);
         item.append(title,note);orders.append(item);
@@ -475,7 +492,7 @@
       c.fillStyle='#c5dbe5';c.fillText('SOLID: PAST 30s / DASHED: NEXT 15s',w-18,89);
       c.fillText('Projection from current speed and turn',w-18,106);c.shadowBlur=0;c.textAlign='left';
     }
-    if(scene.mode==='forward'){c.strokeStyle='#7bd3da66';const x=w/2,y=h/2;c.beginPath();c.arc(x,y,24,0,Math.PI*2);c.moveTo(x-40,y);c.lineTo(x-12,y);c.moveTo(x+12,y);c.lineTo(x+40,y);c.moveTo(x,y-40);c.lineTo(x,y-12);c.moveTo(x,y+12);c.lineTo(x,y+40);c.stroke();}
+
   }
   function eventSound(event,rate=1){
     if(!audioOn)return;
@@ -491,28 +508,67 @@
     helmSpeechEnabled=!helmSpeechEnabled;
     if(!helmSpeechEnabled){
       // Voice mute releases a pending manual shot to fire silently next frame.
-      const pending=[...manualShots];stopHelmSpeech();manualShots=pending;
+      const pending=[...manualShots];stopHelmSpeech({welcomeMusic:false});manualShots=pending;
     }
     $('voices-mute').setAttribute('aria-pressed',String(!helmSpeechEnabled));
     $('voices-mute').setAttribute('aria-label',helmSpeechEnabled?'Mute voices':'Unmute voices');
-    $('voices-mute').title=(helmSpeechEnabled?'Mute':'Unmute')+' captain and helm voices only';
+    $('voices-mute').title=(helmSpeechEnabled?'Mute':'Unmute')+' captain and helm voices only';updateWelcomeNarration(true);
   };
   const helmRoutes=window.BattleVoiceCatalog.routes;
   const bridgeWarnings=window.BattleBridgeWarnings?new window.BattleBridgeWarnings():null;
   let helmQueue=[],helmCurrent=null,helmRemaining=0,enterpriseVoiceLost=false;
-  function clearHelm(){lastSpokenPhrase='';stopHelmSpeech();bridgeWarnings?.reset();helmQueue=[];helmCurrent=null;helmRemaining=0;helmSpeaking=false;enterpriseVoiceLost=false;$('helm-dialogue').hidden=true;}
+  const announcedTorpedoes=new Set();
+  let difficultCommandReply=0,directHitReply=0;
+  function clearHelm(){lastSpokenPhrase='';stopHelmSpeech();bridgeWarnings?.reset();announcedTorpedoes.clear();difficultCommandReply=0;directHitReply=0;helmQueue=[];helmCurrent=null;helmRemaining=0;helmSpeaking=false;enterpriseVoiceLost=false;$('helm-dialogue').hidden=true;}
+  function helmCommandIsDifficult(){
+    const p=sim.player,t=sim.turn;
+    if(sim.freeFlight||sim.result)return false;
+    if(sim.output(p,'engines')<6)return true;
+    if(t.maneuver==='flee')return p.repairBudget<=0;
+    if(t.maneuver==='ram')return false;
+    const shots=(t.orders||[]).filter((order,index)=>order.status==='pending'&&order.weapon&&sim.attackAssignments(order,index).includes(t.stageIndex));
+    return shots.length>0&&(p.integrity.weapons<10||sim.output(p,'weapons')<3||sim.output(p,'sensors')<3.5||shots.every(shot=>shot.weapon==='torpedo')&&p.torpedoes<=0);
+  }
+  function incomingTorpedoThreat(shot){
+    const p=sim.player;
+    if(!sim.running||sim.result||sim.freeFlight||shot.practice||shot.from!==sim.enemy.name||shot.target!==p.name||!shot.pos||sim.output(p,'sensors')<3.5)return false;
+    if(![shot.pos.x,shot.pos.y,shot.pos.z,shot.heading,shot.pitch,p.speed].every(Number.isFinite))return false;
+    const d=B.direction(shot),pd=B.direction(p),r={x:shot.pos.x-p.x,y:shot.pos.y-p.y,z:shot.pos.z-p.z};
+    const v={x:d.x*400-pd.x*p.speed,y:d.y*400-pd.y*p.speed,z:d.z*400-pd.z*p.speed};
+    const speed2=v.x*v.x+v.y*v.y+v.z*v.z,dot=r.x*v.x+r.y*v.y+r.z*v.z;
+    if(dot>=0||speed2<=0||Math.hypot(r.x,r.y,r.z)>1200)return false;
+    const closest=-dot/speed2;
+    if(closest>3||closest>(shot.maxLife??8)-(shot.life??0)||Math.hypot(r.x+v.x*closest,r.y+v.y*closest,r.z+v.z*closest)>160)return false;
+    const intercept={x:shot.pos.x+d.x*400*closest,y:shot.pos.y+d.y*400*closest,z:shot.pos.z+d.z*400*closest};
+    return !sim.stationTrace(shot.pos,intercept,2);
+  }
+  function updateIncomingTorpedoes(){
+    const active=new Set(sim.projectiles.map(shot=>shot.id));
+    for(const id of announcedTorpedoes)if(!active.has(id))announcedTorpedoes.delete(id);
+    for(const shot of sim.projectiles){
+      if(announcedTorpedoes.has(shot.id)||!incomingTorpedoThreat(shot))continue;
+      announcedTorpedoes.add(shot.id);
+      queueHelm('incoming-torpedo','','Torpedo incoming!',2,()=>sim.projectiles.includes(shot)&&incomingTorpedoThreat(shot));
+    }
+  }
   function queueHelm(key,order,reply,priority=1,valid=()=>true,speaker='helm'){
-    if(enterpriseVoiceLost&&key!=='enterprise-lost')return;
+    if(enterpriseVoiceLost&&!['enterprise-lost','captain-farewell'].includes(key))return;
     if(sim.freeFlight)order='';
-    const line={key,order,reply,priority,valid,speaker};
+    const line={key,order,reply:Array.isArray(reply)?reply.join(' '):reply,priority,valid,speaker,...(Array.isArray(reply)?{replies:reply}:{})};
     helmQueue.push(line);
+    return line;
   }
   const helmBrief=window.BattleVoiceCatalog.brief;
   function helmEvent(event){
     if(enterpriseVoiceLost)return;
     if(event.type==='destroyed'&&event.ship===sim.player.name){
       stopHelmSpeech();helmQueue=[];helmCurrent=null;helmRemaining=0;voiceStartsAt=0;enterpriseVoiceLost=true;
-      queueHelm('enterprise-lost','','Helm lost!',4);return;
+      queueHelm('enterprise-lost','','Helm lost!',4);
+      if(captainNarration){
+        const cue=captainNarration.chooseFarewell();
+        const farewell=queueHelm('captain-farewell',cue.text,'',4,()=>sim.result==='defeat');farewell.clip=cue.clip;
+      }
+      return;
     }
     const pass=sim.turn.number;
     const breakingAway=()=>sim.turn.number===pass&&['disengage','review'].includes(sim.turn.phase);
@@ -523,107 +579,104 @@
     if(event.type==='phase'&&event.phase==='disengage'&&sim.turn.navigation?.aborted)queueHelm('aborted-breakaway','','Breaking away.',2,breakingAway);
     if(event.type==='phase'&&['approach','withdraw'].includes(event.phase)){
       const exchange=helmRoutes[sim.turn.maneuver];
-      if(exchange)queueHelm('route-'+sim.turn.maneuver,...exchange);
+      if(exchange){
+        if(helmCommandIsDifficult()){
+          const stage=sim.turn.stageIndex,reply=["I'll do what I can...","I'll try...",['That might be hard...',"I'll try..."]][difficultCommandReply++%3];
+          queueHelm('route-'+sim.turn.maneuver,exchange[0],reply,1,()=>sim.turn.number===pass&&sim.turn.stageIndex===stage&&!sim.result,'allison');
+        }else queueHelm('route-'+sim.turn.maneuver,...exchange);
+      }
     }
     if(event.type==='phase'&&event.phase==='review'){
       queueHelm('review','Report.','Maneuvers complete. Awaiting orders.',2,()=>sim.turn.number===pass&&sim.turn.phase==='review');
     }
     if(event.type==='message'&&event.station==='HELM'&&!/^M[1-3]:/.test(event.text)&&!['Relative position held for over five seconds. Advancing the flight plan.','Maneuver aborted. Breaking away.'].includes(event.text))queueHelm(event.text,'',helmBrief[event.text]||event.text,2,event.text==='Selected maneuvers complete. Automatic breakaway before damage review.'?breakingAway:()=>true);
     if(event.type==='message'&&event.station==='CONN'&&sim.freeFlight)queueHelm('free-flight','Manual helm.','Manual control. Standing by.');
-    if(event.type==='launch'&&event.to==='Enterprise'&&!event.practice){
-      const incoming=new Set(sim.projectiles.filter(shot=>shot.target===sim.player.name&&!shot.practice).map(shot=>shot.id));
-      if(incoming.size)queueHelm('incoming-torpedo','','Torpedo incoming!',2,()=>sim.projectiles.some(shot=>incoming.has(shot.id)&&!shot.practice));
-    }
     if(event.type==='nacelle-detached'&&event.ship===sim.player.name&&['port','starboard'].includes(event.side)&&!sim.freeFlight){
-      queueHelm('engine-lost-'+event.side,'',event.side==='port'?"We've lost the port engine!":"We've lost the starboard engine!",3,()=>!enterpriseVoiceLost,'allison');
+      engineLossQueue.push({key:'engine-lost-'+event.side,order:'',reply:event.side==='port'?"We've lost the port engine!":"We've lost the starboard engine!",speaker:'allison',notBefore:lastFrame+500,valid:()=>!enterpriseVoiceLost});
     }
     if(event.type==='torpedo-missed'&&event.from===sim.player.name&&event.target===sim.enemy.name&&!event.practice&&!sim.freeFlight)queueHelm('torpedo-missed','','We missed!',2,()=>!enterpriseVoiceLost,'allison');
-    if(event.type==='impact'&&event.ship===sim.enemy.name&&event.weapon==='torpedo'&&event.amount>0&&!event.practice&&!sim.freeFlight)queueHelm('torpedo-direct-hit','','Direct hit to Yorktown!',2,()=>!enterpriseVoiceLost,'allison');
-    if(event.type==='impact'&&event.ship==='Enterprise'&&event.hullDamage>0)queueHelm('hull-hit','','Hull hit!',3);
+    if(event.type==='impact'&&event.ship===sim.enemy.name&&event.weapon==='torpedo'&&event.amount>0&&!event.practice&&!sim.freeFlight)queueHelm('torpedo-direct-hit','',['Direct hit to Yorktown!','Direct Hit!'][directHitReply++%2],2,()=>!enterpriseVoiceLost,'allison');
+    if(event.type==='impact'&&event.ship===sim.player.name&&event.hullDamage>0&&!event.practice&&!sim.freeFlight){
+      const hitAt=sim.time,frameAt=lastFrame;
+      queueHelm('hull-hit','','Hull hit!',3,()=>!sim.result&&sim.time-hitAt<=2&&lastFrame-frameAt<=2000);
+    }
     if(event.type==='warp')queueHelm('warp','','Warp complete.',2);
     if(event.type==='destroyed'){
       queueHelm('result','','Yorktown disabled.',4);
     }
   }
-  function stopHelmSpeech(){
+  function stopHelmSpeech({welcome=true,welcomeMusic=true}={}){
+    if(welcome)captainNarration?.stopWelcome({music:welcomeMusic});
     stopReplaySpeech();
     helmSpeaking=false;
+    captainFarewellAt=0;
     helmSpeechGeneration++;
-    if(helmReplyTimer!==null){clearTimeout(helmReplyTimer);helmReplyTimer=null;}
     cancelFiringVoice();
     bridgeVoiceAudio?.stop();
-    if(!helmUtterances.length)return;
-    helmUtterances=[];
-    try{window.speechSynthesis?.cancel();}catch{}
+    engineLossAudio?.stop();engineLossCurrent=null;engineLossQueue=[];
+  }
+  function isEngineLossLine(line){return ["We've lost the port engine!","We've lost the starboard engine!"].includes(line.reply);}
+  function updateEngineLossSpeech(){
+    const replay=!!replayView?.active;
+    if(!audioOn||!helmSpeechEnabled||document.hidden||replay&&(replayView.player.paused||replayView.player.ended)||!replay&&!sim.running&&!sim.result){
+      engineLossAudio?.stop();engineLossCurrent=null;engineLossQueue=[];return false;
+    }
+    if(!engineLossCurrent){
+      while(engineLossQueue.length&&!engineLossQueue[0].valid())engineLossQueue.shift();
+      if(lastFrame<(engineLossQueue[0]?.notBefore??0))return false;
+      const line=engineLossQueue.shift();if(!line)return false;
+      if(!line.valid())return updateEngineLossSpeech();
+      engineLossCurrent=line;
+      // A separate player lets this urgent report speak over an existing command.
+      if(window.BattleBridgeVoices&&window.Audio){
+        engineLossAudio??=new window.BattleBridgeVoices({allowPhrase:(...args)=>replayView?.active?claimReplayPhrase(...args):claimBridgePhrase(...args)});
+        const done=()=>{if(engineLossCurrent===line){engineLossCurrent=null;if(!replay&&helmCurrent)renderHelmLine(helmCurrent);}};
+        if(!engineLossAudio.play(line,null,done))done();
+      }else engineLossCurrent=null;
+    }
+    if(engineLossCurrent&&!replay)renderHelmLine(engineLossCurrent);
+    return !!engineLossCurrent;
   }
   function speakHelm(line,onComplete){
     if(!helmSpeechEnabled||!audioOn||document.hidden||replayView?.active||(!sim.running&&!sim.result)){onComplete();return;}
     if(window.BattleBridgeVoices&&window.Audio){
       bridgeVoiceAudio??=new window.BattleBridgeVoices({allowPhrase:claimBridgePhrase});
-      if(bridgeVoiceAudio.play(line,speakBrowserHelm,onComplete))return;
+      if(bridgeVoiceAudio.play(line,null,onComplete))return;
     }
-    speakBrowserHelm(line,onComplete);
-  }
-  function speakBrowserHelm(line,onComplete=()=>{}){
-    const speech=window.speechSynthesis,Utterance=window.SpeechSynthesisUtterance;
-    if(!helmSpeechEnabled||!audioOn||document.hidden||replayView?.active&&!line.replay||(!sim.running&&!sim.result)&&!line.replay||!speech||!Utterance){onComplete();return;}
-    if(line.order&&line.reply){
-      const generation=helmSpeechGeneration;
-      speakBrowserHelm({...line,order:line.order,reply:''},()=>{
-        if(generation!==helmSpeechGeneration)return;
-        helmReplyTimer=setTimeout(()=>{
-          helmReplyTimer=null;
-          if(generation===helmSpeechGeneration)speakBrowserHelm({...line,order:'',reply:line.reply,speaker:line.speaker},onComplete);
-        },500);
-      });
-      return;
-    }
-    try{
-      const voices=speech.getVoices().filter(voice=>/^en(?:-|$)/i.test(voice.lang));
-      const helmVoice=voices.find(voice=>/\b(Zira|Aria|Jenny|Sonia|Hazel|Susan|Samantha|Victoria|Karen|Moira|Tessa|Serena|Ava|Emma|Michelle|Libby)\b/i.test(voice.name||''))
-        ||voices.find(voice=>/Google (US English|UK English Female)/i.test(voice.name||''))||voices[1]||voices[0];
-      const allisonVoice=voices.find(voice=>/allison/i.test(voice.name||''))||voices.find(voice=>voice!==helmVoice&&/\b(Aria|Jenny|Sonia|Hazel|Susan|Samantha|Victoria|Karen|Moira|Tessa|Serena|Ava|Emma|Michelle|Libby|Zira)\b/i.test(voice.name||''))||helmVoice;
-      const captainVoice=voices.find(voice=>voice!==helmVoice&&/\b(David|Mark|Guy|George|Daniel|James|Ryan|Andrew|Brian|Eric)\b/i.test(voice.name||''))
-        ||voices.find(voice=>voice!==helmVoice)||helmVoice;
-      let remaining=[line.order,line.reply].filter(Boolean).length;
-      if(!remaining){onComplete();return;}
-      for(const [index,words] of [line.order,line.reply].entries()){
-        if(!words)continue;
-        if(!line.phraseClaimed&&!(line.replay?claimReplayPhrase(words):claimBridgePhrase(words,index===0?'captain':line.speaker||'helm'))){if(!--remaining)onComplete();continue;}
-        const utterance=new Utterance(words);
-        utterance.lang='en-US';utterance.volume=line.speaker==='allison'?1:.85;utterance.rate=.98;utterance.pitch=index===0?.85:1.15;
-        const voice=index===0?captainVoice:line.speaker==='allison'?allisonVoice:helmVoice;
-        if(voice){utterance.voice=voice;utterance.lang=voice.lang;}
-        let finished=false;
-        utterance.onend=utterance.onerror=()=>{if(finished)return;finished=true;helmUtterances=helmUtterances.filter(item=>item!==utterance);if(!--remaining)onComplete();};
-        helmUtterances.push(utterance);speech.speak(utterance);
-      }
-    }catch{stopHelmSpeech();onComplete();}
+    onComplete();
   }
   function claimReplayPhrase(words){
     const phrase=String(words).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
     if(!phrase||phrase===replayLastSpokenPhrase)return false;replayLastSpokenPhrase=phrase;return true;
   }
   function stopReplaySpeech(){
-    replayVoiceGeneration++;replayReplyAt=0;replayVoiceQueue=[];replayVoiceSpeaking=false;replayVoiceAudio?.stop();
+    replayVoiceGeneration++;replayReplyAt=0;replayFarewellAt=0;replayVoiceQueue=[];replayVoiceSpeaking=false;replayVoiceAudio?.stop();
   }
+  function isCaptainFarewell(line){return !!window.BattleCaptainNarration?.cues.farewells.some(cue=>cue.text===line.order);}
   function updateReplaySpeech(){
+    const engineLossSpeaking=updateEngineLossSpeech();
     if(!replayView?.active||replayView.player.paused||replayView.player.ended||!audioOn||!helmSpeechEnabled||document.hidden){replayVoiceQueue=[];return;}
+    if(engineLossSpeaking)return;
     if(replayVoiceSpeaking||!replayVoiceQueue.length||replayVoiceQueue[0].reply&&lastFrame<replayReplyAt)return;
+    if(isCaptainFarewell(replayVoiceQueue[0])&&lastFrame<replayFarewellAt)return;
     const line=replayVoiceQueue.shift(),generation=replayVoiceGeneration;replayVoiceSpeaking=true;
-    const done=()=>{if(generation===replayVoiceGeneration){replayVoiceSpeaking=false;replayReplyAt=line.order?lastFrame+500:0;}};
-    const fallback=(part,complete)=>speakBrowserHelm({...part,replay:true,speaker:part.speaker||line.speaker},complete);
+    const done=()=>{if(generation===replayVoiceGeneration){replayVoiceSpeaking=false;replayReplyAt=line.order?lastFrame+500:0;if(line.reply==='Helm lost!')replayFarewellAt=lastFrame+1500;}};
     if(window.BattleBridgeVoices&&window.Audio){
       replayVoiceAudio??=new window.BattleBridgeVoices({allowPhrase:claimReplayPhrase});
-      if(replayVoiceAudio.play(line,fallback,done))return;
+      if(replayVoiceAudio.play(line,null,done))return;
     }
-    fallback(line,done);
+    done();
   }
   function updateHelm(dt){
     if(sim.running||sim.result)helmRemaining-=dt;
+    if(updateEngineLossSpeech())return;
+    if(helmCurrent&&['incoming-torpedo','hull-hit'].includes(helmCurrent.key)&&!helmCurrent.valid()){
+      bridgeVoiceAudio?.stop();helmSpeechGeneration++;helmSpeaking=false;helmCurrent=null;helmRemaining=0;
+    }
     if(helmSpeaking||!sim.running&&!sim.result)return;
     if(helmCurrent&&!helmCurrent.valid()){helmCurrent.discard?.();helmCurrent=null;helmRemaining=0;}
     helmQueue=helmQueue.filter(line=>{if(line.valid())return true;line.discard?.();return false;});
+    if(helmQueue[0]?.key==='captain-farewell'&&lastFrame<captainFarewellAt)return;
     if(helmCurrent?.waitingToSpeak){
       if(lastFrame<voiceStartsAt)return;
       helmCurrent.waitingToSpeak=false;
@@ -632,17 +685,27 @@
       helmCurrent=helmQueue.shift()||null;helmRemaining=6;
       if(helmCurrent){
         const line=helmCurrent;
-        text('helm-order',line.order?'CAPTAIN  '+line.order:'');text('helm-reply',line.reply);
+        renderHelmLine(line);
         helmRemaining=Math.max(6,(line.order+' '+line.reply).split(/\s+/).length/2.5+1);
-        if(lastFrame<voiceStartsAt&&(window.Audio||window.speechSynthesis))line.waitingToSpeak=true;
+        if(lastFrame<voiceStartsAt&&window.Audio&&line.key!=='battle-opening')line.waitingToSpeak=true;
         else startHelmLine(line);
       }
     }
     $('helm-dialogue').hidden=!helmCurrent;
   }
+  function renderHelmLine(line){
+    const role=line.speaker==='allison'?'allison':'helm';
+    const clip=(!line.order&&line.clip)||window.BattleVoiceClips?.[role+'\n'+line.reply]||'';
+    const voice=role==='allison'||/_Alli(?:son|sion)\.mp3(?:[?#]|$)/i.test(clip)?'Allison':'Erica';
+    text('helm-speaker',line.reply?'HELM ('+voice+')':'HELM');
+    $('helm-speaker').setAttribute('data-voice',line.reply?voice.toLowerCase():'');
+    $('captain-dialogue').hidden=!line.order;
+    $('helm-response').hidden=!String(line.reply||'').trim();
+    text('helm-order',line.order||'');text('helm-reply',line.reply);$('helm-dialogue').hidden=false;
+  }
   function startHelmLine(line){
     const generation=helmSpeechGeneration;helmSpeaking=true;
-    const done=()=>{if(generation===helmSpeechGeneration)helmSpeaking=false;};
+    const done=()=>{if(generation===helmSpeechGeneration){helmSpeaking=false;if(line.key==='enterprise-lost')captainFarewellAt=lastFrame+1500;}};
     if(line.play){if(audioOn&&helmSpeechEnabled)line.play(done);else done();}
     else speakHelm(line,done);
   }
@@ -658,6 +721,7 @@
       if(event.type==='shield-disrupted')showCombatCallout(event.from==='Enterprise'?'SHIELD DISRUPTED':'YOUR SHIELD DISRUPTED',event.ship+' / '+event.arc.toUpperCase()+' / TORPEDO WINDOW '+event.duration+'s','breach');
       if(event.type==='impact'&&event.ship==='Enterprise'){$('hit-flash').style.opacity=.45;setTimeout(()=>$('hit-flash').style.opacity=0,220);}
     }
+    updateIncomingTorpedoes();
     for(const warning of bridgeWarnings?.update(sim,batch,Math.max(...Object.values(B.weaponSpecs).map(weapon=>weapon.maxRange)))||[])queueHelm(warning.key,'',warning.text,warning.priority,warning.valid,warning.speaker);
   }
   function updateViewscreenAudio(){
@@ -687,7 +751,7 @@
     }
   }
   function frame(now){
-    updateViewscreenAudio();
+    updateViewscreenAudio();updateWelcomeNarration();
     if(sim.result){firingVoice?.abandon();manualShots=[];}
     else if(!sim.running||document.hidden||replayView?.active)cancelFiringVoice();
     else if(firingVoice?.pending&&!manualShots.length&&

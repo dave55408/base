@@ -68,7 +68,7 @@ test('captain finishes a weakened hull and does not retreat forever without repa
   const s=duel();s.enemy.hull=50;s.enemy.shields.fore=0;assert(s.bestGuessPlan());
   assert(s.turn.draft.every(order=>order.target==='hull'));
   s.player.hull=15;s.player.repairBudget=0;assert(s.bestGuessPlan());assert.notEqual(s.turn.draftManeuver,'flee');
-  s.player.integrity.weapons=5;assert(s.bestGuessPlan());assert.equal(s.turn.draftManeuver,'flee');
+  s.player.integrity.weapons=5;assert(s.bestGuessPlan());assert.equal(s.turn.draftManeuver,'close');
 });
 
 test('Best Guess resolves varied seeded engagements within ten simulated minutes plus the final short maneuver',()=>{

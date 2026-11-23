@@ -38,7 +38,6 @@
     const labels={fore:'Foreward',aft:'Aft',starboard:'Starboard',port:'Port',dorsal:'Dorsal',ventral:'Ventral'};
     for(const [arc,label] of Object.entries(labels))transition(arc+'-critical',state[arc+'-critical'],p.shields[arc]>=35,label+' shields at critical',2.8);
     transition('hull-critical',state['hull-critical'],p.hull>=35,"We're not going to last long",3.2);
-    transition('uneasy',state.uneasy,p.hull>=60,"I've got a bad feeling about this",1.5);
     const hits=events.filter(event=>event.type==='impact'&&event.ship===p.name&&!event.practice&&event.amount>0&&event.amount>(event.hullDamage||0)&&Object.hasOwn(labels,event.arc));
     this.hits=this.hits.filter(at=>now-at<8);this.hits.push(...hits.map(()=>now));
     if(hits.length){
@@ -61,8 +60,7 @@
       'weapons-offline':p.integrity.weapons<10||sim.output(p,'weapons')<3,
       'shields-critical':!offline&&average<=25,
       ...Object.fromEntries(Object.entries(p.shields).map(([arc,value])=>[arc+'-critical',!offline&&value<=25])),
-      'hull-critical':p.hull>0&&p.hull<25,
-      uneasy:p.hull>=25&&p.hull<50
+      'hull-critical':p.hull>0&&p.hull<25
     };
   }
 });

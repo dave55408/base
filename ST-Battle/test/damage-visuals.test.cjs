@@ -8,13 +8,13 @@ const B=require('../engine.js');
 test('weaker shields deplete sooner and penetrating hits heavily damage internal systems',()=>{
   for(const [weapon,remaining] of [['phaser',44],['torpedo',61]]){
     const s=new B.Simulation(),p=s.player,e=s.enemy,arc=B.facing(e,p);
-    s.damage(e,p,20,weapon,'weapons');assert.equal(e.shields[arc],remaining);assert.equal(e.hull,100);
+    s.random=()=>.5;s.damage(e,p,20,weapon,'weapons');assert.equal(e.shields[arc],remaining);assert.equal(e.hull,100);
     e.shields[arc]=0;s.damage(e,p,40,weapon,'weapons');
     const impact=s.events.filter(e=>e.type==='impact').at(-1);
     assert(impact.hullDamage>0);
     const internalLoss=Object.values(e.integrity).reduce((sum,value)=>sum+100-value,0);
-    assert(Math.abs(internalLoss-impact.hullDamage*1.8)<1e-8);
-    assert(Math.abs((100-e.reactor)-impact.hullDamage*.12)<1e-8);
+    assert(Math.abs(internalLoss-impact.hullDamage*1.44)<1e-8);
+    assert(Math.abs((100-e.reactor)-impact.hullDamage*.096)<1e-8);
   }
 });
 

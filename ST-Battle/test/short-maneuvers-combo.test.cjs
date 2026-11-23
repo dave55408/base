@@ -7,6 +7,28 @@ function setup(route='direct',next=null){
   assert(s.commitOrders());return s;
 }
 function disrupt(s){s.damage(s.enemy,s.player,1,'phaser','weapons');s.time=1;s.damage(s.enemy,s.player,1,'phaser','weapons');}
+
+test('ordinary completed maneuvers enter review within half a second without a withdrawal leg',()=>{
+  const s=setup();s.fire=()=>false;
+  for(const order of [...s.turn.orders,...s.turn.enemyOrders])order.status='hit';
+  s.turn.remaining=0;s.advanceTurn(0);
+  let aim;s.steerFlight=(ship,point)=>{if(ship===s.player)aim=point;};s.autoHelm(.1);
+  assert.equal(s.turn.navigation.retiring,false);assert(aim.z<s.player.z);
+  assert.notEqual(s.turn.phase,'review');s.time=.5;s.advanceTurn(0);
+  assert.equal(s.turn.phase,'review');assert(s.range<1400,'review does not require opening separation');
+  assert(!s.events.some(event=>event.type==='phase'&&event.phase==='disengage'));
+  assert(!s.events.some(event=>event.type==='message'&&/breakaway|breaking away/i.test(event.text)));
+});
+
+test('a healthy Yorktown keeps its approach after spending its salvo',()=>{
+  const s=setup();s.fire=()=>false;
+  for(const order of s.turn.enemyOrders)order.status='hit';
+  s.turn.spent.enemy={phaser:2,torpedo:1};
+  let aim;s.steerFlight=(ship,point)=>{if(ship===s.enemy)aim=point;};s.tick(.1);
+  assert(aim.z>s.enemy.z,'Yorktown still steers toward Enterprise');
+  assert.match(s.enemy.speedIntent,/PURSUING/);assert.equal(s.enemyRetreating,false);
+  assert.equal(s.enemyMind.runAwaySince,null);assert.deepEqual(s.turn.spent.enemy,{phaser:2,torpedo:1});
+});
 test('a single maneuver shares its turn allocation across approach and firing',()=>{
   const s=setup();assert.equal(s.turn.remaining,B.TURN.execution);s.time=8;s.turn.remaining=4;
   assert(s.fire('phaser'));assert.equal(s.turn.phase,'attack');assert.equal(s.turn.remaining,4,'firing must not grant another twelve seconds');
@@ -31,7 +53,7 @@ test('combo torpedoes inflict fifty percent more system damage without adding hu
   const a=setup(),b=setup();disrupt(a);a.time=b.time=2;
   const arc=B.facing(a.enemy,a.player);a.enemy.shields[arc]=b.enemy.shields[arc]=0;
   a.enemy.hull=b.enemy.hull=100;a.enemy.integrity.weapons=b.enemy.integrity.weapons=100;
-  for(const s of [a,b])s.damage(s.enemy,s.player,20,'torpedo','weapons',{component:'weapons'});
+  a.random=b.random=()=>.5;for(const s of [a,b])s.damage(s.enemy,s.player,20,'torpedo','weapons',{component:'weapons'});
   assert(Math.abs((100-a.enemy.integrity.weapons)/(100-b.enemy.integrity.weapons)-1.5)<1e-8);
   assert.equal(a.enemy.hull,b.enemy.hull);assert.equal(a.enemy.phaserCombo.used,true);
   assert(Math.abs((100-a.enemy.reactor)/(100-b.enemy.reactor)-1.5)<1e-8);
@@ -53,7 +75,7 @@ test('Yorktown can execute the same combo and quick plans keep attacks eligible 
   const s=setup();s.damage(s.player,s.enemy,1,'phaser','weapons');s.damage(s.player,s.enemy,1,'phaser','weapons');
   assert.equal(s.player.phaserCombo.hits,2);s.damage(s.player,s.enemy,20,'torpedo','weapons',{component:'weapons'});
   assert(s.events.filter(e=>e.type==='impact').at(-1).combo);
-  for(const style of ['timid','strong','aggressive','berserk']){
+  for(const style of ['timid','disabling','strong','aggressive','berserk']){
     const plan=new B.Simulation();assert(plan.applyPlanPreset(style));
     for(const order of plan.turn.draft){assert(order.maneuvers.length>=2);assert(order.maneuvers.every(i=>!['flee','ram'].includes(plan.turn.draftManeuvers[i])));}
   }

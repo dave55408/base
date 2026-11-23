@@ -1,0 +1,155 @@
+{
+  "summary": {
+    "battles": 16,
+    "resolved": 16,
+    "victories": 13,
+    "defeats": 3,
+    "medianSeconds": 199.45
+  },
+  "battles": [
+    {
+      "seed": 12,
+      "personality": "flanker",
+      "result": "victory",
+      "time": 183.6,
+      "shots": 20,
+      "playerHull": 61.73,
+      "enemyHull": 0
+    },
+    {
+      "seed": 37,
+      "personality": "hunter",
+      "result": "victory",
+      "time": 170.9,
+      "shots": 16,
+      "playerHull": 74.85,
+      "enemyHull": 0
+    },
+    {
+      "seed": 73,
+      "personality": "cautious",
+      "result": "defeat",
+      "time": 214.8,
+      "shots": 18,
+      "playerHull": 0,
+      "enemyHull": 61.21
+    },
+    {
+      "seed": 97,
+      "personality": "aggressive",
+      "result": "victory",
+      "time": 200.7,
+      "shots": 21,
+      "playerHull": 29.74,
+      "enemyHull": 0
+    },
+    {
+      "seed": 121,
+      "personality": "hunter",
+      "result": "victory",
+      "time": 244.5,
+      "shots": 26,
+      "playerHull": 37.16,
+      "enemyHull": 0
+    },
+    {
+      "seed": 318,
+      "personality": "cautious",
+      "result": "victory",
+      "time": 147.5,
+      "shots": 17,
+      "playerHull": 79.72,
+      "enemyHull": 0
+    },
+    {
+      "seed": 477,
+      "personality": "cautious",
+      "result": "defeat",
+      "time": 183.2,
+      "shots": 13,
+      "playerHull": 0,
+      "enemyHull": 76.99
+    },
+    {
+      "seed": 601,
+      "personality": "aggressive",
+      "result": "victory",
+      "time": 198.2,
+      "shots": 20,
+      "playerHull": 46.16,
+      "enemyHull": 0
+    },
+    {
+      "seed": 811,
+      "personality": "aggressive",
+      "result": "victory",
+      "time": 214.4,
+      "shots": 22,
+      "playerHull": 36.33,
+      "enemyHull": 0
+    },
+    {
+      "seed": 1031,
+      "personality": "cautious",
+      "result": "victory",
+      "time": 241.4,
+      "shots": 19,
+      "playerHull": 56.27,
+      "enemyHull": 0
+    },
+    {
+      "seed": 1307,
+      "personality": "hunter",
+      "result": "defeat",
+      "time": 255.3,
+      "shots": 10,
+      "playerHull": 0,
+      "enemyHull": 44.84
+    },
+    {
+      "seed": 1709,
+      "personality": "cautious",
+      "result": "victory",
+      "time": 154,
+      "shots": 17,
+      "playerHull": 63.51,
+      "enemyHull": 0
+    },
+    {
+      "seed": 2131,
+      "personality": "aggressive",
+      "result": "victory",
+      "time": 197.5,
+      "shots": 15,
+      "playerHull": 92.49,
+      "enemyHull": 0
+    },
+    {
+      "seed": 2797,
+      "personality": "flanker",
+      "result": "victory",
+      "time": 227.7,
+      "shots": 23,
+      "playerHull": 57.78,
+      "enemyHull": 0
+    },
+    {
+      "seed": 3331,
+      "personality": "cautious",
+      "result": "victory",
+      "time": 167.7,
+      "shots": 17,
+      "playerHull": 60.6,
+      "enemyHull": 0
+    },
+    {
+      "seed": 4093,
+      "personality": "hunter",
+      "result": "victory",
+      "time": 207.3,
+      "shots": 20,
+      "playerHull": 65.36,
+      "enemyHull": 0
+    }
+  ]
+}

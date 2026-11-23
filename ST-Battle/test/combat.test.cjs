@@ -37,7 +37,7 @@ test('the six impact sectors follow ship heading and pitch',()=>{
   s.heading=90;assert.equal(B.facing(s,{x:5,y:0,z:0}),'fore');s.pitch=60;assert.equal(B.facing(s,{x:1,y:5,z:0}),'fore');
 });
 test('strong shields absorb fire; a breached shield exposes hull and subsystems',()=>{
-  const s=new B.Simulation(97,{turnBased:false}),p=s.player,e=s.enemy,arc=B.facing(e,p);s.running=true;
+  const s=new B.Simulation(97,{turnBased:false}),p=s.player,e=s.enemy,arc=B.facing(e,p);s.running=true;s.random=()=>.5;
   s.damage(e,p,20,'phaser','sensors');assert.equal(e.hull,100);assert.ok(e.shields[arc]<100);
   e.shields[arc]=0;const reactor=e.reactor;s.damage(e,p,40,'torpedo','sensors');assert.ok(e.hull<100);assert.ok(e.integrity.sensors<100);assert.ok(e.reactor<reactor);
   const output=s.output(e,'sensors');e.reactor=30;assert.ok(s.output(e,'sensors')<output);
@@ -155,7 +155,7 @@ test('Enterprise holds turn rate on release and opposite steering brakes the tur
 });
 
 test('longer phaser burst still applies one damage hit at the current shield balance',()=>{
-  const s=new B.Simulation(97,{turnBased:false});s.running=true;Object.assign(s.enemy,{x:0,y:0,z:-850});
+  const s=new B.Simulation(97,{turnBased:false});s.running=true;s.random=()=>.5;Object.assign(s.enemy,{x:0,y:0,z:-850});
   assert(s.fire('phaser'));assert.equal(s.events.find(e=>e.type==='beam').duration,1.4);
   const shield=s.enemy.shields[B.facing(s.enemy,s.player)];assert(Math.abs(shield-42.88)<1e-8);
   const impactCount=()=>s.events.filter(e=>e.type==='impact'&&e.ship==='Yorktown').length;
