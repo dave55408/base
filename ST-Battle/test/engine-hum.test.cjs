@@ -1,10 +1,34 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
-function harness(source){
+function harness(source,kind='BattleEngineAudio'){
   const players=[];
   class Audio{constructor(url){this.url=url;this.playbackRate=1;this.plays=0;this.paused=true;players.push(this);}load(){}play(){this.plays++;this.paused=false;return Promise.resolve();}pause(){this.paused=true;}}
   const c={window:{Audio},console};vm.createContext(c);vm.runInContext(fs.readFileSync(path.join(__dirname,'../weapon-audio.js'),'utf8'),c);
-  return {engine:new c.window.BattleEngineAudio(source),players};
+  return {engine:new c.window[kind](source),players};
 }
+
+test('viewscreen ambience repeats quietly at fixed pitch and stops on mute or hidden state',async()=>{
+  const {engine:e,players:[audio]}=harness(undefined,'BattleViewscreenAudio');
+  assert.equal(audio.url,'assets/viewscreen_slow.mp3');assert.equal(audio.loop,true);
+  assert(fs.statSync(path.join(__dirname,'..',audio.url)).size>1000);
+  e.setEnabled(true);e.update({active:true});await new Promise(setImmediate);
+  assert.equal(audio.paused,false);assert.equal(audio.volume,.025);assert.equal(audio.playbackRate,1);
+  for(let i=0;i<10;i++)e.update({active:true});assert.equal(audio.plays,1);
+  e.update({active:false});assert.equal(audio.paused,true);assert.equal(audio.volume,0);
+  e.update({active:true});await new Promise(setImmediate);assert.equal(audio.paused,false);
+  e.setEnabled(false);assert.equal(audio.paused,true);assert.equal(audio.volume,0);
+});
+
+test('steady viewscreen ambience never spikes to engine volume or repeatedly resets playback speed',async()=>{
+  const {engine,players:[audio]}=harness(undefined,'BattleViewscreenAudio');
+  const volumes=[],rates=[];let volume=0,rate=1;
+  Object.defineProperty(audio,'volume',{get:()=>volume,set:value=>{volume=value;volumes.push(value);}});
+  Object.defineProperty(audio,'playbackRate',{get:()=>rate,set:value=>{rate=value;rates.push(value);}});
+  engine.setEnabled(true);engine.update({active:true});await new Promise(setImmediate);
+  for(let i=0;i<120;i++)engine.update({active:true});
+  assert.deepEqual(volumes,[.025],'set the quiet level once, without per-frame spikes');
+  assert.deepEqual(rates,[],'a fixed-speed loop never needs playback-rate assignments');
+  assert.equal(audio.plays,1);
+});
 test('Enterprise engine loop uses drone_hum and raises pitch by at most 40 percent in either direction',async()=>{
   const {engine:e,players:[a]}=harness();assert.equal(a.url,'assets/drone_hum.mp3');assert.equal(a.loop,true);assert.equal(a.preservesPitch,false);
   e.setEnabled(true);e.update({speed:0,maximum:200,active:true});await new Promise(setImmediate);assert.equal(a.playbackRate,1);assert(!a.paused);

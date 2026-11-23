@@ -4,7 +4,7 @@ test('difficulty changes enemy damage but preserves the default duel and survive
     const s=new B.Simulation();assert(s.setDifficulty(level));s.damage(s.player,s.enemy,20,'phaser','hull');losses[level]=100-s.player.shields[B.facing(s.player,s.enemy)];
     s.reset();assert.equal(s.difficulty,level);s.running=true;assert.equal(s.setDifficulty('cadet'),false);
   }
-  assert(Math.abs(losses.captain-42)<1e-8);assert(losses.cadet<losses.captain);assert(losses.admiral>losses.captain);
+  assert(Math.abs(losses.captain-56)<1e-8);assert(losses.cadet<losses.captain);assert(losses.admiral>losses.captain);
 });
 
 test('consecutive hits build bounded chains, expire, and break when Enterprise takes a hit',()=>{

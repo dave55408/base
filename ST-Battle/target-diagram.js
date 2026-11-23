@@ -1,6 +1,6 @@
 /* Perspective 3D wireframe, rendered locally without another WebGL context. */
 (()=>{
-  const anchors={hull:[0,.3,-1.12],bridge:[0,.57,-1.12],engines:[0,.38,-.44],mainEngines:[.56,.53,.1],reactor:[0,.02,-.02],shields:[0,.1,-.58],weapons:[-.4,.31,-1.3],sensors:[0,.13,-1.12],
+  const anchors={hull:[0,.3,-1.12],bridge:[0,.57,-1.12],engines:[0,.38,-.44],mainEngines:[.56,.53,.28],reactor:[0,.02,-.02],shields:[0,.1,-.4],weapons:[-.4,.31,-1.3],sensors:[0,.13,-1.12],
     'shield-fore':[0,.2,-2],'shield-aft':[0,.1,.9],'shield-port':[-1,.2,-.5],'shield-starboard':[1,.2,-.5],'shield-dorsal':[0,1,-.5],'shield-ventral':[0,-.7,-.5]};
   const TAU=Math.PI*2;
   class TargetDiagram{
@@ -29,14 +29,14 @@
       for(const [r,y] of [[.69,.32],[.64,.4],[.48,.44],[.25,.49]])this.ring('hull',[0,y,-1.12],[r,0,r]);
       for(let i=0;i<12;i++){const a=i/12*TAU;this.add('hull',[[.25*Math.cos(a),.49,-1.12+.25*Math.sin(a)],[.69*Math.cos(a),.32,-1.12+.69*Math.sin(a)]]);}
       this.ellipsoid('bridge',[0,.54,-1.12],[.11,.07,.11]);this.ellipsoid('sensors',[0,.18,-1.12],[.22,.09,.22]);
-      this.add('shields',[[0,.34,-.85],[0,.03,-.55],[0,.03,-.2]]);
+      this.add('shields',[[0,.34,-.67],[0,.03,-.37],[0,.03,-.02]]);
       for(const z of [-.7,-.5,-.2,.2,.45])this.ring('reactor',[0,.02,z],[.14,.14,0],'z');
       for(let i=0;i<8;i++){const a=i/8*TAU;this.add('reactor',[[-.7,-.5,-.2,.2,.45].map(z=>[.14*Math.cos(a),.02+.14*Math.sin(a),z])].flat());}
       this.ring('engines',[0,.38,-.44],[.16,.04,0],'z');this.ring('weapons',[-.4,.31,-1.3],[.07,.03,.07]);
       for(const side of [-1,1]){
         this.add('mainEngines',[[side*.08,.02,-.1],[side*.56,.53,.15]]);
-        for(const z of [-.8,-.65,0,.68])this.ring('mainEngines',[side*.56,.53,z],[.085,.085,0],'z');
-        for(let i=0;i<8;i++){const a=i/8*TAU;this.add('mainEngines',[[side*.56+.085*Math.cos(a),.53+.085*Math.sin(a),-.8],[side*.56+.085*Math.cos(a),.53+.085*Math.sin(a),.68]]);}
+        for(const z of [-.62,-.47,.18,.86])this.ring('mainEngines',[side*.56,.53,z],[.085,.085,0],'z');
+        for(let i=0;i<8;i++){const a=i/8*TAU;this.add('mainEngines',[[side*.56+.085*Math.cos(a),.53+.085*Math.sin(a),-.62],[side*.56+.085*Math.cos(a),.53+.085*Math.sin(a),.86]]);}
       }
       this.ellipsoid('envelope',[0,.15,-.55],[1.02,.85,1.52]);
     }
@@ -50,7 +50,8 @@
       const dpr=Math.min(globalThis.devicePixelRatio||1,2),c=this.context;this.canvas.width=w*dpr;this.canvas.height=h*dpr;c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);
       c.fillStyle='#091923';c.fillRect(0,0,w,h);c.strokeStyle='#17313d';c.lineWidth=.5;
       for(let x=0;x<w;x+=30){c.beginPath();c.moveTo(x,0);c.lineTo(x,h);c.stroke();}for(let y=0;y<h;y+=30){c.beginPath();c.moveTo(0,y);c.lineTo(w,y);c.stroke();}
-      for(const line of this.lines){if(line.key==='envelope'&&this.layer!=='shields')continue;const selected=line.key===this.target||line.key==='envelope'&&this.target?.startsWith('shield-');c.strokeStyle=selected?'#ffd094':line.key==='envelope'?'#7786c6':'#659db0';c.lineWidth=selected?2:1;c.beginPath();line.points.forEach((v,i)=>{const p=this.project(v,w,h);if(i)c.lineTo(p.x,p.y);else c.moveTo(p.x,p.y);});c.stroke();}
+      for(const line of this.lines){if(line.key==='envelope'&&this.layer!=='shields')continue;const selected=line.key===this.target||line.key==='envelope'&&this.target?.startsWith('shield-');c.globalAlpha=this.layer==='shields'&&line.key!=='envelope'?.2:1;c.strokeStyle=selected?'#ffd094':line.key==='envelope'?'#7786c6':'#659db0';c.lineWidth=selected?2:1;c.beginPath();line.points.forEach((v,i)=>{const p=this.project(v,w,h);if(i)c.lineTo(p.x,p.y);else c.moveTo(p.x,p.y);});c.stroke();}
+      c.globalAlpha=1;
       this.points={};const keys=Object.keys(anchors).filter(k=>k.startsWith('shield-')===(this.layer==='shields'));
       const groups=[[],[]];keys.forEach((key,i)=>{const point=this.project(anchors[key],w,h);this.points[key]=point;groups[i%2].push({key,point});});
       for(let side=0;side<2;side++){

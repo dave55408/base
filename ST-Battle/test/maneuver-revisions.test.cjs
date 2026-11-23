@@ -8,10 +8,10 @@ function duel(){
 }
 test('changing a live maneuver preserves consumed shots, ammunition, phase time and damage baseline',()=>{
   const s=duel();assert(s.fire('phaser'));const order=s.turn.orders[0],baseline=s.turn.baseline;
-  s.turn.remaining=24;const enemy=JSON.stringify(s.turn.enemyOrders);
+  s.turn.remaining=7;const enemy=JSON.stringify(s.turn.enemyOrders);
   assert(s.applyRevisions(s.turn.draft,['behind','direct','direct']));
   assert.equal(s.turn.maneuver,'behind');assert.equal(s.turn.navigation.stage,'position');assert.equal(s.turn.orders[0],order);
-  assert.equal(s.turn.orders[0].status,'hit');assert.equal(s.turn.spent.player.phaser,1);assert.equal(s.turn.remaining,24);assert.equal(s.turn.baseline,baseline);
+  assert.equal(s.turn.orders[0].status,'hit');assert.equal(s.turn.spent.player.phaser,1);assert.equal(s.turn.remaining,7);assert.equal(s.turn.baseline,baseline);
   assert.equal(JSON.stringify(s.turn.enemyOrders),enemy);assert.equal(s.turn.revisions,1);
 });
 test('an edit to a completed maneuver rejects the entire transaction',()=>{
@@ -21,7 +21,7 @@ test('an edit to a completed maneuver rejects the entire transaction',()=>{
   assert(s.applyRevisions(s.turn.draft,['direct','direct','behind']));assert.equal(s.turn.maneuver,'direct');
 });
 test('changing a repair maneuver restores normal power and keeps the remaining time',()=>{
-  const s=new B.Simulation();s.running=true;s.selectManeuver('flee');const power={...s.player.power};assert(s.commitOrders());s.turn.remaining=12;
-  assert(s.applyRevisions(s.turn.draft,['behind','flee','flee']));assert.deepEqual(s.player.power,power);assert.equal(s.turn.remaining,12);
+  const s=new B.Simulation();s.running=true;s.selectManeuver('flee');const power={...s.player.power};assert(s.commitOrders());s.turn.remaining=8;
+  assert(s.applyRevisions(s.turn.draft,['behind','flee','flee']));assert.deepEqual(s.player.power,power);assert.equal(s.turn.remaining,8);
   assert.equal(s.turn.phase,'approach');assert(s.turn.orders.every(order=>order.status==='unused'));assert.equal(s.turn.spent.player.phaser,0);
 });

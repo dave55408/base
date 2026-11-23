@@ -1,0 +1,86 @@
+/* Shuttle-console finish: blue Enterprise controls and neutral Yorktown fills. */
+#game-shell>.masthead{
+  background:linear-gradient(110deg,#54a1d613,transparent 78%),linear-gradient(#172a3a,#0a1520);
+  border-bottom-color:#28516c;box-shadow:inset 0 1px #9bdcff18;
+}
+#game-shell main>.enterprise-console{
+  --panel:#0a1826;--line:#285572;--cyan:#6bcaff;--amber:#ffc769;--text:#fff;--muted:#fff;
+  color:var(--text);border-color:#24465e;border-top-color:#478ab4;border-radius:10px;
+  background:radial-gradient(ellipse at 35% 0%,#54a1d613,transparent 75%),linear-gradient(125deg,#102337,#050c14 48%,#0b1b2c);
+  box-shadow:inset 0 1px 2px #77cfff28,inset 0 -3px 6px #000,0 3px 0 #06101a,0 6px 0 #102235,0 8px 0 #04080d,0 15px 22px #0009;
+}
+#game-shell .enterprise-console>.panel-heading{
+  background:linear-gradient(110deg,#54a1d613,transparent 78%),linear-gradient(#172a3a,#0a1520);
+  border-bottom-color:#28516c;box-shadow:inset 0 1px #9bdcff18,0 1px #0009;
+}
+#game-shell .enterprise-console :is(.panel-heading h2,.station,.eyebrow,.instrument-label,label,.shield-presets>span,.meter-label,.capacitor>span,.weapon-title h3){color:#f3c17c}
+#game-shell .enterprise-console :is(output,.power-dial strong,.meter-label b,.reactor-summary strong){color:#8ed7ff}
+#game-shell .enterprise-console :is(.energy-reserve,.engineering-repair-controls,.captain-orders,.capacitor){
+  background:linear-gradient(110deg,#54a1d60d,transparent 75%),#081521;border-color:#28516c;
+  box-shadow:inset 0 1px 3px #0005;
+}
+#game-shell .enterprise-console .meter{background:#06111c;box-shadow:inset 0 1px 3px #0009}
+#game-shell .enterprise-console .status-pill:not(.danger){background:#0b2538;border-color:#397ca7;color:#8ed7ff;box-shadow:inset 0 1px #9bdcff18}
+#game-shell .enterprise-console button,#game-shell .enterprise-console select{
+  background:linear-gradient(#193e5b,#0a2034);border-color:#397ca7;color:#f3c17c;border-radius:5px;
+  box-shadow:inset 0 1px #9bdcff28,inset 0 -1px #000a,0 1px 2px #000;text-shadow:none;
+}
+#game-shell .enterprise-console button:hover:not(:disabled){background:linear-gradient(#28658f,#123955);border-color:#74c8fa;color:#ffe1ac}
+#game-shell .enterprise-console button:is(.active,[aria-pressed="true"],[aria-checked="true"]),#game-shell .enterprise-console #commit-orders:not(:disabled){
+  background:linear-gradient(#266e9f,#174b71 55%,#10364f);border-color:#7dceff;color:#ffe0a4;
+  box-shadow:inset 0 1px #c1ebff44,0 0 9px #2ca6ff33;
+}
+#game-shell .enterprise-console button:active:not(:disabled){box-shadow:inset 0 2px 5px #000a,0 1px #68b8f022}
+#game-shell .enterprise-console button.fire.torpedo{background:linear-gradient(#492330,#24111d);border-color:#965363;color:#ffc3b2}
+#game-shell .enterprise-console button.fire.torpedo:hover:not(:disabled){background:linear-gradient(#693044,#381c2c);border-color:#df8992}
+#game-shell .enterprise-console select option{background:#0a1d2d;color:#f3c17c}
+#game-shell .enterprise-console input[type="range"]{
+  accent-color:#65c7ff;border-color:#356281;
+  background:repeating-linear-gradient(90deg,#285c7c22 0 9px,#8ed4ff44 10px 11px),linear-gradient(#030a12,#102a40);
+  box-shadow:inset 0 1px 3px #000,0 1px #68b8f022;
+}
+#game-shell .enterprise-console input[type="range"]::-webkit-slider-thumb{background:linear-gradient(#8ad9ff,#2b7fb1);border-color:#a0deff;box-shadow:0 0 8px #46b9ff55,inset 0 1px #d6f1ff}
+#game-shell .enterprise-console input[type="range"]::-moz-range-thumb{background:#469ed0;border-color:#a0deff;box-shadow:0 0 8px #46b9ff55}
+#game-shell .enterprise-console .attitude{border-color:#376787;background:#071624;box-shadow:0 0 0 1px #579cc4,0 0 15px #409de633,inset 0 0 12px #000}
+#game-shell .enterprise-console .attitude-grid{background:repeating-linear-gradient(transparent 0 14px,#69bfff66 15px,transparent 16px),linear-gradient(#071728,#24577e 48%,#6ac5f4 49.7%,#c5edff 50%,#23516c 50.3%,#07121e 100%)}
+#game-shell .enterprise-console .attitude-wing{color:#ffc769}
+#game-shell .enterprise-console .north{color:#f3c17c;background:#081624;border-color:#397395}
+#game-shell .enterprise-console .power-dial{background:conic-gradient(from 220deg,#75ccff var(--power,0deg),#1a405e 0 280deg,transparent 0);border-color:#39799f;box-shadow:0 0 0 2px #050d17,0 0 15px #3d9ef033}
+#game-shell .enterprise-console .power-dial>div{border-color:#437da3;background:radial-gradient(ellipse at 50% 25%,#234e70,#0b2236 60%,#050c15);box-shadow:inset 0 0 12px #5abaff22}
+#game-shell .enterprise-console .power-dial strong{text-shadow:0 0 7px #39a9ff66}
+#game-shell .enterprise-console .power-dial small{color:#f3c17c}
+#game-shell main>.panel.enterprise-console,
+#game-shell main>.panel.enterprise-console *,
+#game-shell main>.panel.enterprise-console button.fire.torpedo{color:#fff}
+
+/* Planning controls sit at the right; view and grid controls share the left strip. */
+#game-shell .view-bottom{flex-wrap:wrap;--amber:#ffc769}
+#game-shell .view-bottom .flight-mode-actions{flex-wrap:wrap;justify-content:flex-end;min-width:0;max-width:100%;flex-shrink:1}
+#game-shell .view-bottom .commit-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px;--amber:#ffc769}
+#game-shell .view-bottom .commit-actions button{font:10px var(--mono);padding:8px 10px;margin:0;white-space:nowrap}
+#game-shell .view-bottom .commit-actions #random-turn{display:flex;align-items:center;justify-content:center;gap:6px}
+#game-shell .view-bottom .flight-mode-actions button{
+  background:#24282d;color:#ffc769;border:1px solid #62676e;border-radius:3px;
+  box-shadow:none;text-shadow:none;
+}
+#game-shell .view-bottom .flight-mode-actions button:hover:not(:disabled){background:#30353b;color:#ffe5a8;border-color:#d6b466}
+#game-shell .view-bottom .flight-mode-actions button:is(.active,[aria-pressed="true"],[aria-checked="true"]),
+#game-shell .view-bottom #commit-orders:not(:disabled),
+#game-shell .view-bottom #start:not(:disabled){
+  background:#383328;color:#ffe5a8;border-color:#e2bc62;
+  box-shadow:none;
+}
+#game-shell .view-bottom .flight-mode-actions button:active:not(:disabled){background:#1c2025;box-shadow:none}
+#game-shell .view-bottom .flight-mode-actions button:focus-visible{outline-color:#ffc769}
+#game-shell #cameras button[aria-pressed="true"]{background:#273842;color:#c5e7e9;border-color:#506d79}
+
+/* Match the layered fill style while retaining Yorktown's gunmetal palette and controls. */
+#game-shell .yorktown-rail>.panel{
+  background-color:#191b1e;
+  background-image:radial-gradient(ellipse at 35% 0%,#c5cbd213,transparent 75%),linear-gradient(125deg,#292c30,#141619 48%,#202327);
+}
+#game-shell .yorktown-rail>.panel>.panel-heading{
+  background-color:#191b1e;
+  background-image:linear-gradient(110deg,#d0d3d613,transparent 78%),linear-gradient(#2b2e32,#1b1d20);
+}
+#game-shell .yorktown-rail>.panel :is(.target-name,.contact-stats,.target-bars,.enemy-systems,.enemy-damage-body,.yorktown-console-body){background:transparent}

@@ -3,10 +3,10 @@ window.BattleFileWeaponAudio=class{
   constructor(context){
     this.context=context;this.enabled=false;this.voices=new Set();this.generation=0;this.frame=0;this.pools={};
     this.hitCount=0;this.lastBreakAt=-Infinity;
-    for(const kind of ['phaser','torpedo','explosion','bump','break'])this.pools[kind]=Array.from({length:kind==='phaser'?3:6},()=>{
-      const audio=new window.Audio('assets/'+(kind==='phaser'?'phaser2':kind)+'.mp3');audio.preload='auto';audio.loop=kind==='phaser';audio.volume=0;audio._token=0;
-      audio.onerror=()=>this.report('Could not load '+(kind==='phaser'?'phaser2':kind)+'.mp3. Keep the assets folder beside index.html.');
-      audio.load();return audio;
+    for(const kind of ['phaser','torpedo','explosion','bump','break','end'])this.pools[kind]=Array.from({length:kind==='phaser'?3:6},()=>{
+      const audio=new window.Audio('assets/'+(kind==='phaser'?'phaser2':kind==='break'?'bang_together':kind)+'.mp3');audio.preload='auto';audio.loop=kind==='phaser';audio.volume=0;audio._token=0;
+      audio.onerror=()=>this.report('Could not load '+(kind==='phaser'?'phaser2':kind==='break'?'bang_together':kind)+'.mp3. Keep the assets folder beside index.html.');
+      window.BattleReplayCapture?.trackMedia(audio);audio.load();return audio;
     });
     this.ready=Promise.resolve();
   }
@@ -27,6 +27,7 @@ window.BattleFileWeaponAudio=class{
   playPhaser(duration=1.4){this.play('phaser',duration);}
   playTorpedo(){this.play('torpedo');}
   playExplosion(){this.play('explosion');}
+  playEnd(){this.play('end');}
   playHit(){if(!this.enabled)return;this.play(this.hitCount++%2?'bump':'explosion');}
   playBreak(){if(!this.enabled||this.context.currentTime-this.lastBreakAt<.75)return;this.lastBreakAt=this.context.currentTime;this.play('break');}
   play(kind,duration){
@@ -36,7 +37,7 @@ window.BattleFileWeaponAudio=class{
     if(!audio){const old=[...this.voices].find(v=>pool.includes(v.audio));this.finish(old);audio=old.audio;}
     const voice={audio,token:++audio._token,start:this.context.currentTime,end:duration===undefined?Infinity:this.context.currentTime+duration,fade:.18,peak:kind==='phaser'?.8:kind==='torpedo'?.255:.8,stopping:false};
     audio.pause();try{audio.currentTime=0;}catch{}audio.loop=kind==='phaser';audio.volume=0;
-    this.voices.add(voice);audio.onended=()=>this.finish(voice);
+    window.BattleReplayCapture?.trackMedia(audio);this.voices.add(voice);audio.onended=()=>this.finish(voice);
     try{Promise.resolve(audio.play()).catch(()=>{if(audio._token===voice.token){this.finish(voice);this.report('Weapon audio was blocked. Toggle Audio off and on, then fire again.');}});}
     catch{this.finish(voice);this.report('Weapon audio could not start. Toggle Audio off and on.');}
     this.schedule();
@@ -70,17 +71,18 @@ window.BattleWeaponAudio=class{
     if(window.location?.protocol==='file:')return new window.BattleFileWeaponAudio(context);
     this.context=context;this.buffers={};this.voices=new Set();this.enabled=false;this.generation=0;
     this.hitCount=0;this.lastBreakAt=-Infinity;
-    this.ready=Promise.all(['phaser','torpedo','explosion','bump','break'].map(async kind=>{
+    this.ready=Promise.all(['phaser','torpedo','explosion','bump','break','end'].map(async kind=>{
       try{
-        const response=await fetch('assets/'+(kind==='phaser'?'phaser2':kind)+'.mp3');if(!response.ok)throw new Error('HTTP '+response.status);
+        const response=await fetch('assets/'+(kind==='phaser'?'phaser2':kind==='break'?'bang_together':kind)+'.mp3');if(!response.ok)throw new Error('HTTP '+response.status);
         this.buffers[kind]=await context.decodeAudioData(await response.arrayBuffer());
-      }catch(error){console.warn('Could not load '+(kind==='phaser'?'phaser2':kind)+'.mp3',error);}
+      }catch(error){console.warn('Could not load '+(kind==='phaser'?'phaser2':kind==='break'?'bang_together':kind)+'.mp3',error);}
     }));
   }
   setEnabled(enabled){this.enabled=enabled;if(!enabled)this.stopAll();}
   playPhaser(duration=1.4){this.play('phaser',duration);}
   playTorpedo(){this.play('torpedo');}
   playExplosion(){this.play('explosion');}
+  playEnd(){this.play('end');}
   playHit(){if(!this.enabled)return;this.play(this.hitCount++%2?'bump':'explosion');}
   playBreak(){if(!this.enabled||this.context.currentTime-this.lastBreakAt<.75)return;this.lastBreakAt=this.context.currentTime;this.play('break');}
   play(kind,duration){
@@ -93,7 +95,7 @@ window.BattleWeaponAudio=class{
       });return;
     }
     const ctx=this.context,now=ctx.currentTime,source=ctx.createBufferSource(),gain=ctx.createGain();
-    source.buffer=this.buffers[kind];source.loop=kind==='phaser';source.connect(gain);gain.connect(ctx.destination);
+    source.buffer=this.buffers[kind];source.loop=kind==='phaser';source.connect(gain);gain.connect(ctx.destination);window.BattleReplayCapture?.trackNode(gain,ctx);
     const voice={source,gain,stopping:false};this.voices.add(voice);
     source.onended=()=>{this.voices.delete(voice);source.disconnect();gain.disconnect();};
     const peak=kind==='phaser'?.42:kind==='torpedo'?.165:.5;
@@ -122,7 +124,7 @@ window.BattleWeaponAudio=class{
 /* Ship impulse engines: native media supports both file and web pages. */
 window.BattleEngineAudio=class{
   constructor(source='assets/drone_hum.mp3'){
-    this.audio=new window.Audio(source);this.audio.preload='auto';this.audio.loop=true;this.audio.volume=0;
+    this.audio=new window.Audio(source);window.BattleReplayCapture?.trackMedia(this.audio);this.audio.preload='auto';this.audio.loop=true;this.audio.volume=0;
     this.audio.preservesPitch=false;this.audio.mozPreservesPitch=false;this.audio.webkitPreservesPitch=false;
     this.enabled=false;this.active=false;this.starting=false;this.playing=false;this.generation=0;
     this.audio.onerror=()=>{this.stop();console.warn('Could not load '+source);};
@@ -133,6 +135,7 @@ window.BattleEngineAudio=class{
     if(!enabled)this.stop();else this.start(true);
   }
   start(prime=false){
+    window.BattleReplayCapture?.trackMedia(this.audio);
     if(!this.enabled||this.starting||this.playing||(!prime&&!this.active))return;
     const token=this.generation;this.starting=true;
     try{Promise.resolve(this.audio.play()).then(()=>{
@@ -142,14 +145,82 @@ window.BattleEngineAudio=class{
     }).catch(()=>{if(token===this.generation){this.starting=false;this.playing=false;this.enabled=false;}});}
     catch{this.starting=false;this.playing=false;this.enabled=false;}
   }
-  update({speed=0,maximum=300,active=false}={}){
+  update({speed=0,maximum=300,active=false,volume=.2}={}){
     this.active=active;
     const fraction=Math.max(0,Math.min(1,Math.abs(speed)/Math.max(1,maximum)));
-    this.audio.playbackRate=1+.4*fraction;
-    this.audio.volume=this.enabled&&active?.2:0;
+    const rate=1+.4*fraction,targetVolume=this.enabled&&active?volume:0;
+    if(this.audio.playbackRate!==rate)this.audio.playbackRate=rate;
+    if(this.audio.volume!==targetVolume)this.audio.volume=targetVolume;
     if(this.enabled&&active)this.start();else if(this.playing||this.starting)this.stop();
   }
   stop(){
     this.generation++;this.starting=false;this.playing=false;this.audio.volume=0;this.audio.pause();
+  }
+};
+
+/* Quiet viewscreen ambience, independent of ship speed and battle state. */
+window.BattleViewscreenAudio=class extends window.BattleEngineAudio{
+  constructor(){super('assets/viewscreen_slow.mp3');}
+  update({active=false}={}){
+    super.update({speed:0,active,volume:.025});
+  }
+};
+
+/* Quiet, fixed-pitch alert loop; shares native-media lifecycle and file support. */
+window.BattleAlertAudio=class extends window.BattleEngineAudio{
+  constructor(){super('assets/tos_red_alert.mp3');}
+  setEnabled(enabled){
+    this.enabled=enabled;
+    // Do not prime or start this recording merely because audio was enabled.
+    if(!enabled){this.active=false;this.stop();}
+  }
+  update({active=false}={}){
+    super.update({speed:0,active,volume:.06});
+  }
+};
+
+/* Combat score follows the opening cue and pauses with the engagement. */
+window.BattleFightAudio=class extends window.BattleEngineAudio{
+  constructor(){super('assets/FightMusic.mp3');}
+  setEnabled(enabled){this.enabled=enabled;if(!enabled)this.stop();}
+  update({active=false,dt=0,fade=false}={}){
+    if(!this.enabled){this.active=false;this.stop();return;}
+    const target=active?.2:0,step=.2*Math.max(0,dt)/1.2;
+    this.audio.volume=fade?this.audio.volume+Math.max(-step,Math.min(step,target-this.audio.volume)):target;
+    if(Math.abs(this.audio.volume-target)<1e-8)this.audio.volume=target;
+    this.audio.playbackRate=1;this.active=active||this.audio.volume>0;
+    if(this.active)this.start();else if(this.playing||this.starting)this.stop();
+  }
+};
+
+/* One introduction per engagement; pause/resume retains its playback position. */
+window.BattleIntroAudio=class extends window.BattleEngineAudio{
+  constructor(){
+    super('assets/introwav.mp3');this.audio.loop=false;this.triggered=false;this.finished=false;this.requestedActive=false;
+    this.fight=new window.BattleFightAudio();
+    this.audio.onended=()=>{
+      this.finished=true;this.active=false;this.playing=false;this.audio.volume=0;
+      this.update(this.musicState||{active:this.requestedActive});
+    };
+  }
+  setEnabled(enabled){this.enabled=enabled;this.fight.setEnabled(enabled);if(!enabled)this.stop();}
+  playOnce(){
+    if(this.triggered)return;this.triggered=true;
+    try{this.audio.currentTime=0;}catch{}
+    this.update({active:true});
+  }
+  update({active=false,musicActive=active,replay=false,fadeMusic=false,fadeOut=false,dt=0}={}){
+    this.musicState={active,musicActive,replay,fadeMusic,fadeOut};
+    this.requestedActive=active;
+    this.active=this.triggered&&!this.finished&&(active||fadeOut&&(this.playing||this.starting));
+    this.audio.playbackRate=1;
+    this.audio.volume=fadeOut?Math.max(0,this.audio.volume-.5*Math.max(0,dt)/1.2):this.enabled&&this.active?.5:0;
+    if(fadeOut&&this.audio.volume<1e-8){this.audio.volume=0;this.active=false;}
+    if(this.enabled&&this.active)this.start();else if(this.playing||this.starting)this.stop();
+    this.fight.update({active:musicActive&&!fadeOut&&(replay||this.triggered&&this.finished),dt,fade:fadeMusic||fadeOut});
+  }
+  reset(){
+    this.stop();this.fight.stop();this.fight.active=false;this.triggered=false;this.finished=false;this.active=false;this.requestedActive=false;this.musicState=null;
+    try{this.audio.currentTime=0;this.fight.audio.currentTime=0;}catch{}
   }
 };

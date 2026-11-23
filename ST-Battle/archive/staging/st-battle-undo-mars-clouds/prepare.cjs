@@ -1,0 +1,15 @@
+const fs=require('node:fs'),path=require('node:path');
+const game='C:/Users/David Granholm/.codex/ST Battle';
+let scene=fs.readFileSync(path.join(game,'scene.js'),'utf8');
+const start=scene.indexOf('    const clouds=new T.Mesh('),end=scene.indexOf('    const atmosphereRadius=',start);
+if(start<0||end<start)throw new Error('Cloud layer boundaries not found');
+scene=scene.slice(0,start)+scene.slice(end);
+scene=scene.replace(/^    if\(this\.planet\?\.userData\.clouds\)this\.planet\.userData\.clouds\.rotation\.y=this\.clock\*\.012;\r?\n/m,'');
+fs.writeFileSync(path.join(__dirname,'scene.js'),scene);
+let test=fs.readFileSync(path.join(game,'test/planet.test.cjs'),'utf8');
+test=test.replace(/^  const clouds=planet\.userData\.clouds;[^\r\n]*\r?\n/m,'').replace(/^  const cloudRadius=clouds\.geometry\.parameters\.radius;[^\r\n]*\r?\n/m,'');
+fs.writeFileSync(path.join(__dirname,'planet.test.cjs'),test);
+const image=fs.readFileSync('C:/Users/David Granholm/.codex/generated_images/01a1fbd5-4100-76b0-9a47-81d7c3c81db2/exec-08988fec-721f-4020-81a4-2cf44497772f.png');
+fs.writeFileSync(path.join(__dirname,'mars-surface.png'),image);
+fs.writeFileSync(path.join(__dirname,'mars-surface.js'),'/* Simplified Mars texture embedded for direct file:// launch. */\nwindow.BattleMarsSurface="data:image/png;base64,'+image.toString('base64')+'";');
+fs.copyFileSync('C:/Users/David Granholm/.codex/Attached/st-battle-planet-update/mars-surface-prompt.txt',path.join(__dirname,'mars-surface-prompt.txt'));

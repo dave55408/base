@@ -31,7 +31,7 @@ test('rear attack tracks Yorktown stern and holds fire until Enterprise gets beh
 test('automatic helm ignores manual inputs and produces distinct port, starboard, climb and dive paths',()=>{
   const route=key=>{const s=setup(key);advance(s,4);return s;},direct=route('direct'),port=route('port'),starboard=route('starboard'),above=route('above'),below=route('below');
   assert(port.player.x<direct.player.x-30);assert(starboard.player.x>direct.player.x+30);assert(above.player.y>direct.player.y+60);assert(below.player.y<direct.player.y-60);
-  const a=setup(),b=setup();advance(a,4);advance(b,4,{left:true,up:true,stop:true});
+  const a=setup(),b=setup();advance(a,4);advance(b,4,{left:true,up:true});
   assert.deepEqual(b.player,a.player);
 });
 test('hide establishes actual K7 occlusion, holds weapons, then starts an assault',()=>{

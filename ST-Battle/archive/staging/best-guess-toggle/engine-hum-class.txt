@@ -1,0 +1,35 @@
+
+/* Enterprise impulse engines: native media supports both file and web pages. */
+window.BattleEngineAudio=class{
+  constructor(){
+    this.audio=new window.Audio('assets/drone_hum.mp3');this.audio.preload='auto';this.audio.loop=true;this.audio.volume=0;
+    this.audio.preservesPitch=false;this.audio.mozPreservesPitch=false;this.audio.webkitPreservesPitch=false;
+    this.enabled=false;this.active=false;this.starting=false;this.playing=false;this.generation=0;
+    this.audio.onerror=()=>{this.stop();console.warn('Could not load assets/drone_hum.mp3');};
+    this.audio.load();
+  }
+  setEnabled(enabled){
+    if(this.enabled===enabled)return;this.enabled=enabled;
+    if(!enabled)this.stop();else this.start(true);
+  }
+  start(prime=false){
+    if(!this.enabled||this.starting||this.playing||(!prime&&!this.active))return;
+    const token=this.generation;this.starting=true;
+    try{Promise.resolve(this.audio.play()).then(()=>{
+      if(token!==this.generation)return;
+      this.starting=false;this.playing=true;
+      if(!this.enabled||!this.active)this.stop();
+    }).catch(()=>{if(token===this.generation){this.starting=false;this.playing=false;this.enabled=false;}});}
+    catch{this.starting=false;this.playing=false;this.enabled=false;}
+  }
+  update({speed=0,maximum=300,active=false}={}){
+    this.active=active;
+    const fraction=Math.max(0,Math.min(1,Math.abs(speed)/Math.max(1,maximum)));
+    this.audio.playbackRate=1+.2*fraction;
+    this.audio.volume=this.enabled&&active?.2:0;
+    if(this.enabled&&active)this.start();else if(this.playing||this.starting)this.stop();
+  }
+  stop(){
+    this.generation++;this.starting=false;this.playing=false;this.audio.volume=0;this.audio.pause();
+  }
+};

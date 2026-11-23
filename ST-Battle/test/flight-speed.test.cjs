@@ -58,6 +58,7 @@ test('predicted K7 collisions reduce speed before the ship reaches the station',
 
 test('held W and S override only player speed and releasing returns to the automatic plan',()=>{
   const s=duel(900,1400),p=s.player,orders=JSON.stringify(s.turn.orders);p.speed=80;
+  s.enemy.x+=400;
   s.autoHelm(.1,{more:true});assert.equal(p.speedOverride,1);assert(p.flightTargetSpeed>150);assert.match(p.speedIntent,/MANUAL SPEED UP/);assert(p.speed>80&&p.speed<90);
   s.autoHelm(.1,{});assert.equal(p.speedOverride,0);assert.doesNotMatch(p.speedIntent,/MANUAL/);assert.equal(p.flightTargetSpeed,B.MIN_IMPULSE_SPEED);
   s.autoHelm(.1,{less:true});assert.equal(p.speedOverride,-1);assert.equal(p.flightTargetSpeed,B.MIN_IMPULSE_SPEED);assert.match(p.speedIntent,/MANUAL SLOW DOWN/);

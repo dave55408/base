@@ -1,0 +1,21 @@
+const fs=require('node:fs'),path=require('node:path');
+const file=name=>path.join(__dirname,name);
+function replace(text,before,after){if(!text.includes(before))throw new Error('Missing anchor: '+before.slice(0,70));return text.replace(before,after);}
+let html=fs.readFileSync(file('index.html'),'utf8');
+html=replace(html,'<div class="header-actions">','<div id="score-strip" class="score-strip"><div><span>SCORE</span><strong id="score-value">0</strong></div><span id="chain-value">BUILD A CHAIN</span><div><span>BEST</span><strong id="best-value">0</strong></div></div><div class="header-actions">');
+const launch='<div id="launch-card" class="launch-card"><span class="launch-kicker">K7 / MUTARA SECTOR</span><h2>Take command.<br><em>Make it count.</em></h2><p>Outsmart Yorktown. Break its defenses. Bring your crew home.</p><div class="difficulty-picker" role="group" aria-label="Battle difficulty"><button id="difficulty-cadet" type="button" aria-pressed="false">Cadet</button><button id="difficulty-captain" type="button" aria-pressed="true">Captain</button><button id="difficulty-admiral" type="button" aria-pressed="false">Admiral</button></div><p id="difficulty-note" class="difficulty-note"></p><div class="launch-goal"><span>THIS ROUND / BONUS OBJECTIVE</span><strong id="launch-objective"></strong><small>Complete it for bonus points.</small></div><div class="launch-actions"><button id="quick-battle" type="button">QUICK BATTLE <span>→</span></button><button id="launch-practice" type="button">FREE FLIGHT</button></div><p class="launch-tip">Quick Battle starts with a ready-to-fly Strong plan. Use Build to take full tactical control.</p><span id="career-summary" class="career-summary"></span></div><div id="combat-callout" class="combat-callout" role="status" aria-live="polite" hidden><strong id="callout-title"></strong><span id="callout-detail"></span></div>';
+html=replace(html,'<div id="viewport"></div>','<div id="viewport"></div>'+launch);
+html=replace(html,'<ol id="live-plan"','<p id="battle-objective" class="battle-objective"></p><ol id="live-plan"');
+const debrief='<div class="result-performance"><div class="result-grade"><span>RANK</span><strong id="result-grade">—</strong></div><div><span>FINAL SCORE</span><strong id="result-score">0</strong><small id="result-performance"></small></div></div><p id="result-challenge" class="result-challenge"></p><p id="result-record" class="result-record"></p><button id="quick-rematch" class="quick-rematch" type="button">QUICK REMATCH →</button>';
+html=replace(html,'<p id="result-description"></p>','<p id="result-description"></p>'+debrief);
+fs.writeFileSync(file('index.html'),html);
+let app=fs.readFileSync(file('app.js'),'utf8');
+app=replace(app,'function reset(){','function reset(){resultSaved=false;newBest=false;calloutUntil=0;$(\'combat-callout\').hidden=true;');
+app=replace(app,'scene?.event(event);eventSound(event);',`scene?.event(event);eventSound(event);if(event.scorePoints){showCombatCallout(event.shieldBroken?'SHIELD BREACHED':event.hullDamage>0?'HULL HIT':'DIRECT HIT','+'+event.scorePoints+' POINTS'+(event.chain>1?' / CHAIN '+event.chain:''),event.shieldBroken?'breach':'hit');}`);
+app=replace(app,'lastFrame=now;','lastFrame=now;if(now>calloutUntil)$(\'combat-callout\').hidden=true;');
+app=replace(app,'Enterprise hull ${fmt(p.hull)}%`);}','Enterprise hull ${fmt(p.hull)}%`);renderDebrief();}');
+fs.writeFileSync(file('app.js'),app);
+let engine=fs.readFileSync(file('engine.js'),'utf8');
+engine=replace(engine,'const arc=facing(target,source),shield=target.shields[arc];','const arc=facing(target,source),shield=target.shields[arc],hullBefore=target.hull;');
+engine=replace(engine,'this.scoreHit(shield-target.shields[arc],hullDamage,weapon)','this.scoreHit(shield-target.shields[arc],Math.min(hullDamage,hullBefore),weapon)');
+fs.writeFileSync(file('engine.js'),engine);

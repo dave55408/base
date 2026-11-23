@@ -1,0 +1,6 @@
+{
+  "name": "st-battle", "version": "1.0.0", "private": true,
+  "description": "A cinematic starship duel: Enterprise versus Yorktown",
+  "scripts": {"start": "node server.cjs", "test": "node --test test/*.test.cjs"},
+  "engines": {"node": ">=20"}
+}

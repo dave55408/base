@@ -66,8 +66,8 @@ test('a photon keeps its launch heading and pitch when its target changes course
 test('Yorktown pursues and eventually destroys an undefended Enterprise',()=>{
   const s=new B.Simulation(97,{turnBased:false});s.running=true;const start=s.range;advance(s,7);assert.ok(s.range<start);for(let i=0;i<10000&&!s.result;i++)s.tick(.1);assert.equal(s.result,'defeat');assert.equal(s.player.hull,0);assert.equal(s.running,false);
 });
-test('helm preserves signed thrust, brakes before reversing and maintains slow ahead',()=>{
-  const s=new B.Simulation(97,{turnBased:false});s.running=true;s.player.throttle=60;advance(s,1);assert.ok(s.player.speed>0);s.player.throttle=-60;s.tick(.05);assert.ok(s.player.speed>=0);advance(s,2);assert.ok(s.player.speed<0);const heading=s.player.heading;s.tick(.1,{stop:true});assert.equal(s.player.speed,B.MIN_IMPULSE_SPEED);assert.equal(s.player.throttle,0);s.tick(.1,{right:true,up:true});assert.ok(s.player.heading>heading);assert.ok(s.player.pitch<0);s.player.pitch=0;s.tick(.1,{down:true});assert.ok(s.player.pitch>0);
+test('helm preserves signed thrust, brakes before reversing and allows a full stop',()=>{
+  const s=new B.Simulation(97,{turnBased:false});s.running=true;s.player.throttle=60;advance(s,1);assert.ok(s.player.speed>0);s.player.throttle=-60;s.tick(.05);assert.ok(s.player.speed>=0);advance(s,2);assert.ok(s.player.speed<0);const heading=s.player.heading;s.tick(.1,{stop:true});assert.equal(s.player.speed,0);assert.equal(s.player.throttle,0);s.tick(.1,{right:true,up:true});assert.ok(s.player.heading>heading);assert.ok(s.player.pitch<0);s.player.pitch=0;s.tick(.1,{down:true});assert.ok(s.player.pitch>0);
 });
 test('pausing freezes combat and movement, and reset restores both ships',()=>{
   const s=new B.Simulation(97,{turnBased:false}),original=JSON.stringify(s.player);s.tick(.1,{right:true,more:true});assert.equal(JSON.stringify(s.player),original);s.running=true;s.damage(s.enemy,s.player,999,'torpedo','reactor');s.player.torpedoes=0;s.reset();assert.equal(s.result,null);assert.equal(s.player.torpedoes,24);assert.equal(s.enemy.hull,100);assert.equal(s.time,0);assert.equal(s.running,false);
@@ -154,10 +154,22 @@ test('Enterprise holds turn rate on release and opposite steering brakes the tur
   s.reset();assert.equal(s.player.turnRate,0);
 });
 
-test('longer phaser burst still applies one original-strength damage hit',()=>{
+test('longer phaser burst still applies one damage hit at the current shield balance',()=>{
   const s=new B.Simulation(97,{turnBased:false});s.running=true;Object.assign(s.enemy,{x:0,y:0,z:-850});
   assert(s.fire('phaser'));assert.equal(s.events.find(e=>e.type==='beam').duration,1.4);
-  const shield=s.enemy.shields[B.facing(s.enemy,s.player)];assert(Math.abs(shield-57.16)<1e-8);
+  const shield=s.enemy.shields[B.facing(s.enemy,s.player)];assert(Math.abs(shield-42.88)<1e-8);
   const impactCount=()=>s.events.filter(e=>e.type==='impact'&&e.ship==='Yorktown').length;
   assert.equal(impactCount(),1);advance(s,1.4);assert.equal(impactCount(),1);assert.equal(s.hits,1);
+});
+
+
+test('torpedo misses emit one confirmed outcome for expiry or K7 interception, but not practice shots',()=>{
+  for(const reason of ['expired','blocked','practice']){
+    const s=new B.Simulation(97,{turnBased:false});s.running=true;Object.assign(s.player,{x:2000,y:0,z:0});Object.assign(s.enemy,{x:2000,y:0,z:-900});s.enemy.integrity.weapons=0;
+    s.stationTrace=(from,to,padding)=>reason==='blocked'&&padding===2?{pos:{...to},normal:{x:0,y:1,z:0}}:null;
+    s.projectiles.push({id:'miss-test',from:'Enterprise',target:'Yorktown',pos:{x:2000,y:500,z:0},heading:90,pitch:0,life:7.99,maxLife:8,strength:1,targetSystem:'hull',practice:reason==='practice'});
+    s.tick(.05);s.tick(.05);const misses=s.events.filter(e=>e.type==='torpedo-missed');
+    assert.equal(misses.length,reason==='practice'?0:1);
+    if(misses.length){assert.equal(misses[0].reason,reason);assert.equal(misses[0].from,'Enterprise');assert.equal(misses[0].target,'Yorktown');assert.equal(misses[0].projectileId,'miss-test');}
+  }
 });

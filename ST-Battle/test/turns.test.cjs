@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const B=require('../engine.js');
 const advance=(s,n)=>{for(let i=0;i<Math.ceil(n/.05);i++)s.tick(.05);};
 const plan=(target='hull',range=1000)=>[{weapon:'phaser',target,range},{weapon:'phaser',target,range},{weapon:'torpedo',target,range}];
-function configure(s,steps=plan()){s.selectManeuver('direct');steps.forEach((shot,i)=>assert.equal(s.updateStep(i,shot),true));}
+function configure(s,steps=plan()){s.selectManeuver('direct');steps.forEach((shot,i)=>assert.equal(s.updateStep(i,{...shot,maneuvers:[0]}),true));}
 function duel(steps=plan()){
   const s=new B.Simulation();s.running=true;
   Object.assign(s.player,{x:2000,y:0,z:0,heading:0});Object.assign(s.enemy,{x:2000,y:0,z:-900,heading:180});
@@ -16,16 +16,16 @@ test('incomplete plans never launch; planning freezes motion and recharge, pause
   s.running=false;const remaining=s.turn.remaining;advance(s,2);assert.equal(s.turn.remaining,remaining);
   configure(s);s.running=true;s.tick(.05);assert.equal(s.turn.phase,'planning');assert.equal(s.commitOrders(),true);assert.equal(s.turn.phase,'approach');
 });
-test('three valid steps enforce a two-phaser one-torpedo budget, clearing and range limits',()=>{
+test('three valid steps accept any weapon mix and enforce clearing and range limits',()=>{
   const s=new B.Simulation();assert.equal(s.planReady(),false);
   assert.equal(s.updateStep(0,{weapon:'beam',target:'hull',range:1000}),false);
   assert.equal(s.updateStep(0,{weapon:'phaser',target:'bogus',range:1000}),false);
   assert.equal(s.updateStep(0,{weapon:'phaser',target:'bridge',range:NaN}),false);
   assert.equal(s.updateStep(0,{weapon:'phaser',target:'bridge',range:1900}),false);
   assert.equal(s.updateStep(0,{weapon:'torpedo',target:'bridge',range:1900}),true);
-  assert.equal(s.updateStep(1,{weapon:'torpedo',target:'hull',range:600}),false);
+  assert.equal(s.updateStep(1,{weapon:'torpedo',target:'hull',range:600}),true);
   assert.equal(s.clearStep(0),true);configure(s);assert.equal(s.planReady(),true);
-  assert.equal(s.updateStep(2,{weapon:'phaser',target:'hull',range:800}),false);
+  assert.equal(s.updateStep(2,{weapon:'phaser',target:'hull',range:800}),true);
   s.running=true;s.commitOrders();assert.equal(s.clearStep(1),false);
 });
 test('pending steps allow exactly two live revisions; launched torpedoes retain their aim',()=>{
@@ -64,7 +64,7 @@ test('missed stages advance within one pass; projectiles resolve before final re
   s.turn.orders.forEach(v=>v.range=300);s.player.heading=180;
   for(let stage=0;stage<3;stage++){
     assert.equal(s.turn.stageIndex,stage);s.turn.remaining=0;
-    if(stage<2)advance(s,1.6);else advance(s,12);
+    if(stage<2)advance(s,1.6);else advance(s,2.2);
   }
   assert(s.turn.orders.every(v=>v.status==='skipped'));assert.equal(s.turn.number,1);assert.equal(s.turn.phase,'disengage');
   s.turn.remaining=0;s.projectiles.push({id:'pending',from:s.player.name,target:s.enemy.name,pos:{x:5000,y:5000,z:5000},life:7.9,maxLife:8,strength:1,targetSystem:'hull',heading:0,pitch:0});

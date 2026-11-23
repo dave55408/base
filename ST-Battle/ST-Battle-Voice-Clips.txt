@@ -1,0 +1,55 @@
+ST BATTLE - VOICE CLIP SCRIPT
+43 clips total
+Captain: Cedar
+Helmsman: Marin
+
+Read only the dialogue.
+
+CAPTAIN - CEDAR (14 clips)
+
+Attack run.
+Come to port.
+Come to starboard.
+Take us above.
+Take us below.
+Come around astern.
+Take cover behind K7.
+Collision course.
+Match course. Close in.
+Pursue.
+Hold firing range.
+Break off. Repair.
+Report.
+Manual helm.
+
+HELMSMAN - MARIN (29 clips)
+
+Closing, Captain.
+Coming to port.
+Coming to starboard.
+Climbing.
+Descending.
+Moving astern.
+Making for cover.
+Course set. Brace.
+Matching course.
+Pursuit course.
+Adjusting range.
+Withdrawing.
+Cloud tops. Correcting altitude.
+Course updated.
+In cover. Holding six seconds.
+No cover. Attacking.
+No relative movement. Next maneuver.
+Maneuvers complete. Breaking away.
+Station collision. Deflecting.
+Warp blocked by K7. Change heading.
+Warp blocked by planet. Change heading.
+Warp complete. Charge spent.
+Maneuvers complete. Awaiting orders.
+Manual control. Standing by.
+Torpedo incoming!
+Hull hit!
+Warp complete.
+Helm lost!
+Yorktown disabled.

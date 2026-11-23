@@ -1,0 +1,34 @@
+﻿const fs=require('fs'),root='attack-budget-fix/';
+let code=fs.readFileSync(root+'engine.js','utf8');
+function r(a,b){if(!code.includes(a))throw Error('Engine anchor '+a);code=code.replace(a,b);}
+r('  const TURN=',"  const ATTACK_BUDGET=Object.freeze({phaser:5,torpedo:2}),ATTACK_COUNT=7;\n  const TURN=");
+code=code.replaceAll('draft:[null,null,null]','draft:Array(ATTACK_COUNT).fill(null)');
+r('const draft=preset.shots.map(', 'const draft=[preset.shots[0],preset.shots[1],preset.shots[0],preset.shots[1],preset.shots[1],preset.shots[2],preset.shots[2]].map(');
+r("const draft=breached&&p.torpedoes>0&&p.cooldown.torpedo<=2?[torpedo,...phasers]:[...phasers,torpedo];", "const bursts=Array.from({length:ATTACK_BUDGET.phaser},(_,i)=>({...phasers[i%phasers.length],maneuvers:[0]})),torpedoes=Array.from({length:ATTACK_BUDGET.torpedo},()=>({...torpedo,maneuvers:[0]}));\n      const draft=breached&&p.torpedoes>0&&p.cooldown.torpedo<=2?[...torpedoes,...bursts]:[...bursts,...torpedoes];");
+r("return (detailed&&shield<25?[torpedo,...phasers]:[...phasers,torpedo]).map", "const bursts=Array.from({length:ATTACK_BUDGET.phaser},(_,i)=>({...phasers[i%phasers.length]})),torpedoes=Array.from({length:ATTACK_BUDGET.torpedo},()=>({...torpedo}));\n      return (detailed&&shield<25?[...torpedoes,...bursts]:[...bursts,...torpedoes]).map");
+r('plan.length!==3','plan.length!==ATTACK_COUNT');
+r("plan.length===3&&plan.every", "plan.length===ATTACK_COUNT&&Array.from(plan).every");
+r("plan.filter(s=>s.weapon==='phaser').length===2&&plan.filter(s=>s.weapon==='torpedo').length===1", "plan.filter(s=>s?.weapon==='phaser').length===ATTACK_BUDGET.phaser&&plan.filter(s=>s?.weapon==='torpedo').length===ATTACK_BUDGET.torpedo");
+r("clearStep(index){if(this.result||!Number.isInteger(index)||index<0||index>2", "clearStep(index){if(this.result||!Number.isInteger(index)||index<0||index>=ATTACK_COUNT");
+r("if(!this.turnBased||this.result||!Number.isInteger(index)||index<0||index>2", "if(!this.turnBased||this.result||!Number.isInteger(index)||index<0||index>=ATTACK_COUNT");
+r("plan.filter(s=>s?.weapon==='phaser').length>2||plan.filter(s=>s?.weapon==='torpedo').length>1", "plan.filter(s=>s?.weapon==='phaser').length>ATTACK_BUDGET.phaser||plan.filter(s=>s?.weapon==='torpedo').length>ATTACK_BUDGET.torpedo");
+r('const changes=[0,1,2].filter(i=>JSON.stringify(plan[i])', 'const changes=Array.from({length:ATTACK_COUNT},(_,i)=>i).filter(i=>JSON.stringify(plan[i])');
+r("if(this.turnBased){const hold=this.turnStatus(type,shooter,target);if(hold)return hold;}","if(this.turnBased){if((this.turn.spent[shooter===this.player?'player':'enemy']?.[type]||0)>=ATTACK_BUDGET[type])return 'TURN WEAPON BUDGET SPENT';const hold=this.turnStatus(type,shooter,target);if(hold)return hold;}");
+r('return {Simulation,TURN,', 'return {Simulation,ATTACK_BUDGET,ATTACK_COUNT,TURN,');
+code=code.replace('Manual helm. F fires practice phasers','Manual helm. R fires practice phasers');fs.writeFileSync(root+'engine.js',code);
+code=fs.readFileSync(root+'planner.js','utf8');
+function p(a,b){if(!code.includes(a))throw Error('Planner anchor '+a);code=code.replace(a,b);}
+p("      for(let i=0;i<3;i++){\n", "      for(let i=0;i<Battle.ATTACK_COUNT;i++)this.$('plan-step-'+i).onclick=()=>this.selectStep(i);\n      for(let i=0;i<3;i++){\n");
+p("        this.$('plan-step-'+i).onclick=()=>this.selectStep(i);\n",'');
+p('draft:[null,null,null]','draft:Array(Battle.ATTACK_COUNT).fill(null)');
+code=code.replaceAll("(weapon==='phaser'?2:1)",'Battle.ATTACK_BUDGET[weapon]');
+p('Math.min(2,this.index+1)','Math.min(Battle.ATTACK_COUNT-1,this.index+1)');
+p('for(let i=0;i<3;i++)if(t.orders?.[i])','for(let i=0;i<Battle.ATTACK_COUNT;i++)if(t.orders?.[i])');
+p("if(planning&&!choosing)t.draft[this.index]=selected.weapon&&selected.target?copy(selected):null;", "if(planning&&!choosing){\n        if(!selected.weapon||!selected.target)t.draft[this.index]=null;\n        else if(!s.updateStep(this.index,selected))this.error('Assign a valid attack within the limit of five phasers and two torpedoes.');\n      }");
+p("length===2&&budget.filter(shot=>shot?.weapon==='torpedo').length===1", "length===B.ATTACK_BUDGET.phaser&&budget.filter(shot=>shot?.weapon==='torpedo').length===B.ATTACK_BUDGET.torpedo");
+const start=code.indexOf('        const shot=t.draft[i];'),end=code.indexOf("        this.$('attack-maneuver-'+i)",start);const shots=code.slice(start,end);if(start<0||end<0)throw Error('render block');code=code.slice(0,start)+code.slice(end);p('      for(const key of Object.keys(B.maneuvers))',"      for(let i=0;i<B.ATTACK_COUNT;i++){\n"+shots+"      }\n      for(const key of Object.keys(B.maneuvers))");
+code=code.replaceAll('/2 phasers','/5 phasers').replaceAll('/1 torpedo','/2 torpedoes').replaceAll('all three attacks','all seven attacks').replaceAll('your three attacks','five phasers and two torpedoes');fs.writeFileSync(root+'planner.js',code);
+code=fs.readFileSync(root+'app.js','utf8').replaceAll('Save all three shots','Configure all five phasers and two torpedoes').replace('t.spent.player.phaser}/2','t.spent.player.phaser}/5').replace('t.spent.player.torpedo}/1','t.spent.player.torpedo}/2');fs.writeFileSync(root+'app.js',code);
+let html=fs.readFileSync(root+'index.html','utf8');const anchor='<button id="plan-step-2" type="button" aria-current="false"><b>04</b><span id="plan-step-label-2">Choose weapon & target</span></button>';if(!html.includes(anchor))throw Error('HTML steps');html=html.replace(anchor,anchor+Array.from({length:4},(_,j)=>`<button id="plan-step-${j+3}" type="button" aria-current="false"><b>0${j+5}</b><span id="plan-step-label-${j+3}">Choose weapon & target</span></button>`).join(''));
+for(const [a,b] of [['THREE-SHOT ATTACK PLAN','SEVEN-SHOT ATTACK PLAN'],['0 / 3 shots','0 / 7 shots'],['your three attacks','five phasers and two torpedoes'],['all three shots','all seven shots'],['two phasers and one torpedo','five phasers and two torpedoes'],['Two phasers and one torpedo','Five phasers and two torpedoes'],['2 bursts per plan','5 shots per plan'],['1 launch per plan','2 launches per plan']])html=html.replaceAll(a,b);fs.writeFileSync(root+'index.html',html);
+fs.appendFileSync(root+'style.css','\n#plan-wizard .wizard-steps{grid-template-columns:repeat(4,minmax(0,1fr))}\n@media(max-width:600px){#plan-wizard .wizard-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}\n');

@@ -38,14 +38,14 @@ test('live target updates exploit new breaches without adding shots or resetting
   assert.equal(s.enemy.cooldown.phaser,1.2);assert.equal(s.enemy.capacitor,63);assert.equal(s.turn.spent.enemy.phaser,1);assert.equal(s.turn.enemyOrders.length,3);
 });
 test('a retreating captain can repair using finite parts and re-engage after stabilizing',()=>{
-  const s=duel();s.player.integrity.weapons=0;s.player.repairBudget=0;s.enemy.hull=24;
-  for(let i=0;i<430&&!s.result;i++)s.tick(.1);
+  const s=duel();s.fire=()=>false;s.player.repairBudget=0;s.enemy.hull=24;
+  for(let i=0;i<430&&!s.result;i++){if(s.turn.phase==='review')s.commitOrders();s.tick(.1);}
   assert(s.enemy.hull>=35);assert(s.enemy.repairBudget<30);assert(s.enemy.repairBudget>=0);assert.equal(s.enemyRetreating,false);
   assert(s.turn.spent.enemy.phaser<=2&&s.turn.spent.enemy.torpedo<=1);
 });
 
 test('Yorktown retreats for at most ten seconds and returns on a different maneuver after each retreat',()=>{
-  const s=duel();s.player.integrity.weapons=0;s.player.repairBudget=0;s.enemy.hull=24;s.enemy.repairBudget=0;
+  const s=duel();s.fire=()=>false;s.player.repairBudget=0;s.enemy.hull=24;s.enemy.repairBudget=0;
   for(let i=0;i<95;i++)s.tick(.1);
   assert.equal(s.enemyRetreating,true);assert.equal(s.enemyMind.returnManeuver,undefined);
   const time=s.time;s.running=false;for(let i=0;i<200;i++)s.tick(.1);assert.equal(s.time,time,'pause does not consume the retreat timer');s.running=true;
@@ -53,17 +53,63 @@ test('Yorktown retreats for at most ten seconds and returns on a different maneu
   assert.equal(s.enemyRetreating,false);const first=s.enemyMind.returnManeuver;assert(['port','starboard','above','below','behind'].includes(first));
   const due=s.enemyMind.reengageUntil;
   for(let i=0;i<100;i++)s.tick(.1);assert.equal(s.enemyRetreating,false,'critical hull cannot immediately restart its retreat');
-  while(s.time<due+10.5&&!s.result)s.tick(.1);
+  for(let i=0;i<1000&&s.time<due+10.5&&!s.result;i++){if(s.turn.phase==='review')s.commitOrders();s.tick(.1);}
   assert.equal(s.enemyRetreating,false);assert.notEqual(s.enemyMind.returnManeuver,first);
   assert(s.turn.spent.enemy.phaser<=2&&s.turn.spent.enemy.torpedo<=1,'returning preserves the existing weapon budget');
   s.reset();assert.equal(s.enemyMind.returnManeuver,undefined);assert.equal(s.enemyMind.runAwaySince,undefined);
 });
 
 test('Yorktown also turns back after ten seconds of pulling away with an exhausted plan',()=>{
-  const s=duel();s.player.integrity.weapons=0;s.player.repairBudget=0;
+  const s=duel();s.beforePlayerFire=()=>false;s.player.repairBudget=0;
   for(const order of s.turn.enemyOrders)order.status='hit';
   Object.assign(s.turn.spent.enemy,{phaser:2,torpedo:1});
   for(let i=0;i<110;i++)s.tick(.1);
   assert.equal(s.enemyRetreating,false);assert(s.enemyMind.returnManeuver);assert(s.enemyMind.reengageUntil>s.time);
   assert.equal(s.nextOrder(s.enemy),undefined);assert.deepEqual(s.turn.spent.enemy,{phaser:2,torpedo:1});
+});
+
+
+test('Yorktown pursues a damaged Enterprise after spending its salvo and during Enterprise breakaway',()=>{
+  for(const phase of ['attack','disengage']){
+    const s=duel(),e=s.enemy,p=s.player;p.hull=60;p.fullStop=true;p.throttle=0;s.beforePlayerFire=()=>false;s.stationTrace=()=>null;
+    for(const order of s.turn.enemyOrders)order.status='hit';Object.assign(s.turn.spent.enemy,{phaser:2,torpedo:1});s.turn.phase=phase;s.turn.remaining=3;s.turn.elapsed=0;
+    let mode,aim;const steering=s.steerFlight.bind(s),speed=s.adjustFlightSpeed.bind(s);
+    s.steerFlight=(ship,target,...args)=>{if(ship===e)aim={...target};return steering(ship,target,...args);};
+    s.adjustFlightSpeed=(ship,target,point,options,dt)=>{if(ship===e)mode=options.mode;return speed(ship,target,point,options,dt);};
+    s.tick(.1);assert.equal(mode,'pursuit');assert(aim.z>e.z,'Yorktown aims toward Enterprise, not away');assert.equal(s.enemyRetreating,false);assert.equal(s.enemyMind.runAwaySince,null);
+    assert.deepEqual(s.turn.spent.enemy,{phaser:2,torpedo:1},'pressing an advantage does not grant additional attacks');
+  }
+});
+
+test('damaged Enterprise cancels ordinary Yorktown retreat, while emergency retreat and Free Flight remain available',()=>{
+  const s=duel();s.player.hull=60;s.enemy.hull=24;s.enemyRetreating=true;s.fire=()=>false;s.tick(.1);assert.equal(s.enemyRetreating,false);
+  s.enemy.hull=10;s.tick(.1);assert.equal(s.enemyPressesAdvantage(),false);assert.equal(s.enemyRetreating,true,'critical Yorktown can still escape');
+  s.freeFlight=true;s.enemy.hull=100;assert.equal(s.enemyPressesAdvantage(),false);
+});
+
+test('Yorktown commits offensive power against wounded Enterprise despite its own moderate damage or return maneuver',()=>{
+  for(const wound of ['hull','engines','breach']){
+    const s=duel();
+    if(wound==='hull')s.player.hull=60;
+    if(wound==='engines')s.player.integrity.engines=40;
+    if(wound==='breach')s.player.shields.fore=0;
+    s.enemy.hull=24;s.enemyRetreating=true;s.enemyMind.reengageUntil=s.time+20;
+    for(const arc of B.arcs)s.enemy.shields[arc]=15;
+    s.thinkEnemy();
+    assert.equal(s.enemyRetreating,false);assert.equal(s.enemy.tactic,'PRESSING ATTACK');
+    assert.equal(s.enemy.power.weapons,34);assert.equal(s.enemy.power.engines,34);
+    s.enemyMind.nextThink=0;s.enemyMind.evadeUntil=s.time+2;s.thinkEnemy();
+    assert.equal(s.enemy.tactic,'DEFENSIVE','a short torpedo dodge still takes priority');
+  }
+});
+
+test('Yorktown keeps closing on wounded Enterprise after firing instead of holding distant pursuit range',()=>{
+  const s=duel(1300),e=s.enemy,p=s.player;p.hull=60;p.fullStop=true;p.throttle=0;s.stationTrace=()=>null;s.beforePlayerFire=()=>false;s.fire=()=>false;
+  for(const order of s.turn.enemyOrders)order.status='hit';
+  let mode,aim;s.steerFlight=(ship,target)=>{if(ship===e)aim={...target};};
+  s.adjustFlightSpeed=(ship,target,point,options)=>{if(ship===e)mode=options.mode;};
+  s.tick(.1);assert.equal(mode,'pursuit');assert.equal(aim.x,p.x);assert.equal(aim.z,p.z);
+  const command=s.desiredFlightSpeed(e,p,p,{mode:'pursuit'});
+  assert(command.speed>50,'Yorktown keeps closing into firing range even without a pending shot');
+  assert(!command.reason.includes('WITHDRAWAL')||command.reason.includes('NO WITHDRAWAL'));
 });

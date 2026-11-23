@@ -8,9 +8,11 @@
   const Replay=typeof module==='object'&&module.exports?require('./replay.js'):globalThis.BattleReplay;
   const DESTRUCTION_DURATION=Replay?.DESTRUCTION_DURATION??5;
   const targets={hull:'Primary hull',engines:'Impulse engines',mainEngines:'Main engines',bridge:'Bridge',shields:'Shield generators',weapons:'Weapons',sensors:'Sensors',reactor:'Reactor',...Object.fromEntries(arcs.map(a=>['shield-'+a,a[0].toUpperCase()+a.slice(1)+' shield']))};
-  const weaponSpecs={phaser:{name:'Phaser',maxRange:1500,optimal:[500,1000]},torpedo:{name:'Torpedo',maxRange:1900,optimal:[300,700]}};
-  const maneuvers={direct:{name:'Direct assault',description:'Close head-on, fire your sequence, then break away.'},port:{name:'Curving attack — to port',description:'Sweep to your port side before turning in to attack.'},starboard:{name:'Curving attack — to starboard',description:'Sweep to your starboard side before turning in to attack.'},above:{name:'Attack from above',description:'Climb above Yorktown, then dive into your attack run.'},below:{name:'Attack from below',description:'Descend below Yorktown, then climb into your attack run.'},behind:{name:'Attack from behind',description:'Sweep around Yorktown, get astern, then fire from behind.'},hide:{name:'Hide then direct assault',description:'Seek cover behind K7, wait six seconds, then attack.'},ram:{name:'Ram',description:'Attempt a high-speed collision. A solid impact causes massive damage to both ships.'},close:{name:'Close battle',description:'Match Yorktown\'s course and speed. Both ships can fire in any direction.'},chase:{name:'Chase',description:'Follow Yorktown at a distance without withdrawing, even after assigned attacks are spent.'},distance:{name:'Keep your distance',description:'Hold near your selected firing range and pull away when Yorktown closes in.'},flee:{name:'Flee and effect repairs',description:'Withdraw for 30 seconds. Divert power and repair the most damaged areas with available parts.'}};
-  const TURN={planning:30,approach:75,attack:75,disengage:6,withdraw:30,review:30};
+  const weaponSpecs={phaser:{name:'Phaser',energy:28,reserve:3,maxRange:1500,optimal:[500,1000]},torpedo:{name:'Torpedo',energy:24,reserve:1.5,maxRange:1900,optimal:[300,700]}};
+  const maneuvers={direct:{name:'Direct assault',description:'Close head-on, fire your sequence, then break away.'},port:{name:'Curving attack — to port',description:'Sweep to your port side before turning in to attack.'},starboard:{name:'Curving attack — to starboard',description:'Sweep to your starboard side before turning in to attack.'},above:{name:'Attack from above',description:'Climb above Yorktown, then dive into your attack run.'},below:{name:'Attack from below',description:'Descend below Yorktown, then climb into your attack run.'},behind:{name:'Attack from behind',description:'Sweep around Yorktown, get astern, then fire from behind.'},hide:{name:'Hide then direct assault',description:'Seek cover behind K7, wait six seconds, then attack.'},ram:{name:'Ram',description:'Attempt a high-speed collision. A solid impact causes massive damage to both ships.'},close:{name:'Close battle',description:'Match Yorktown\'s course and speed. Both ships can fire in any direction.'},chase:{name:'Chase',description:'Follow Yorktown at a distance without withdrawing, even after assigned attacks are spent.'},distance:{name:'Keep your distance',description:'Hold near your selected firing range and pull away when Yorktown closes in.'},flee:{name:'Flee and effect repairs',description:'Withdraw during your share of the turn. Divert power and repair the most damaged areas with available parts.'}};
+  const DEFAULT_SALVO=Object.freeze({phaser:2,torpedo:1}),ATTACK_COUNT=3;
+  const TURN={execution:30,planning:30,approach:12,attack:12,disengage:3,withdraw:30,review:30};
+  const COMBO=Object.freeze({window:6,systemMultiplier:1.5});
   const PLANET={name:'Mars',x:-13000,y:-3000,z:-18000,radius:2800,atmosphere:60};
   const direction=s=>({x:Math.sin(s.heading*RAD)*Math.cos(s.pitch*RAD),y:Math.sin(s.pitch*RAD),z:-Math.cos(s.heading*RAD)*Math.cos(s.pitch*RAD)});
   const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
@@ -27,22 +29,22 @@
   function ship(name,x,y,z,heading){return {name,x,y,z,heading,pitch:0,bank:0,turnRate:0,throttle:0,speed:MIN_IMPULSE_SPEED,hull:100,reactor:100,
     integrity:{engines:100,shields:100,weapons:100,sensors:100,bridge:100,mainEngines:100},power:{engines:24,shields:30,weapons:30,sensors:16},
     shields:Object.fromEntries(arcs.map(a=>[a,100])),bias:{fore:24,starboard:17,aft:16,port:17,dorsal:13,ventral:13},
-    capacitor:100,torpedoes:24,cooldown:{phaser:0,torpedo:0,scan:0},heat:0,lastHit:-100,repair:'sensors',repairBudget:30};}
+    energyReserve:100,energyRate:0,capacitor:100,torpedoes:24,cooldown:{phaser:0,torpedo:0,scan:0},heat:0,lastHit:-100,repair:'sensors',repairBudget:30,phaserCombo:null,detachedNacelles:{port:false,starboard:false}};}
   function redistribute(map,key,value){
     const old=map[key];map[key]=clamp(value);const others=Object.keys(map).filter(k=>k!==key),total=others.reduce((s,k)=>s+map[k],0);
     for(const k of others)map[k]=(100-map[key])*(total?map[k]/total:1/others.length);
     return old!==map[key];
   }
   const targetingColor=(sim,visible)=>!sim.contact?'#a8b7c5':sim.lock&&sim.range<=1500?'#79f0a3':sim.lock||visible?'#ffad45':'#ff9c85';
+  const K7_ROTATION_RATE=Math.PI/240; // Counterclockwise from above: one revolution per eight minutes.
   function makeK7(){
     const cargoArmLength=(246-38)/10;
-    const station={cargo:{x:-(110+cargoArmLength+18),y:76,z:0,armStart:-90,armEnd:-(110+cargoArmLength)},name:'K7',x:-430,y:-20,z:-430,radius:335,scale:1.4,parts:[],pods:[]};
+    const station={cargo:{x:-(110+cargoArmLength+18),y:76,z:0,armStartY:76,armStart:-90,armEnd:-(110+cargoArmLength)},name:'K7',x:-430,y:-20,z:-430,radius:335,scale:1.4,parts:[],pods:[]};
     const add=(x,y,z,rx,ry,rz)=>station.parts.push({x:station.x+x,y:station.y+y,z:station.z+z,rx,ry,rz});
     add(0,76,0,110,20,110);add(0,129,0,33,44,33);add(0,192,0,4,24,4);
     add(0,0,0,39,25,39);add(0,45,0,18,31,18);add(0,-45,0,13,38,13);add(0,-100,0,47,26,47);
-    add(station.cargo.x,76,0,19,36,19);
-    for(let i=0;i<=4;i++)add(station.cargo.armStart+(station.cargo.armEnd-station.cargo.armStart)*i/4,station.cargo.y,0,10,10,10);
-    add(station.cargo.armEnd+4,station.cargo.y,0,15,12.5,16);
+    add(station.cargo.x,station.cargo.y,0,19,36,19);
+    for(let i=0;i<=4;i++)add(station.cargo.armStart+(station.cargo.armEnd-station.cargo.armStart)*i/4,station.cargo.armStartY,0,10,10,10);
     for(let i=0;i<3;i++){
       const a=i*Math.PI*2/3,x=Math.cos(a)*280,z=Math.sin(a)*280;station.pods.push({x,z});
       add(x,0,z,52,12,52);add(x,31,z,18,25,18);
@@ -95,7 +97,7 @@
       this.freeFlightOrbit={radius:700,height:350,angle:Math.atan2(this.enemy.z-this.station.z,this.enemy.x-this.station.x)};
       this.enemy.speed=55;this.enemy.flightAcceleration=0;this.flyYorktownOrbit(0);
       this.projectiles=[];this.events=[];this.running=true;
-      this.message('CONN','Free flight. Manual helm. F fires practice phasers; T launches practice torpedoes. No damage. Yorktown is cruising near K7.');
+      this.message('CONN','Free flight. Manual helm. R fires practice phasers; T launches practice torpedoes. No damage. Yorktown is cruising near K7.');
     }
     flyYorktownOrbit(dt){
       const e=this.enemy,k=this.station,o=this.freeFlightOrbit;o.angle+=e.speed/o.radius*dt;
@@ -137,14 +139,34 @@
       ship.heading=bearing(origin,ahead);ship.pitch=clamp(elevation(origin,ahead),-85,85);ship.turnRate=0;ship.pitchRate=0;ship.speed=sign*MIN_IMPULSE_SPEED;ship.flightAcceleration=0;
       if(ship===this.player){ship.throttle=0;if(this.time-(this.lastPlanetWarning??-10)>4){this.lastPlanetWarning=this.time;this.message('HELM','Cloud-top clearance reached. Deflecting to keep Enterprise above the atmosphere.');}}
     }
-    output(s,key){return s.power[key]*s.reactor/100*s.integrity[key]/100*(.5+s.integrity.bridge/200)*(key==='engines'?.35+s.integrity.mainEngines*.0065:1);}
+    nacelleSpeedFactor(ship){
+      const lost=Object.values(ship.detachedNacelles||{}).filter(Boolean).length;
+      return lost>=2?.12:lost===1?.45:1;
+    }
+    flightMobility(ship,minimum=.12,maximum=1.6){
+      const hardware=.35+ship.integrity.mainEngines*.0065,factor=this.nacelleSpeedFactor(ship),output=this.output(ship,'engines');
+      const intactOutput=output*hardware/Math.min(hardware,factor);
+      return Math.max(.08,Math.min(clamp(output/24,minimum,maximum),clamp(intactOutput/24,minimum,maximum)*factor));
+    }
+    output(s,key){return s.power[key]*s.reactor/100*s.integrity[key]/100*(.5+s.integrity.bridge/200)*(key==='engines'?Math.min(.35+s.integrity.mainEngines*.0065,this.nacelleSpeedFactor(s)):1);}
     initTurns(){
       this.turn={number:1,phase:'planning',remaining:TURN.planning,elapsed:0,revisions:2,
-        draft:[null,null,null],draftManeuvers:[null,null,null],draftManeuver:null,maneuvers:null,stageIndex:0,maneuver:null,navigation:null,orders:null,enemyOrders:null,spent:{player:{phaser:0,torpedo:0},enemy:{phaser:0,torpedo:0}},offArcSpent:{player:false,enemy:false},baseline:null,report:null};
+        draft:Array(ATTACK_COUNT).fill(null),draftManeuvers:[null,null,null],draftManeuver:null,maneuvers:null,stageIndex:0,maneuver:null,navigation:null,orders:null,enemyOrders:null,spent:{player:{phaser:0,torpedo:0},enemy:{phaser:0,torpedo:0}},offArcSpent:{player:false,enemy:false},baseline:null,report:null};
     }
     get maneuvering(){return !this.turnBased||!['planning','review'].includes(this.turn.phase);}
+    drawEnergy(s,amount){s.energyReserve=clamp(s.energyReserve-Math.max(0,amount));}
+    updateEnergy(s,dt,capacitorGain=0,shieldGain=0,repairGain=0){
+      // Reactor health and remaining warp nacelles limit generation; damaged conduits leak energy.
+      const generation=1.8*(.25+.75*s.reactor/100)*this.nacelleSpeedFactor(s);
+      const propulsion=.65*clamp(Math.abs(s.speed)/190,0,2)*(s.power.engines/24);
+      const leakage=(100-s.hull)*.012+(100-s.reactor)*.006;
+      const demand=.2+propulsion+this.output(s,'sensors')*.003+leakage;
+      const replenishment=capacitorGain*.12+shieldGain*.08+repairGain*.5;
+      s.energyRate=generation-demand-(dt>0?replenishment/dt:0);
+      s.energyReserve=clamp(s.energyReserve+s.energyRate*dt);
+    }
     snapshot(){return [this.player,this.enemy].map(s=>({hull:s.hull,shields:{...s.shields},integrity:{...s.integrity},reactor:s.reactor}));}
-    setPhase(phase){const t=this.turn;t.phase=phase;t.remaining=TURN[phase];t.elapsed=0;this.events.push({type:'phase',phase,pass:t.number});}
+    setPhase(phase){const t=this.turn,remaining=t.phase==='approach'&&phase==='attack'?t.remaining:['approach','attack','withdraw'].includes(phase)?t.stageDuration??TURN[phase]:TURN[phase];t.phase=phase;t.remaining=remaining;t.elapsed=0;this.events.push({type:'phase',phase,pass:t.number});}
     applyPlanPreset(style){
       if(!this.turnBased||this.freeFlight||this.result||!['planning','review'].includes(this.turn.phase))return false;
       const presets={
@@ -153,7 +175,8 @@
         aggressive:{routes:['direct','close','chase'],shots:[['phaser','weapons',700,0],['phaser','bridge',550,1],['torpedo','reactor',650,2]]},
         berserk:{routes:['direct','close','ram'],shots:[['phaser','weapons',500,0],['phaser','bridge',400,1],['torpedo','reactor',300,1]]}
       },preset=Object.hasOwn(presets,style)?presets[style]:null;if(!preset)return false;
-      const draft=preset.shots.map(([weapon,target,range,maneuver])=>({weapon,target,range,maneuvers:[maneuver]}));
+      const attackRoutes=preset.routes.map((route,i)=>route!=='flee'&&route!=='ram'?i:-1).filter(i=>i>=0);
+      const draft=preset.shots.map(([weapon,target,range])=>({weapon,target,range,maneuvers:[...attackRoutes]}));
       if(!this.planReady(draft,preset.routes))return false;
       Object.assign(this.turn,{draft,draftManeuvers:[...preset.routes],draftManeuver:preset.routes[0]});return true;
     }
@@ -165,7 +188,7 @@
       const emergency=!finishNow&&repairable&&(p.hull<32||p.integrity.weapons<10||p.integrity.engines<12||p.integrity.mainEngines<15||p.integrity.sensors<10||p.reactor<25);
       const noWeapons=p.integrity.weapons<10;
       if(emergency||noWeapons){
-        Object.assign(this.turn,{draft:[null,null,null],draftManeuvers:['flee',null,null],draftManeuver:'flee'});
+        Object.assign(this.turn,{draft:Array(ATTACK_COUNT).fill(null),draftManeuvers:['flee',null,null],draftManeuver:'flee'});
         this.captainStatus=repairable?'Withdraw, recharge shields and repair the weakest essential system.':'Disengage: preserve Enterprise while weapons or hull are critical.';return true;
       }
       const arc=seen.detailed?this.captainAttackArc(seen):null;
@@ -177,7 +200,8 @@
       const phasers=[{weapon:'phaser',target:phaseTarget,range:longRange?1500:1000,maneuvers:[0]},
         {weapon:'phaser',target:phaseTarget,range:longRange?1500:cautious?1000:900,maneuvers:[0]}];
       const torpedo={weapon:'torpedo',target:internal,range:finishNow?700:longRange?1800:cautious?700:650,maneuvers:[0]};
-      const draft=breached&&p.torpedoes>0&&p.cooldown.torpedo<=2?[torpedo,...phasers]:[...phasers,torpedo];
+      const bursts=Array.from({length:DEFAULT_SALVO.phaser},(_,i)=>({...phasers[i%phasers.length],maneuvers:[0]})),torpedoes=Array.from({length:DEFAULT_SALVO.torpedo},()=>({...torpedo,maneuvers:[0]}));
+      const draft=breached&&p.torpedoes>0&&p.cooldown.torpedo<=2?[...torpedoes,...bursts]:[...bursts,...torpedoes];
       if(arc)for(const order of draft)order.attackArc=arc;
       if(!this.planReady(draft,routes))return false;
       Object.assign(this.turn,{draft,draftManeuvers:routes,draftManeuver:first});this.playerMind.arc=arc;
@@ -263,12 +287,23 @@
       }else{delete order.attackArc;if(order.target.startsWith('shield-'))order.target='hull';this.captainStatus='Reacquire contact; avoid precision targeting without sensors.';}
       if(this.captainTargetEscaping(seen)||this.time-m.waitingSince>15)order.range=Math.min(weaponSpecs[order.weapon].maxRange,Math.max(order.range,distance(p,seen)+50));
     }
+    previewEngineSide(){
+      const missing=this.player.detachedNacelles;
+      if(missing.port&&missing.starboard)return null;
+      if(!this.previewAttackArc||missing[this.previewAttackArc])this.previewAttackArc=!missing.port&&!missing.starboard?(facing(this.player,this.enemy)==='starboard'?'starboard':'port'):missing.port?'starboard':'port';
+      return this.previewAttackArc;
+    }
     planEnemy(){
+      if(this.previewNacelleBreakoff&&this.previewEngineSide()){
+
+        return [{weapon:'phaser',range:1000},{weapon:'phaser',range:900},{weapon:'torpedo',range:800}].map(order=>({...order,target:'mainEngines',attackArc:this.previewAttackArc}));
+      }
       const p=this.player,e=this.enemy,detailed=this.enemyHasContact(true),arc=detailed?this.enemyAttackArc():facing(p,e);
       const shield=detailed?p.shields[arc]:100,internal=detailed?this.enemyInternalTarget():'hull',target=detailed&&shield>=25?'shield-'+arc:internal;
       if(this.enemyHasContact())this.rememberEnemyContact();
       const phasers=[{weapon:'phaser',target,range:1000},{weapon:'phaser',target,range:750}],torpedo={weapon:'torpedo',target:internal,range:650};
-      return (detailed&&shield<25?[torpedo,...phasers]:[...phasers,torpedo]).map(order=>({...order,attackArc:detailed?arc:null}));
+      const bursts=Array.from({length:DEFAULT_SALVO.phaser},(_,i)=>({...phasers[i%phasers.length]})),torpedoes=Array.from({length:DEFAULT_SALVO.torpedo},()=>({...torpedo}));
+      return (detailed&&shield<25?[...torpedoes,...bursts]:[...bursts,...torpedoes]).map(order=>({...order,attackArc:detailed?arc:null}));
     }
     enemyHasContact(detailed=false){return this.range<2000&&this.enemy.integrity.sensors>12&&this.output(this.enemy,'sensors')>=(detailed?10:3.5);}
     rememberEnemyContact(){const p=this.player;this.enemyMind.lastKnown={x:p.x,y:p.y,z:p.z,heading:p.heading,pitch:p.pitch,speed:p.speed,at:this.time};}
@@ -308,9 +343,15 @@
         {x:target.x+Math.cos(a)*550*side,y:target.y,z:target.z+Math.sin(a)*550*side};
       if(distance(this.enemy,point)<180){m.returnLegComplete=true;return target;}return point;
     }
+    enemyPressesAdvantage(){
+      const p=this.player,e=this.enemy;
+      const vulnerable=p.hull<99.99||p.reactor<99.99||Object.values(p.integrity).some(value=>value<99.99)||Object.values(p.detachedNacelles||{}).some(Boolean)||Object.values(p.shields).some(value=>value<25);
+      return !this.freeFlight&&p.hull>0&&e.hull>=15&&e.integrity.weapons>=10&&vulnerable;
+    }
     thinkEnemy(){
       const e=this.enemy,p=this.player,m=this.enemyMind;if(this.time<m.nextThink)return;m.nextThink=this.time+.75;
       const contact=this.enemyHasContact(),detailed=this.enemyHasContact(true);if(contact)this.rememberEnemyContact();
+      const pressing=this.enemyPressesAdvantage();if(pressing)this.enemyRetreating=false;
       const threat=contact?p:this.enemyTrack(),exposed=facing(e,threat),order=this.nextOrder(e);
       redistribute(e.bias,exposed,55);
       const repairKeys=this.enemyRetreating||e.hull<35?['hull','engines','reactor','shields','weapons','sensors']:['reactor',...Object.keys(e.integrity)];
@@ -330,9 +371,10 @@
       if(this.enemyRetreating&&e.hull>=35&&e.integrity.engines>=40&&e.integrity.weapons>=30){this.enemyRetreating=false;this.message('TACTICAL','Yorktown has stabilized and is re-engaging.');}
       let profile,stance;
       if(this.enemyRetreating){profile={engines:45,shields:35,weapons:10,sensors:10};stance='RETREATING';}
-      else if(m.reengageUntil>this.time){profile={engines:34,shields:28,weapons:26,sensors:12};stance='RE-ENGAGING';}
+      else if(!pressing&&m.reengageUntil>this.time){profile={engines:34,shields:28,weapons:26,sensors:12};stance='RE-ENGAGING';}
       else if(!contact){profile={engines:25,shields:30,weapons:15,sensors:30};stance='REACQUIRING CONTACT';}
-      else if(e.hull<45||e.shields[exposed]<20||m.evadeUntil>this.time){profile={engines:34,shields:38,weapons:16,sensors:12};stance='DEFENSIVE';}
+      else if(!pressing&&(e.hull<45||e.shields[exposed]<20)||m.evadeUntil>this.time){profile={engines:34,shields:38,weapons:16,sensors:12};stance='DEFENSIVE';}
+      else if(pressing){profile={engines:34,shields:20,weapons:34,sensors:12};stance='PRESSING ATTACK';}
       else if(order&&this.range<=order.range+120&&angle(e,p)<45){profile={engines:20,shields:24,weapons:44,sensors:12};stance='ATTACKING';}
       else{profile={engines:40,shields:22,weapons:26,sensors:12};stance='PURSUING';}
       Object.assign(e.power,profile);e.tactic=stance;
@@ -346,9 +388,10 @@
           if(away>.5&&p.speed>e.speed*.9)order.range=Math.max(order.range,Math.min(1700,this.range+50));
         }
         if(this.time-m.waitingSince>10){order.attackArc=angle(e,p)<45&&this.range<=order.range+300?current:this.enemyAttackArc();if(order.target.startsWith('shield-'))order.target='shield-'+order.attackArc;}
+        if(this.previewNacelleBreakoff){order.target='mainEngines';order.attackArc=this.previewEngineSide();}
       }
     }
-    attackAssignments(step,index){return step?.maneuvers??[index];}
+    attackAssignments(step,index){return step?.maneuvers??(this.turn.draftManeuvers.some(Boolean)?this.defaultAttackAssignments(index):[Math.min(index,2)]);}
     defaultAttackAssignments(index){const available=this.turn.draftManeuvers.map((key,i)=>key&&key!=='flee'?i:-1).filter(i=>i>=0);return available.includes(index)?[index]:available.length?[available[available.length-1]]:[];}
     validStep(step){return !!step&&Object.hasOwn(weaponSpecs,step.weapon)&&Object.hasOwn(targets,step.target)&&Number.isFinite(step.range)&&step.range>=300&&step.range<=weaponSpecs[step.weapon].maxRange&&(!Object.hasOwn(step,'maneuvers')||Array.isArray(step.maneuvers)&&step.maneuvers.length>0&&new Set(step.maneuvers).size===step.maneuvers.length&&step.maneuvers.every(i=>Number.isInteger(i)&&i>=0&&i<3));}
     selectManeuver(key,index=null){
@@ -365,23 +408,23 @@
       this.turn.draftManeuver=this.turn.draftManeuvers.find(Boolean)||null;return true;
     }
     planReady(plan=this.turn.draft,routes=this.turn.draftManeuvers){
-      if(!Array.isArray(plan)||plan.length!==3)return false;
+      if(!Array.isArray(plan)||plan.length!==ATTACK_COUNT)return false;
       if(!Array.isArray(routes)||routes.length!==3||!routes.some(Boolean)||routes.some(key=>key&&!Object.hasOwn(maneuvers,key)))return false;
       if(!routes.some(key=>key&&key!=='flee'))return true;
       if(this.maneuvering&&this.turn.orders?.every(order=>order.status==='unused')&&plan.every(step=>!step))return true;
-      return Array.isArray(plan)&&plan.length===3&&plan.every((step,i)=>this.validStep(step)&&(this.maneuvering&&this.turn.orders?.[i]?.status!=='pending'||this.attackAssignments(step,i).every(m=>routes[m]&&routes[m]!=='flee')))&&plan.filter(s=>s.weapon==='phaser').length===2&&plan.filter(s=>s.weapon==='torpedo').length===1;
+      return Array.isArray(plan)&&plan.length===ATTACK_COUNT&&Array.from(plan).every((step,i)=>this.validStep(step)&&(this.maneuvering&&this.turn.orders?.[i]?.status!=='pending'||this.attackAssignments(step,i).every(m=>routes[m]&&routes[m]!=='flee')));
     }
-    clearStep(index){if(this.result||!Number.isInteger(index)||index<0||index>2||this.maneuvering)return false;this.turn.draft[index]=null;return true;}
+    clearStep(index){if(this.result||!Number.isInteger(index)||index<0||index>=ATTACK_COUNT||this.maneuvering)return false;this.turn.draft[index]=null;return true;}
     updateStep(index,step){
       const t=this.turn;
-      if(!this.turnBased||this.result||!Number.isInteger(index)||index<0||index>2||!this.validStep(step))return false;
+      if(!this.turnBased||this.result||!Number.isInteger(index)||index<0||index>=ATTACK_COUNT||!this.validStep(step))return false;
       const planning=['planning','review'].includes(t.phase);
       if(!planning&&(!this.running||!['approach','attack','withdraw'].includes(t.phase)||t.revisions<=0))return false;
       if(!planning&&t.orders[index].status!=='pending')return false;
       const assigned=this.attackAssignments(step,index);
       if(assigned.some(m=>t.draftManeuvers[m]==='flee')||!planning&&(!assigned.every(m=>t.draftManeuvers[m])||!assigned.some(m=>m>=t.stageIndex)))return false;
       const plan=t.draft.map(s=>s&&({...s}));plan[index]={weapon:step.weapon,target:step.target,range:step.range,maneuvers:[...assigned].sort()};
-      if(plan.filter(s=>s?.weapon==='phaser').length>2||plan.filter(s=>s?.weapon==='torpedo').length>1)return false;
+
       if(!planning){if(!this.planReady(plan)||JSON.stringify(t.draft[index])===JSON.stringify(plan[index]))return false;t.revisions--;t.orders[index]={...plan[index],status:'pending'};}
       t.draft=plan;return true;
     }
@@ -390,7 +433,7 @@
     }
     applyRevisions(plan,routes=this.turn.draftManeuvers){
       const t=this.turn;if(this.result||!['approach','attack','withdraw'].includes(t.phase)||!this.planReady(plan,routes))return false;
-      const changes=[0,1,2].filter(i=>JSON.stringify(plan[i])!==JSON.stringify(t.draft[i]));
+      const changes=Array.from({length:ATTACK_COUNT},(_,i)=>i).filter(i=>JSON.stringify(plan[i])!==JSON.stringify(t.draft[i]));
       const routeChanges=[0,1,2].filter(i=>routes[i]!==t.maneuvers[i]),cost=changes.length+routeChanges.length;
       if(cost>t.revisions||routeChanges.some(i=>!routes[i]||!this.canReviseManeuver(i))||changes.some(i=>t.orders[i].status!=='pending'||!this.attackAssignments(plan[i],i).some(m=>m>=t.stageIndex)))return false;
       for(const i of changes){t.draft[i]={...plan[i],maneuvers:[...this.attackAssignments(plan[i],i)]};t.orders[i]={...t.draft[i],status:'pending'};}
@@ -409,12 +452,13 @@
     commitOrders(){
       const t=this.turn;
       if(!this.turnBased||!this.running||this.result||!['planning','review'].includes(t.phase)||!this.planReady())return false;
+      this.player.fullStop=false;this.player.phaserCombo=null;this.enemy.phaserCombo=null;
       if(t.phase==='review')t.number++;
       t.maneuvers=[...t.draftManeuvers];const offensive=t.maneuvers.some(key=>key&&key!=='flee');
       t.orders=t.draft.map((s,i)=>offensive?{...s,maneuvers:[...this.attackAssignments(s,i)],status:'pending'}:{status:'unused',maneuvers:[]});
       t.maneuverStatus=t.maneuvers.map(key=>key?'pending':'not-selected');t.enemyOrders=this.planEnemy().map(s=>({...s,status:'pending'}));t.spent={player:{phaser:0,torpedo:0},enemy:{phaser:0,torpedo:0}};t.offArcSpent={player:false,enemy:false};t.revisions=2;t.baseline=this.snapshot();t.report=null;t.stageHistory=[];
-      t.cleanupDeadline=null;t.endedEarly=false;this.replayRecording=Replay?new Replay.Recorder(this):null;this.startStage(t.maneuvers.findIndex(Boolean));
-      this.message('COMMAND',`Turn ${t.number}: ${t.maneuvers.filter(Boolean).length} maneuver(s) committed. Each attack fires once.`);this.captureReplay(true);return true;
+      t.executionDeadline=this.time+TURN.execution;t.cleanupDeadline=null;t.endedEarly=false;this.replayRecording=Replay?new Replay.Recorder(this):null;this.startStage(t.maneuvers.findIndex(Boolean));
+      this.message('COMMAND',`Turn ${t.number}: ${t.maneuvers.filter(Boolean).length} maneuver(s) committed. Three scheduled shots committed. Additional manual fire uses energy and ammunition.`);this.captureReplay(true);return true;
     }
     captureReplay(force=false){
       if(!this.replayRecording)return;
@@ -428,6 +472,7 @@
       t.maneuverStatus=t.maneuverStatus.map(status=>status==='active'?'ended':status==='pending'?'skipped':status);
       for(const projectile of this.projectiles)if(projectile.order)projectile.order.status='cancelled';
       const cancelled=this.projectiles.length;this.projectiles=[];this.events.push({type:'pass-ended',cancelledProjectiles:cancelled});
+      this.events.push({type:'action-aborted',reason:'captain-ended-pass',maneuver:t.maneuver,stage:t.stageIndex});
       this.finishPass(true);return true;
     }
     finishPass(endedEarly=false){
@@ -443,6 +488,8 @@
     }
     startStage(index){
       const t=this.turn;this.restoreFlightPower();t.stageIndex=index;t.maneuver=t.maneuvers[index];t.maneuverStatus[index]='active';t.stageCompletedAt=null;t.stageHistory.push(t.maneuver);
+      const remainingStages=t.maneuvers.slice(index).filter(Boolean).length;
+      t.stageDuration=Math.max(0,((t.executionDeadline??this.time+TURN.execution)-this.time)/remainingStages);
       this.initNavigation();this.target=this.nextOrder()?.target||'hull';this.setPhase(t.maneuver==='flee'?'withdraw':'approach');
       if(t.maneuver==='flee'){t.savedPower={...this.player.power};t.savedRepair=this.player.repair;Object.assign(this.player.power,{engines:50,shields:30,weapons:5,sensors:15});}
       this.message('HELM',`M${index+1}: ${maneuvers[t.maneuver].name}.`);
@@ -454,6 +501,8 @@
       if(t.maneuver==='above'||t.maneuver==='below')waypoint.y+=t.maneuver==='above'?800:-800;
       if(t.maneuver==='hide'){const k=this.station,d=distance(k,e)||1,r=k.radius+240;waypoint.x=k.x+(k.x-e.x)/d*r;waypoint.y=k.y+(k.y-e.y)/d*r;waypoint.z=k.z+(k.z-e.z)/d*r;}
       t.navigation={stage:['direct','distance','ram','close','chase','flee'].includes(t.maneuver)?'attack':'position',elapsed:0,wait:6,waypoint};
+      t.navigation.relativeAnchor={x:p.x-e.x,y:p.y-e.y,z:p.z-e.z};
+      t.navigation.relativeStillTime=0;t.navigation.relativeStalled=false;
       if(t.maneuver==='behind'){
         const forward=direction(e),right={x:Math.cos(e.heading*RAD),z:Math.sin(e.heading*RAD)};
         t.navigation.rearSide=(p.x-e.x)*right.x+(p.z-e.z)*right.z<0?-1:1;
@@ -461,8 +510,30 @@
         Object.assign(waypoint,{x:e.x-forward.x*150+right.x*850*t.navigation.rearSide,y:e.y,z:e.z-forward.z*150+right.z*850*t.navigation.rearSide});
       }
     }
+    avoidShipCollision(ship,target,aim){
+      const intentionalRam=this.turnBased&&!this.freeFlight&&this.turn.maneuver==='ram'&&['approach','attack'].includes(this.turn.phase)&&!this.turn.navigation?.rammed;
+      if(intentionalRam){ship.collisionAvoidance=null;return aim;}
+      const a=direction(ship),b=direction(target),r={x:target.x-ship.x,y:target.y-ship.y,z:target.z-ship.z};
+      const v={x:b.x*target.speed-a.x*ship.speed,y:b.y*target.speed-a.y*ship.speed,z:b.z*target.speed-a.z*ship.speed};
+      const speedSquared=v.x*v.x+v.y*v.y+v.z*v.z,dot=r.x*v.x+r.y*v.y+r.z*v.z;
+      const closestTime=speedSquared>1e-6?clamp(-dot/speedSquared,0,8):0;
+      const miss=Math.hypot(r.x+v.x*closestTime,r.y+v.y*closestTime,r.z+v.z*closestTime),range=Math.hypot(r.x,r.y,r.z);
+      const danger=range<180||dot<0&&closestTime>0&&miss<180;
+      let avoidance=ship.collisionAvoidance;
+      if(danger){
+        if(!avoidance||avoidance.until<this.time){
+          const horizontal=Math.hypot(r.x,r.z),length=range||1;
+          // Both ships pass to their own right; retain that side until clear.
+          const side=horizontal>1?{x:-r.z/horizontal,z:r.x/horizontal}:{x:ship===this.player?1:-1,z:0};
+          avoidance={x:side.x*900-r.x/length*350,y:(ship===this.player?1:-1)*180-r.y/length*350,z:side.z*900-r.z/length*350};
+        }
+        avoidance.until=this.time+1.5;ship.collisionAvoidance=avoidance;
+      }
+      if(avoidance&&avoidance.until>=this.time)return {x:ship.x+avoidance.x,y:ship.y+avoidance.y,z:ship.z+avoidance.z};
+      ship.collisionAvoidance=null;return aim;
+    }
     desiredFlightSpeed(ship,target,aim,{mode='attack',order=null,avoiding=false,turnRate=42,speedOverride=0}={}){
-      const mobility=clamp(this.output(ship,'engines')/24,.12,1.6),maximum=125*mobility*IMPULSE_SPEED_MULTIPLIER;
+      const mobility=this.flightMobility(ship),maximum=125*mobility*IMPULSE_SPEED_MULTIPLIER;
       const aimDistance=distance(ship,aim),error=angle(ship,aim);let speed=maximum,reason='CLOSING FOR ATTACK';
       if(mode==='ram'){speed=maximum;reason='RAMMING SPEED';}
       else if(mode==='close'){
@@ -477,8 +548,9 @@
       }else{
         const range=distance(ship,target)||1,line={x:(target.x-ship.x)/range,y:(target.y-ship.y)/range,z:(target.z-ship.z)/range},d=direction(target);
         const targetAway=(d.x*line.x+d.y*line.y+d.z*line.z)*target.speed;
-        const desiredRange=mode==='pursuit'?Math.min(1200,(order?.range??(1200/.95))*.95):order?(mode==='distance'?order.range*.95:Math.min(order.range*.82,weaponSpecs[order.weapon].optimal[1]*.95)):range;
-        const weaponOutput=this.output(ship,'weapons'),cost=order?.weapon==='torpedo'?24:14;
+        const pressing=ship===this.enemy&&this.enemyPressesAdvantage();
+        const desiredRange=mode==='pursuit'?Math.min(pressing?1000:1200,(order?.range??(1200/.95))* .95):order?(mode==='distance'?order.range*.95:Math.min(order.range*.82,weaponSpecs[order.weapon].optimal[1]*.95)):range;
+        const weaponOutput=this.output(ship,'weapons'),cost=weaponSpecs[order?.weapon||'phaser'].energy;
         const chargeWait=order&&ship.capacitor<cost?(cost-ship.capacitor)/Math.max(.01,weaponOutput*.42):0;
         const heatWait=order?.weapon==='phaser'?Math.max(0,(ship.heat-85)/(5+weaponOutput*.12)):0;
         const readyIn=order?Math.max(0,ship.cooldown[order.weapon]||0,chargeWait,heatWait):0;
@@ -494,6 +566,7 @@
       }
       if(speedOverride>0){speed=maximum;reason='MANUAL SPEED UP / RELEASE W TO RESUME PLAN';}
       else if(speedOverride<0){speed=MIN_IMPULSE_SPEED;reason='MANUAL SLOW DOWN / RELEASE S TO RESUME PLAN';}
+      if(ship.collisionAvoidance){speed=Math.min(speed,55,Math.sqrt(2*65*Math.max(0,distance(ship,target)-180)));reason='AVOIDING SHIP COLLISION';}
       const f=direction(ship),lookAhead=Math.max(200,Math.abs(ship.speed)*3),ahead={x:ship.x+f.x*lookAhead,y:ship.y+f.y*lookAhead,z:ship.z+f.z*lookAhead};
       const hit=this.stationTrace(ship,ahead,90);
       if(hit){speed=Math.min(speed,Math.sqrt(2*65*Math.max(0,hit.t*lookAhead-75)));reason='BRAKING FOR K7';}
@@ -567,7 +640,7 @@
 
         const forward=direction(e),right={x:Math.cos(e.heading*RAD),z:Math.sin(e.heading*RAD)},order=this.nextOrder(p);
         const flank={x:e.x-forward.x*150+right.x*850*n.rearSide,y:e.y,z:e.z-forward.z*150+right.z*850*n.rearSide};
-        if(n.rearPhase==='flank'&&(distance(p,flank)<250||n.elapsed>14||facing(e,p)==='aft'))n.rearPhase='stern';
+        if(n.rearPhase==='flank'&&(distance(p,flank)<250||n.elapsed>4.5||facing(e,p)==='aft'))n.rearPhase='stern';
         const standOff=Math.max(300,Math.min(800,(order?.range||1000)*.72));
         n.waypoint=n.rearPhase==='flank'?flank:{x:e.x-forward.x*standOff,y:e.y-forward.y*standOff,z:e.z-forward.z*standOff};
         const astern=n.rearPhase==='stern'&&facing(e,p)==='aft';
@@ -575,11 +648,11 @@
       }else if(t.maneuver==='hide'&&n.stage!=='attack'){
         if(n.stage==='position'&&this.stationTrace(e,p)){n.stage='hiding';this.message('HELM','K7 cover established. Holding six seconds before the assault.');}
         if(n.stage==='hiding'){n.wait-=dt;if(n.wait<=0)n.stage='attack';}
-        if(n.elapsed>25&&n.stage==='position'){this.message('HELM','Cover route timed out. Beginning the direct assault.');n.stage='attack';}
+        if(n.elapsed>5&&n.stage==='position'){this.message('HELM','Cover route timed out. Beginning the direct assault.');n.stage='attack';}
         if(n.stage!=='attack')aim=n.waypoint;
       }else if(n.stage==='position'){
         aim=n.waypoint;
-        if(distance(p,aim)<220||n.elapsed>18)n.stage='attack';
+        if(distance(p,aim)<220||n.elapsed>4.5)n.stage='attack';
       }
       const order=this.nextOrder(p);
       const selectedArc=this.captainEnabled&&order?.attackArc|| (order?.target.startsWith('shield-')?order.target.slice(7):null);
@@ -588,10 +661,11 @@
         if(facing(e,p)!==sector){const vertical=sector==='dorsal'||sector==='ventral';aim={x:e.x+(vertical?0:Math.sin(a)*r),y:e.y+(sector==='dorsal'?r:sector==='ventral'?-r:0),z:e.z-(vertical?0:Math.cos(a)*r)};}
       }
       if(this.captainEnabled&&this.playerMind.evadeUntil>this.time&&this.playerMind.evadeAim&&t.phase!=='disengage'&&!['flee','ram','close','chase'].includes(t.maneuver)&&!n.retiring)aim=this.playerMind.evadeAim;
+      aim=this.avoidShipCollision(p,e,aim);
       const f=direction(p),ahead={x:p.x+f.x*280,y:p.y+f.y*280,z:p.z+f.z*280};
       n.avoiding=!!(this.stationTrace(p,aim,90)||this.stationTrace(p,ahead,90));
       if(n.avoiding)aim={x:this.station.x+(p.x>=this.station.x?1:-1)*(this.station.radius+200),y:this.station.y+this.station.radius+180,z:this.station.z};
-      const mobility=clamp(this.output(p,'engines')/24,.12,1.6),rate=42*mobility;
+      const mobility=this.flightMobility(p),rate=42*mobility;
       this.steerFlight(p,aim,dt,rate,30*mobility);
       const mode=t.maneuver==='flee'?'escape':t.phase==='disengage'||n.retiring?'breakaway':t.maneuver==='ram'?'ram':t.maneuver==='chase'?'pursuit':t.maneuver==='close'&&n.matchingCourse?'close':t.maneuver==='distance'?(n.openingRange?'escape':'distance'):n.stage==='hiding'?'cover':n.stage==='position'?'position':'attack';
       this.adjustFlightSpeed(p,e,aim,{mode,order,avoiding:n.avoiding,turnRate:rate,speedOverride:(keys.more?1:0)-(keys.less?1:0)},dt);
@@ -601,13 +675,14 @@
     }
     nextStageIndex(){return this.turn.maneuvers?.findIndex((key,i)=>key&&i>this.turn.stageIndex)??-1;}
     nextOrder(shooter=this.player){if(shooter!==this.player)return this.turn.enemyOrders?.find(s=>s.status==='pending');if(this.turn.maneuver==='flee')return undefined;return this.turn.orders?.find((order,i)=>order.weapon&&order.status==='pending'&&this.attackAssignments(order,i).includes(this.turn.stageIndex));}
-    turnStatus(type,shooter,target){
+    turnStatus(type,shooter,target,scheduled=true){
       const t=this.turn,order=this.nextOrder(shooter);
       if(t.phase==='withdraw'&&shooter===this.player)return 'WITHDRAWING / WEAPONS HOLD';
       if(!['approach','attack','withdraw'].includes(t.phase))return t.phase.toUpperCase()+' / WEAPONS HOLD';
       if(shooter===this.player&&t.maneuver==='hide'&&t.navigation.stage!=='attack')return 'K7 COVER MANEUVER';
       if(shooter===this.player&&order&&t.maneuver==='behind'&&facing(target,shooter)!=='aft')return 'POSITIONING BEHIND YORKTOWN';
       if(shooter===this.player&&t.navigation.stage==='position')return 'POSITIONING FOR ATTACK';
+      if(!scheduled)return null;
       if(!order)return this.nextStageIndex()>=0?'MANEUVER COMPLETE':'TURN PLAN COMPLETE';
       if(order.weapon!==type)return 'NEXT STEP: '+order.weapon.toUpperCase();
       if((shooter===this.enemy||this.captainEnabled)&&order.attackArc&&facing(target,shooter)!==order.attackArc)return 'SEEKING EXPOSED SHIELD';
@@ -620,26 +695,40 @@
       if(!this.maneuvering)return false;
       if(t.phase==='approach'||t.phase==='attack'||t.phase==='withdraw'){
         const timedOut=t.remaining<=0;
+        const n=t.navigation,relative={x:this.player.x-this.enemy.x,y:this.player.y-this.enemy.y,z:this.player.z-this.enemy.z};
+        // A fixed anchor catches accumulated drift, rather than just comparing adjacent frames.
+        if(!n.relativeAnchor||distance(relative,n.relativeAnchor)>25){n.relativeAnchor=relative;n.relativeStillTime=0;}
+        else n.relativeStillTime+=dt;
+        if(n.relativeStillTime>5)n.relativeStalled=true;
+        const stalled=n.relativeStalled;
         for(const [shooter,target] of [[this.player,this.enemy],[this.enemy,this.player]]){
           if(this.result)break;
           if(shooter===this.enemy&&this.enemyRetreating&&!this.closeBattleFire()&&!(angle(shooter,target)>90&&this.inFiringArc(this.nextOrder(shooter)?.weapon,shooter,target)))continue;
-          if(shooter===this.player&&t.remaining<=0)continue;
-          const order=this.nextOrder(shooter);if(order)this.fire(order.weapon,shooter,target);
+          if(shooter===this.player&&(t.remaining<=0||stalled))continue;
+          const order=this.nextOrder(shooter);if(order)this.fire(order.weapon,shooter,target,true);
         }
+        for(const order of t.orders)if(order.status==='pending'&&order.weapon==='torpedo'&&this.player.torpedoes<=0)order.status='skipped';
         const here=t.orders.filter((order,i)=>order.weapon&&this.attackAssignments(order,i).includes(t.stageIndex));
+        const unfinished=here.some(order=>order.status==='pending');
         if(timedOut)t.remaining=0;
-        if(timedOut)for(const order of here)if(order.status==='pending'&&!order.maneuvers.some(m=>m>t.stageIndex&&t.maneuvers[m]))order.status='skipped';
+        if(timedOut||stalled)for(const order of here)if(order.status==='pending'&&!order.maneuvers.some(m=>m>t.stageIndex&&t.maneuvers[m]))order.status='skipped';
         const fired=here.filter(order=>order.firedStage===t.stageIndex),beamEnd=Math.max(0,...fired.map(order=>order.firedAt+(order.weapon==='phaser'?PHASER_DURATION:0)));
-        const emptyRouteReady=t.navigation.stage==='attack'&&t.navigation.elapsed>=2&&(this.range<=1000||t.navigation.elapsed>=8);
-        const finished=t.maneuver==='flee'||t.maneuver==='chase'?timedOut:t.maneuver==='ram'?timedOut||!!t.navigation.rammed:timedOut||!this.nextOrder()&&(fired.length>0||emptyRouteReady);
-        if(finished&&t.stageCompletedAt===null)t.stageCompletedAt=this.time;
+
+        const finished=stalled||timedOut;
+        if(finished&&t.stageCompletedAt===null){
+          t.stageCompletedAt=this.time;
+          if(stalled||timedOut&&!['flee','chase'].includes(t.maneuver)&&(t.maneuver==='ram'?!n.rammed:unfinished)){
+            n.aborted=true;this.events.push({type:'action-aborted',reason:stalled?'no-relative-progress':'timeout',maneuver:t.maneuver,stage:t.stageIndex,nextStage:this.nextStageIndex()});
+          }
+        }
         const complete=finished&&this.time>=beamEnd;
         if(!this.result&&complete){
+          if(stalled&&!n.relativeAdvanceLogged){n.relativeAdvanceLogged=true;this.message('HELM','Relative position held for over five seconds. Advancing the flight plan.');}
           t.maneuverStatus[t.stageIndex]=t.maneuver==='flee'?'repaired':'complete';
           const next=this.nextStageIndex();
           if(next>=0)this.startStage(next);
           else{
-            if(t.cleanupDeadline===null)t.cleanupDeadline=this.time+(t.maneuver==='flee'?0:10);
+            if(t.cleanupDeadline===null)t.cleanupDeadline=this.time+(t.maneuver==='flee'||stalled?0:2);
             if(this.time>=t.cleanupDeadline||!this.nextOrder(this.enemy)||this.enemyRetreating){
               for(const pending of t.enemyOrders)if(pending.status==='pending')pending.status='skipped';
               if(t.maneuver==='chase'){
@@ -647,7 +736,7 @@
                 return true;
               }
               const retreat=t.maneuver==='flee';this.restoreFlightPower();this.setPhase('disengage');if(retreat)t.remaining=0;
-              this.message('HELM','Selected maneuvers complete. Automatic breakaway before damage review.');
+              this.message('HELM',n.aborted?'Maneuver aborted. Breaking away.':'Selected maneuvers complete. Automatic breakaway before damage review.');
             }
           }
         }
@@ -662,7 +751,7 @@
       const amount=clamp(45+closingSpeed*.18,45,90);
       for(const [target,source] of [[this.enemy,this.player],[this.player,this.enemy]]){
         const arc=facing(target,source),before=target.hull,shield=target.shields[arc];
-        target.shields[arc]=0;target.hull=clamp(target.hull-amount);target.lastHit=this.time;
+        target.shields[arc]=0;target.hull=clamp(target.hull-amount);target.lastHit=this.time;this.drawEnergy(target,amount*.4);
         for(const key of ['engines','mainEngines','bridge'])target.integrity[key]=clamp(target.integrity[key]-amount*.5);
         target.reactor=clamp(target.reactor-amount*.2,12,100);
         const hullDamage=before-target.hull,scorePoints=target===this.enemy?this.scoreHit(shield,hullDamage,'ram'):0;
@@ -679,6 +768,9 @@
       return true;
     }
     stationTrace(from,to,padding=0){
+      const angle=(this.time||0)*K7_ROTATION_RATE,c=Math.cos(angle),s=Math.sin(angle),station=this.station;
+      const unrotate=p=>{const x=p.x-station.x,z=p.z-station.z;return {x:station.x+c*x-s*z,y:p.y,z:station.z+s*x+c*z};};
+      from=unrotate(from);to=unrotate(to);
       let nearest=null;
       for(const part of this.station.parts){
         const rx=part.rx+padding,ry=part.ry+padding,rz=part.rz+padding;
@@ -691,6 +783,11 @@
         const pos={x:from.x+(to.x-from.x)*t,y:from.y+(to.y-from.y)*t,z:from.z+(to.z-from.z)*t};
         const nx=(pos.x-part.x)/(rx*rx),ny=(pos.y-part.y)/(ry*ry),nz=(pos.z-part.z)/(rz*rz),len=Math.hypot(nx,ny,nz)||1;
         nearest={t,pos,normal:{x:nx/len,y:ny/len,z:nz/len},part};
+      }
+      if(nearest){
+        const x=nearest.pos.x-station.x,z=nearest.pos.z-station.z,n=nearest.normal;
+        nearest.pos={x:station.x+c*x+s*z,y:nearest.pos.y,z:station.z-s*x+c*z};
+        nearest.normal={x:c*n.x+s*n.z,y:n.y,z:-s*n.x+c*n.z};
       }
       return nearest;
     }
@@ -729,15 +826,16 @@
       const a=angle(shooter,target),limit=type==='phaser'?65:28;
       return !this.turnBased&&shooter===this.enemy&&180-a<=limit;
     }
-    status(type,shooter=this.player,target=this.enemy){
+    status(type,shooter=this.player,target=this.enemy,scheduled=true){
       if(this.freeFlight&&shooter!==this.player)return 'FREE FLIGHT / WEAPONS SECURED';
       if(this.result)return 'ENGAGEMENT ENDED';if(!this.running)return 'STANDING BY';
       if(this.freeFlight)return shooter.cooldown[type]>0?'RECHARGING':'READY';
-      if(this.turnBased){const hold=this.turnStatus(type,shooter,target);if(hold)return hold;}
+      if(this.turnBased){const hold=this.turnStatus(type,shooter,target,scheduled);if(hold)return hold;}
       if(shooter.integrity.weapons<10||this.output(shooter,'weapons')<3)return 'WEAPONS OFFLINE';
       if(shooter.cooldown[type]>0)return 'RECHARGING';
       if(type==='torpedo'&&shooter.torpedoes<=0)return 'MAGAZINE EMPTY';
-      if(shooter.capacitor<(type==='phaser'?14:24))return 'LOW CAPACITOR';
+      if(shooter.energyReserve<weaponSpecs[type].reserve)return 'LOW ENERGY RESERVE';
+      if(shooter.capacitor<weaponSpecs[type].energy)return 'LOW CAPACITOR';
       if(type==='phaser'&&shooter.heat>85)return 'PHASERS OVERHEATED';
       if(distance(shooter,target)>=2000||distance(shooter,target)>(type==='phaser'?1500:2000))return 'OUT OF RANGE';
       if(!this.inFiringArc(type,shooter,target))return 'OUTSIDE FIRING ARC';
@@ -759,8 +857,9 @@
       const times=roots.filter(time=>time>0&&time<=8),time=times.length?Math.min(...times):0;
       return {x:point.x+v.x*time,y:point.y+v.y*time,z:point.z+v.z*time};
     }
-    fire(type,shooter=this.player,target=this.enemy){
-      const status=this.status(type,shooter,target);if(status!=='READY')return false;
+    fire(type,shooter=this.player,target=this.enemy,scheduled=true){
+      const status=this.status(type,shooter,target,scheduled);if(status!=='READY')return false;
+      if(shooter===this.player&&this.beforePlayerFire?.(type,scheduled)===false)return false;
       if(this.freeFlight){
         shooter.cooldown[type]=type==='phaser'?1.65:5.5;this.shots++;
         if(type==='phaser')this.events.push({type:'beam',from:shooter.name,to:target.name,duration:PHASER_DURATION,practice:true});
@@ -774,16 +873,19 @@
       if(this.turnBased&&!this.closeBattleFire()&&!this.forwardFiringArc(type,shooter,target)){
         this.turn.offArcSpent??={player:false,enemy:false};this.turn.offArcSpent[shooter===this.player?'player':'enemy']=true;
       }
-      const order=this.turnBased?this.nextOrder(shooter):null;
-      if(order){order.status=type==='phaser'?'hit':'in-flight';order.firedAt=this.time;if(shooter===this.player)order.firedStage=this.turn.stageIndex;this.turn.spent[shooter===this.player?'player':'enemy'][type]++;if(this.turn.phase==='approach')this.setPhase('attack');}
-      shooter.capacitor-=type==='phaser'?14:24;shooter.cooldown[type]=type==='phaser'?1.65:5.5;
+      const order=this.turnBased&&scheduled?this.nextOrder(shooter):null;
+      if(order){order.status=type==='phaser'?'hit':'in-flight';order.firedAt=this.time;if(shooter===this.player)order.firedStage=this.turn.stageIndex;if(this.turn.phase==='approach')this.setPhase('attack');}
+      if(this.turnBased)this.turn.spent[shooter===this.player?'player':'enemy'][type]++;
+      this.drawEnergy(shooter,weaponSpecs[type].reserve);
+      shooter.capacitor-=weaponSpecs[type].energy;shooter.cooldown[type]=type==='phaser'?1.65:5.5;
       const optimal=weaponSpecs[type].optimal,inBand=distance(shooter,target)>=optimal[0]&&distance(shooter,target)<=optimal[1];
       const strength=clamp(this.output(shooter,'weapons')/25,.2,1.6)*(shooter===this.enemy?.9:1)*(order&&inBand?1.15:1);
       if(shooter===this.player)this.shots++;
       if(type==='phaser'){
         const aim=order?order.target:shooter===this.player?this.target:null,hit=this.resolveWeaponHit?.(shooter,target,aim,'phaser');
-        shooter.heat+=23;this.events.push({type:'beam',from:shooter.name,to:target.name,duration:PHASER_DURATION,hit});
-        this.damage(target,shooter,17*strength,'phaser',aim,hit);
+        const missed=!!this.resolveWeaponHit&&!hit;
+        shooter.heat+=23;this.events.push({type:'beam',from:shooter.name,to:target.name,duration:PHASER_DURATION,hit,missed});
+        if(!missed)this.damage(target,shooter,17*strength,'phaser',aim,hit);
       }else{
         shooter.torpedoes--;const aft=shooter===this.enemy&&angle(shooter,target)>90,close=this.closeBattleFire()||this.turnBased&&!this.forwardFiringArc(type,shooter,target),r=distance(shooter,target)||1,d=close?{x:(target.x-shooter.x)/r,y:(target.y-shooter.y)/r,z:(target.z-shooter.z)/r}:direction(shooter),sign=!close&&aft?-1:1,pos={x:shooter.x+d.x*30*sign,y:shooter.y+d.y*30*sign,z:shooter.z+d.z*30*sign};
         const targetSystem=order?order.target:shooter===this.player?this.target:null,contact=this.resolveWeaponHit?.(shooter,target,targetSystem,'torpedo');
@@ -796,41 +898,73 @@
       if(this.freeFlight||this.result)return;
       if(source===this.enemy)amount*=this.difficultyProfile.enemyDamage;
       const arc=facing(target,source),shield=target.shields[arc],hullBefore=target.hull;
+      const opening=target.phaserCombo;
+      const combo=weapon==='torpedo'&&this.turnBased&&!!this.turn.orders&&opening?.source===source.name&&opening.turn===this.turn.number&&opening.arc===arc&&opening.hits>=2&&!opening.used&&this.time<=opening.until;
+      if(combo)opening.used=true;
+      let disrupted=false;
+      if(weapon==='phaser'&&amount>0&&this.turnBased&&this.turn.orders){
+        const same=opening?.source===source.name&&opening.turn===this.turn.number&&opening.arc===arc;
+        target.phaserCombo=same?{...opening,hits:opening.hits+1}:{source:source.name,turn:this.turn.number,arc,hits:1,until:0,used:false};
+        if(target.phaserCombo.hits===2){target.phaserCombo.until=this.time+COMBO.window;disrupted=true;}
+      }
       const shieldAim=typeof aim==='string'&&aim.startsWith('shield-');
       if(shieldAim&&aim.slice(7)===arc)amount*=1.3;
-      target.shields[arc]=clamp(shield-amount*(weapon==='phaser'?2.1:1.45));target.lastHit=this.time;
-      const penetration=shield<25?.58+(25-shield)/60:Math.max(0,amount-shield)/Math.max(amount,1)*.7;
-      const hullDamage=amount*penetration*(weapon==='torpedo'?1.35:.65)*.18*(aim==='hull'?1.35:1);
-      target.hull=clamp(target.hull-hullDamage);
+      const shieldDamage=amount*(weapon==='phaser'?2.8:1.95);
+      target.shields[arc]=clamp(shield-shieldDamage);target.lastHit=this.time;
+      // Weakened shields leak sooner, and an overloaded hit can penetrate immediately.
+      const protection=combo?Math.min(shield,20):shield;
+      const penetration=protection<40?.65+(40-protection)/80:Math.max(0,shieldDamage-protection)/Math.max(shieldDamage,1)*.7;
+      const calculatedHullDamage=amount*penetration*(weapon==='torpedo'?1.35:.65)*.18*(aim==='hull'?1.35:1);
+      target.hull=clamp(target.hull-calculatedHullDamage);
+      const hullDamage=hullBefore-target.hull;
+      this.drawEnergy(target,(shield-target.shields[arc])*.035+Math.min(hullDamage,hullBefore)*.6);
       let system=null;
       if(hullDamage>0){
         const available=[...systems,'reactor','bridge','mainEngines'];system=hit&&available.includes(hit.component)?hit.component:aim&&aim!=='hull'&&!shieldAim&&Object.hasOwn(targets,aim)&&this.random()<.78?aim:available[Math.floor(this.random()*available.length)];
-        if(system==='reactor')target.reactor=clamp(target.reactor-hullDamage*.5,12,100);
-        else target.integrity[system]=clamp(target.integrity[system]-hullDamage*.85);
+        const systemDamage=hullDamage*(combo?COMBO.systemMultiplier:1);
+        if(system==='reactor')target.reactor=clamp(target.reactor-systemDamage,12,100);
+        else target.integrity[system]=clamp(target.integrity[system]-systemDamage*1.8);
         // Damage to power conduits also cuts total available output.
-        target.reactor=clamp(target.reactor-hullDamage*.08,12,100);
+        target.reactor=clamp(target.reactor-systemDamage*.12,12,100);
       }
       let scorePoints=0;
       if(source===this.player){this.hits++;scorePoints=this.scoreHit(shield-target.shields[arc],Math.min(hullDamage,hullBefore),weapon);}
       else if(target===this.player){this.battleStats.chain=0;this.battleStats.lastScoredAt=-Infinity;}
-      this.events.push({type:'impact',ship:target.name,arc,hullDamage,amount,weapon,system,hit,scorePoints,chain:this.activeChain,shieldBroken:shield>0&&target.shields[arc]===0,shieldDepleted:target.shields[arc]===0});
+      this.events.push({type:'impact',ship:target.name,arc,hullDamage,amount,weapon,system,hit,scorePoints,chain:this.activeChain,combo,shieldBroken:shield>0&&target.shields[arc]===0,shieldDepleted:target.shields[arc]===0});
+      if(hullDamage>0&&['port','starboard'].includes(hit?.pylonSide)&&!target.detachedNacelles?.[hit.pylonSide]){
+
+        target.detachedNacelles??={port:false,starboard:false};target.detachedNacelles[hit.pylonSide]=true;
+        target.integrity.mainEngines=Math.min(target.integrity.mainEngines,100-50*Object.values(target.detachedNacelles).filter(Boolean).length);
+        this.events.push({type:'nacelle-detached',ship:target.name,side:hit.pylonSide,point:hit.point});
+        if(target===this.player&&this.previewNacelleBreakoff){
+          const remaining=this.previewEngineSide();
+          if(!remaining)this.previewNacelleBreakoff=false;
+          else for(const order of this.turn.enemyOrders||[])if(order.status==='pending'){order.target='mainEngines';order.attackArc=remaining;}
+        }
+      }
+      if(disrupted&&target.hull>0)this.events.push({type:'shield-disrupted',ship:target.name,from:source.name,arc,until:target.phaserCombo.until,duration:COMBO.window});
       if(target===this.player||hullDamage>0||target.shields[arc]===0)this.message(target===this.player?'DAMAGE':'TACTICAL',`${target.name}: ${arc} shield ${Math.round(target.shields[arc])}%${hullDamage>0?`; hull hit${system?' / '+system+' damaged':''}`:'.'}`);
       if(target.hull<=0&&!this.result){this.result=target===this.enemy?'victory':'defeat';this.running=false;this.completeBattleScore();this.events.push({type:'destroyed',ship:target.name});this.message('COMMAND',target===this.enemy?'Yorktown neutralized. Stand down from red alert.':'Enterprise lost. Command signal terminated.');this.captureReplay(true);}
     }
-    scan(){if(!this.running||!this.maneuvering||this.result||this.player.cooldown.scan>0||this.output(this.player,'sensors')<3.5||this.player.capacitor<12)return false;this.player.capacitor-=12;this.player.cooldown.scan=14;this.scanUntil=this.time+8;this.message('SCIENCE','Active sweep. Target subsystem telemetry resolved for eight seconds.');this.events.push({type:'scan'});return true;}
+    scan(){if(!this.running||!this.maneuvering||this.result||this.player.cooldown.scan>0||this.output(this.player,'sensors')<3.5||this.player.capacitor<12||this.player.energyReserve<2)return false;this.drawEnergy(this.player,2);this.player.capacitor-=12;this.player.cooldown.scan=14;this.scanUntil=this.time+8;this.message('SCIENCE','Active sweep. Target subsystem telemetry resolved for eight seconds.');this.events.push({type:'scan'});return true;}
     warp(){
-      if(!this.running||!this.maneuvering||this.result||this.warpUsed||this.player.hull<=0)return false;
+      if(!this.running||!this.maneuvering||this.result||this.warpUsed||this.player.hull<=0||this.player.energyReserve<12)return false;
       const p=this.player,d=direction(p),from={x:p.x,y:p.y,z:p.z};
       const destination={x:p.x+d.x*3000,y:p.y+d.y*3000,z:p.z+d.z*3000};
       if(this.stationTrace(destination,destination,45)){this.message('HELM','Warp destination obstructed by K7. Change heading before jumping.');return false;}
       if(distance(destination,this.planet)<this.planet.radius+this.planet.atmosphere+120){this.message('HELM','Warp destination inside the planet. Change heading before jumping.');return false;}
+      this.drawEnergy(p,12);
       Object.assign(p,destination);
       this.warpUsed=true;
       this.events.push({type:'warp',from,to:{x:p.x,y:p.y,z:p.z},direction:d});
       this.message('HELM','Emergency warp complete: 30 km along current heading and pitch. Warp charge spent.');
       return true;
     }
-    slowAhead(){this.player.throttle=0;this.player.speed=MIN_IMPULSE_SPEED;this.player.flightAcceleration=0;}
+    stopEnterprise(){
+      if(this.result||this.player.hull<=0)return false;
+      Object.assign(this.player,{fullStop:true,throttle:0,speed:0,flightAcceleration:0,turnRate:0,pitchRate:0,bank:0});return true;
+    }
+    slowAhead(){this.player.fullStop=false;this.player.throttle=0;this.player.speed=MIN_IMPULSE_SPEED;this.player.flightAcceleration=0;}
     repair(key){if(![...systems,'reactor','bridge','mainEngines'].includes(key))return;this.player.repair=key;}
     tick(dt,keys={}){
       if(!this.running||this.result)return;dt=clamp(dt,0,.1);
@@ -839,10 +973,12 @@
       if(this.result||!this.maneuvering){this.captureReplay(true);return;}
       this.time+=dt;
       const p=this.player,e=this.enemy;
+      if(keys.more||keys.less||p.throttle!==0)p.fullStop=false;
+      if(keys.stop)this.stopEnterprise();
       const previousPositions={[p.name]:{x:p.x,y:p.y,z:p.z},[e.name]:{x:e.x,y:e.y,z:e.z}};
       const turn=(keys.right?1:0)-(keys.left?1:0),tilt=(keys.down?1:0)-(keys.up?1:0);
-      const mobility=clamp(this.output(p,'engines')/24,.12,1.6);
-      if(this.turnBased)this.autoHelm(dt,keys);
+      const mobility=this.flightMobility(p);
+      if(this.turnBased){if(!p.fullStop)this.autoHelm(dt,keys);}
       else{
       if(turn){
         const maxRate=42*mobility;
@@ -853,9 +989,9 @@
       // Releasing steering preserves the selected yaw rate and bank angle.
       p.heading=wrap(p.heading+p.turnRate*dt);p.pitch=clamp(p.pitch+tilt*30*mobility*dt,-85,85);
       p.throttle=clamp(p.throttle+((keys.more?1:0)-(keys.less?1:0))*30*dt,-100,100);
-      if(keys.stop)this.slowAhead();
+      if(keys.stop)this.stopEnterprise();
       }
-      if(!this.turnBased){
+      if(!this.turnBased&&!p.fullStop){
       const commanded=p.throttle/100*125*mobility*IMPULSE_SPEED_MULTIPLIER;
       const desired=this.planetSpeedLimit(p,(Math.sign(commanded)||1)*Math.max(MIN_IMPULSE_SPEED,Math.abs(commanded)));
       if(p.speed*desired<0){
@@ -864,16 +1000,17 @@
       }else{const sign=Math.sign(desired);p.speed=Math.abs(p.speed);this.easeFlightSpeed(p,Math.abs(desired),dt,45*Math.max(.35,mobility),65);p.speed*=sign;}
       if(Math.abs(p.speed)<MIN_IMPULSE_SPEED)p.speed=Math.sign(desired)*MIN_IMPULSE_SPEED;
       }
-      if(!this.freeFlight&&e.hull<25&&!this.enemyRetreating&&this.time>=(this.enemyMind.reengageUntil||0)){
+      const pressing=this.enemyPressesAdvantage();if(pressing)this.enemyRetreating=false;
+      if(!pressing&&!this.freeFlight&&e.hull<25&&!this.enemyRetreating&&this.time>=(this.enemyMind.reengageUntil||0)){
         this.enemyRetreating=true;
         Object.assign(e.power,{engines:45,shields:35,weapons:10,sensors:10});
         e.repair='engines';
         this.message('TACTICAL','Yorktown is badly damaged and attempting to retreat.');
       }
-      const m=this.enemyMind,runningAway=!this.freeFlight&&this.time>=(m.reengageUntil||0)&&(this.enemyRetreating||this.turnBased&&(this.turn.phase==='disengage'||!this.nextOrder(e)));
+      const m=this.enemyMind,runningAway=!pressing&&!this.freeFlight&&this.time>=(m.reengageUntil||0)&&(this.enemyRetreating||this.turnBased&&(this.turn.phase==='disengage'||!this.nextOrder(e)));
       if(runningAway){m.runAwaySince??=this.time;if(this.time-m.runAwaySince>=10-1e-8)this.reengageEnemy();}
       else m.runAwaySince=null;
-      const enemyReturning=!this.freeFlight&&m.reengageUntil>this.time;
+      const enemyReturning=!pressing&&!this.freeFlight&&m.reengageUntil>this.time;
       if(this.turnBased)this.thinkEnemy();
       const enemyLocked=!this.turnBased||this.enemyHasContact(),enemyTarget=this.turnBased?this.enemyTrack():p;
       const range=this.range,weak=Object.entries(p.shields).sort((a,b)=>a[1]-b[1])[0][0];
@@ -882,7 +1019,7 @@
       const attackRun=range<1450&&(this.aiShot<1.5||this.aiTorp<1.5);
       const away={x:e.x+(e.x-enemyTarget.x),y:e.y+(e.y-enemyTarget.y),z:e.z+(e.z-enemyTarget.z)};
       if(distance(enemyTarget,e)<1){const d=direction(e);away.x=e.x+d.x*1000;away.y=e.y+d.y*1000;away.z=e.z+d.z*1000;}
-      let aim=enemyReturning?enemyTarget:this.enemyRetreating||this.turnBased&&(this.turn.phase==='disengage'||!this.nextOrder(e))?away:this.turnBased?enemyTarget:attackRun?p:waypoint;
+      let aim=enemyReturning?enemyTarget:this.enemyRetreating||!pressing&&this.turnBased&&(this.turn.phase==='disengage'||!this.nextOrder(e))?away:this.turnBased?enemyTarget:pressing||attackRun?p:waypoint;
       if(this.freeFlight){const o=this.freeFlightOrbit,a=o.angle+.25;aim={x:this.station.x+Math.cos(a)*o.radius,y:this.station.y+o.height,z:this.station.z+Math.sin(a)*o.radius};}
       const enemyOrder=this.nextOrder(e);let enemyPositioning=!enemyLocked;
       if(this.turnBased&&enemyLocked&&this.turn.phase!=='disengage'&&!this.enemyRetreating&&enemyOrder&&(enemyOrder.attackArc||enemyOrder.target.startsWith('shield-'))){
@@ -895,27 +1032,32 @@
           const lead=direction(p),seconds=Math.min(1.5,this.range/400*.3);aim={x:p.x+lead.x*p.speed*seconds,y:p.y+lead.y*p.speed*seconds,z:p.z+lead.z*p.speed*seconds};
         }
       }
-      if(enemyOrder&&enemyLocked&&!enemyPositioning&&angle(e,p)>90&&this.inFiringArc(enemyOrder.weapon,e,p)&&this.range<=enemyOrder.range&&!enemyReturning){const d=direction(e);aim={x:e.x+d.x*1000,y:e.y+d.y*1000,z:e.z+d.z*1000};}
+      if(!pressing&&enemyOrder&&enemyLocked&&!enemyPositioning&&angle(e,p)>90&&this.inFiringArc(enemyOrder.weapon,e,p)&&this.range<=enemyOrder.range&&!enemyReturning){const d=direction(e);aim={x:e.x+d.x*1000,y:e.y+d.y*1000,z:e.z+d.z*1000};}
       if(enemyReturning){aim=this.enemyReturnAim(enemyTarget);enemyPositioning=!m.returnLegComplete;}
+      if(!this.freeFlight)aim=this.avoidShipCollision(e,p,aim);
       const forward=direction(e),ahead={x:e.x+forward.x*300,y:e.y+forward.y*300,z:e.z+forward.z*300};
       const enemyAvoiding=!!(this.stationTrace(e,aim,90)||this.stationTrace(e,ahead,90));
       if(enemyAvoiding){
         aim={x:this.station.x+(e.x>=this.station.x?430:-430)*this.station.scale,y:this.station.y+330*this.station.scale,z:this.station.z};
       }
-      const rate=26*clamp(this.output(e,'engines')/24,.1,1.5);
+      const rate=26*this.flightMobility(e,.1,1.5);
       if(!this.freeFlight)this.steerFlight(e,aim,dt,rate,18);
       if(this.turnBased){
-        const mode=enemyReturning?'position':this.enemyRetreating?'escape':this.turn.phase==='disengage'||!enemyOrder?'breakaway':enemyPositioning||enemyAvoiding?'position':'attack';
+        const mode=enemyReturning?'position':this.enemyRetreating?'escape':this.turn.phase==='disengage'||!enemyOrder?(pressing?'pursuit':'breakaway'):enemyPositioning||enemyAvoiding?'position':'attack';
         this.adjustFlightSpeed(e,enemyTarget,aim,{mode,order:enemyOrder,avoiding:enemyAvoiding,turnRate:rate},dt);
-      }else this.easeFlightSpeed(e,this.freeFlight?55:Math.max(MIN_IMPULSE_SPEED,(this.enemyRetreating?110:range>700?70:range<240?20:43)*clamp(this.output(e,'engines')/24,.1,1.5)*IMPULSE_SPEED_MULTIPLIER),dt);
+      }else this.easeFlightSpeed(e,this.freeFlight?Math.max(MIN_IMPULSE_SPEED,55*this.nacelleSpeedFactor(e)):Math.max(MIN_IMPULSE_SPEED,(this.enemyRetreating?110:range>700?70:range<240?20:43)*this.flightMobility(e,.1,1.5)*IMPULSE_SPEED_MULTIPLIER),dt);
+      if(p.fullStop){p.speed=0;p.throttle=0;p.flightAcceleration=0;}
       for(const s of [p,e]){
         const previous={x:s.x,y:s.y,z:s.z};
         if(this.freeFlight&&s===e)this.flyYorktownOrbit(dt);
         else{const d=direction(s);s.x+=d.x*s.speed*dt;s.y+=d.y*s.speed*dt;s.z+=d.z*s.speed*dt;this.moveAroundStation(s,previous);this.moveAroundPlanet(s,previous);}
         for(const key of Object.keys(s.cooldown))s.cooldown[key]=Math.max(0,s.cooldown[key]-dt);
-        s.capacitor=clamp(s.capacitor+this.output(s,'weapons')*.42*dt);s.heat=Math.max(0,s.heat-dt*(5+this.output(s,'weapons')*.12));
-        for(const a of arcs)s.shields[a]=clamp(s.shields[a]+this.output(s,'shields')*.045*(this.turnBased?.3:1)*(s.bias[a]/16.667)*dt*(this.time-s.lastHit>3?1:.18));
+        const capacitorBefore=s.capacitor,shieldsBefore=arcs.reduce((sum,a)=>sum+s.shields[a],0),partsBefore=s.repairBudget;
+        const reserveSupply=(.25+.75*clamp(s.energyReserve/15,0,1))*this.nacelleSpeedFactor(s);
+        s.capacitor=clamp(s.capacitor+this.output(s,'weapons')*.42*reserveSupply*dt);s.heat=Math.max(0,s.heat-dt*(5+this.output(s,'weapons')*.12));
+        for(const a of arcs)s.shields[a]=clamp(s.shields[a]+this.output(s,'shields')*.03*reserveSupply*(this.turnBased?.3:1)*(s.bias[a]/16.667)*dt*(this.time-s.lastHit>3?1:.18));
         if(s.repairBudget>0&&this.time-s.lastHit>6){const key=s.repair,current=key==='hull'?s.hull:key==='reactor'?s.reactor:s.integrity[key],gain=Math.min(100-current,dt*(key==='hull'?.35:.65),s.repairBudget);if(key==='reactor')s.reactor+=gain;else if(key==='hull')s.hull+=gain;else s.integrity[key]+=gain;s.repairBudget-=gain;}
+        this.updateEnergy(s,dt,s.capacitor-capacitorBefore,arcs.reduce((sum,a)=>sum+s.shields[a],0)-shieldsBefore,partsBefore-s.repairBudget);
       }
       const separation=distance(p,e);
       if(separation>120)this.shipsTouching=false;
@@ -951,13 +1093,13 @@
         const source=t.from===p.name?p:e,hit=near?this.resolveWeaponHit?.(source,target,t.targetSystem,'torpedo',t.pos,end):null;
         const struck=near&&(!this.resolveWeaponHit||!!hit);
         const obstruction=this.stationTrace(t.pos,end,2);
-        if(obstruction){if(t.order)t.order.status='intercepted';this.events.push({type:'station-impact',pos:obstruction.pos,weapon:'torpedo'});this.projectiles.splice(this.projectiles.indexOf(t),1);}
+        if(obstruction){if(t.order)t.order.status='intercepted';this.events.push({type:'station-impact',pos:obstruction.pos,weapon:'torpedo'},{type:'torpedo-missed',from:t.from,target:t.target,projectileId:t.id,reason:'blocked'});this.projectiles.splice(this.projectiles.indexOf(t),1);}
         else if(struck){if(t.order)t.order.status='hit';this.damage(target,source,38*t.strength,'torpedo',t.targetSystem,hit);this.projectiles.splice(this.projectiles.indexOf(t),1);}
-        else if(t.life>t.maxLife){if(t.order)t.order.status='missed';this.projectiles.splice(this.projectiles.indexOf(t),1);}
+        else if(t.life>t.maxLife){if(t.order)t.order.status='missed';this.events.push({type:'torpedo-missed',from:t.from,target:t.target,projectileId:t.id,reason:'expired'});this.projectiles.splice(this.projectiles.indexOf(t),1);}
         else{t.pos.x+=d.x*step;t.pos.y+=d.y*step;t.pos.z+=d.z*step;}
       }
       this.captureReplay();
     }
   }
-  return {Simulation,TURN,PLANET,targets,weaponSpecs,maneuvers,PHASER_DURATION,DESTRUCTION_DURATION,MIN_IMPULSE_SPEED,targetingColor,makeK7,clamp,wrap,delta,direction,distance,bearing,elevation,angle,facing,redistribute,arcs,systems};
+  return {Simulation,COMBO,DEFAULT_SALVO,ATTACK_COUNT,TURN,PLANET,targets,weaponSpecs,maneuvers,PHASER_DURATION,DESTRUCTION_DURATION,MIN_IMPULSE_SPEED,K7_ROTATION_RATE,targetingColor,makeK7,clamp,wrap,delta,direction,distance,bearing,elevation,angle,facing,redistribute,arcs,systems};
 });

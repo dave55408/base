@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Planet atmosphere preview</title>
+<style>body{margin:0;background:#050914;color:#b8dfdf;font:15px Arial}header{padding:20px}main{display:flex;height:calc(100vh - 60px)}section{width:50%;position:relative}section span{position:absolute;top:15px;left:20px}canvas{width:100%;height:100%;display:block}</style>
+<script src="vendor/three.js"></script><script src="replay.js"></script><script src="engine.js"></script><script src="assets/gas-giant-surface.js"></script><script src="scene.js"></script></head>
+<body><header>Atmosphere: bright cyan cloud-top rim fading through teal into space</header><main><section id="distant"><span>Distant view</span></section><section id="near"><span>Close view</span></section></main>
+<script>
+const T=window.AlpineThree;
+for(const [id,multiplier] of [['distant',3.5],['near',1.25]]){
+ const host=document.getElementById(id),renderer=new T.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));renderer.outputColorSpace=T.SRGBColorSpace;host.append(renderer.domElement);
+ const maker=Object.create(window.BattleScene.prototype);maker.T=T;maker.renderer=renderer;maker.sim=new Battle.Simulation();maker.planetMap=maker.loadPlanetMap();
+ const scene=new T.Scene();scene.background=new T.Color(0x050914);const planet=maker.makePlanet();scene.add(planet);
+ const b=maker.sim.planet,camera=new T.PerspectiveCamera(46,1,.5,65000);camera.position.set(b.x,b.y,b.z+b.radius*multiplier);camera.lookAt(b.x,b.y+(multiplier<2?b.radius*.9:0),b.z);
+ const size=()=>{renderer.setSize(host.clientWidth,host.clientHeight,false);camera.aspect=host.clientWidth/host.clientHeight;camera.updateProjectionMatrix();};size();addEventListener('resize',size);
+ const render=()=>{renderer.render(scene,camera);requestAnimationFrame(render);};render();
+}
+</script></body></html>

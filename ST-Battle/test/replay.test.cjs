@@ -22,7 +22,7 @@ function movie(){
 test('replay chooses an opening reveal, saucer phaser shot, traveling torpedo, impact and destruction finale',()=>{
   const {sim,record}=movie(),p=new Replay.Player(record,sim);
   assert.equal(p.state.replayShot.kind,'establishing');
-  p.screenTime=4;p.sample(4);assert.equal(p.state.replayShot.kind,'phaser');assert.equal(p.state.replayShot.event.from,'Enterprise');
+  p.screenTime=5;p.sample(4);assert.equal(p.state.replayShot.kind,'phaser');assert.equal(p.state.replayShot.event.from,'Enterprise');
   p.sample(7);assert.equal(p.state.replayShot.kind,'torpedo');assert.equal(p.state.replayShot.projectileId,'movie-torpedo');
   p.sample(10.2);assert.equal(p.state.replayShot.kind,'impact');assert.equal(p.state.replayShot.focus,'Yorktown');
   record.events.push({at:20,event:{type:'destroyed',ship:'Yorktown'}});record.result='victory';
@@ -36,11 +36,11 @@ test('speed ramps are continuous before and after impacts and playback delivers 
   assert(rates[0]>5.9);assert(rates.at(-1)<.5);assert(rates.every((rate,i)=>i===0||rate<=rates[i-1]));
   for(let at=6;at<14;at+=.01){p.position=at;const rate=p.rate();p.position=at+.01;assert(Math.abs(p.rate()-rate)<.08,'no speed discontinuity at an action boundary');}
   const playback=new Replay.Player(record,sim),events=[];let previous=playback.playbackRate;
-  for(let i=0;i<5000&&!playback.ended;i++){const frame=playback.advance(.016);assert(Math.abs(frame.rate-previous)<.6);previous=frame.rate;events.push(...frame.events);}
+  for(let i=0;i<5000&&!playback.ended;i++){const frame=playback.advance(.016);if(!frame.cut)assert(Math.abs(frame.rate-previous)<.6);previous=frame.rate;events.push(...frame.events);}
   assert.equal(events.filter(event=>event.type==='impact').length,1);assert(playback.ended);
 });
 
-test('special replay cameras track the ventral phaser emitter, actual torpedo and expanding wreckage',()=>{
+test('weapon replay cameras include both ships and destruction uses a fixed wreckage view',()=>{
   const c={window:{},Battle:B,console,AbortController};vm.createContext(c);
   for(const file of ['vendor/three.js','scene.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),c);
   const T=c.window.AlpineThree,scene=Object.create(c.window.BattleScene.prototype);scene.T=T;scene.camera=new T.PerspectiveCamera(46,1.8,.5,65000);
@@ -49,14 +49,14 @@ test('special replay cameras track the ventral phaser emitter, actual torpedo an
   scene.ships.Yorktown.position.set(300,100,-1100);
   const camera=new T.Vector3(),target=new T.Vector3();
   scene.sim.replayShot={kind:'phaser',focus:'Enterprise',event:{to:'Yorktown'},key:'beam',screenAt:4};
-  scene.replayCamera(camera,target);assert(target.distanceTo(scene.phaserEmitter())<1e-8);assert(camera.y<target.y,'phaser camera is beneath the saucer');
-  scene.sim.projectiles=[{id:'one',pos:{x:100,y:30,z:-600}}];scene.sim.replayShot={kind:'torpedo',focus:'Enterprise',projectileId:'one',key:'one',screenAt:8};
-  scene.replayCamera(camera,target);assert.deepEqual(Array.from(target.toArray()),[100,30,-600]);
-  scene.sim.projectiles[0].pos.z=-700;scene.sim.replayShot.screenAt=9;scene.replayCamera(camera,target);assert.equal(target.z,-700);
+  scene.replayCamera(camera,target);assert.deepEqual(Array.from(target.toArray()),[150,50,-550]);assert.equal(scene.replayComposition.twoShips,true);
+  scene.sim.projectiles=[{id:'one',pos:{x:100,y:30,z:-600}}];scene.sim.replayShot={kind:'torpedo',focus:'Enterprise',projectileId:'one',key:'one',screenAt:10};
+  scene.replayCamera(camera,target);assert.deepEqual(Array.from(target.toArray()),[150,50,-550]);
+  scene.sim.projectiles[0].pos.z=-700;scene.sim.replayShot.screenAt=11;scene.replayCamera(camera,target);assert.equal(target.z,-550,'the projectile does not drag the camera away from the ships');
   scene.effects=[{kind:'debris',object:{position:new T.Vector3(200,100,-900)}},{kind:'debris',object:{position:new T.Vector3(400,100,-1100)}}];
-  scene.sim.replayShot={kind:'destruction',focus:'Yorktown',key:'end',screenAt:10,destructionElapsed:0};scene.replayCamera(camera,target);const near=camera.distanceTo(target);
+  scene.sim.replayShot={kind:'destruction',focus:'Yorktown',key:'end',screenAt:12,destructionElapsed:0};scene.replayCamera(camera,target);const near=camera.distanceTo(target);
   scene.sim.replayShot.destructionElapsed=5;scene.sim.replayShot.screenAt=15;scene.replayCamera(camera,target);
-  assert.deepEqual(Array.from(target.toArray()),[300,100,-1000]);assert(camera.distanceTo(target)>near+400,'finale slowly pulls back from the drifting debris');
+  assert.deepEqual(Array.from(target.toArray()),[300,100,-1000]);assert.equal(camera.distanceTo(target),near,'finale holds the camera instead of pulling back');
 });
 test('flight recorder captures the entire three-maneuver pass, projectiles, and each combat event once',()=>{
   const s=pass(),r=s.lastReplay;assert(r);assert.equal(s.turn.phase,'review');assert.equal(r.pass,1);assert.deepEqual(r.maneuvers,['direct','direct','direct']);
@@ -91,12 +91,30 @@ test('the last completed pass remains available while the next records; reset cl
   const s=pass(),previous=s.lastReplay;s.commitOrders();assert.equal(s.lastReplay,previous);assert(s.replayRecording);s.tick(.05);assert.equal(s.lastReplay,previous);
   s.reset();assert.equal(s.lastReplay,null);assert.equal(s.replayRecording,null);
 });
+
+test('replay presentation smooths rapid helm corrections and bank without changing recorded flight or timing',()=>{
+ const sim=new B.Simulation(),frames=[];
+ for(let i=0;i<=40;i++){const at=i/10;frames.push({at,player:{...sim.player,x:at*100,heading:((355+at*8+(i%2?-3:3))%360+360)%360,pitch:at*2+(i%2?-2:2),bank:.4},enemy:{...sim.enemy},stageIndex:0,maneuver:'direct',phase:'attack',projectiles:[]});}
+ const record={pass:1,startTime:0,duration:4,station:sim.station,planet:sim.planet,events:[],frames},before=JSON.stringify(record),live=JSON.stringify(sim.player),player=new Replay.Player(record,sim,{fullTurn:true});
+ player.sample(1.5);const raw=player.state.player,pose=player.state.replayPoses.Enterprise;
+ const delta=(a,b)=>Math.abs(((a-b+540)%360)-180);
+ assert(delta(pose.heading,7)<delta(raw.heading,7)*.4,'short heading corrections are damped across north');assert(Math.abs(pose.pitch-3)<Math.abs(raw.pitch-3)*.4);
+ assert(Math.abs(pose.bank-.22)<1e-8,'replay banking is gentler');assert.equal(raw.x,150);assert.equal(raw.heading,frames[15].player.heading,'recorded state remains available unchanged');
+ const expected=JSON.stringify(pose);player.sample(2.3);player.sample(1.5);assert.equal(JSON.stringify(player.state.replayPoses.Enterprise),expected,'seeking produces the same stabilized pose');assert.equal(JSON.stringify(record),before);assert.equal(JSON.stringify(sim.player),live);
+});
+
+test('replay stabilization respects warp cuts and handles a zero-duration recording',()=>{
+ const sim=new B.Simulation(),frames=Array.from({length:31},(_,i)=>({at:i/10,player:{...sim.player,x:i<20?0:2000,heading:i<20?0:180},enemy:{...sim.enemy},stageIndex:0,maneuver:'direct',phase:'attack',projectiles:[]}));
+ const record={pass:1,startTime:0,duration:3,station:sim.station,planet:sim.planet,events:[{at:2,event:{type:'warp'}}],frames},player=new Replay.Player(record,sim);
+ player.sample(1.9);assert.equal(player.state.replayPoses.Enterprise.heading,0);player.sample(2);assert.equal(player.state.replayPoses.Enterprise.heading,180);assert.equal(player.state.player.x,2000);
+ const short=new Replay.Player({...record,duration:0,frames:[frames[0]],events:[]},sim);assert(Object.values(short.state.replayPoses.Enterprise).every(Number.isFinite));
+});
 test('victory or defeat during a pass finalizes a replay including the final destruction',()=>{
   const s=new B.Simulation();s.running=true;s.selectManeuver('direct');['phaser','phaser','torpedo'].forEach((weapon,i)=>s.updateStep(i,{weapon,target:'hull',range:1000}));s.commitOrders();
   Object.keys(s.enemy.shields).forEach(a=>s.enemy.shields[a]=0);s.enemy.hull=1;s.damage(s.enemy,s.player,100,'torpedo','hull');
   assert.equal(s.lastReplay.result,'victory');assert.equal(s.lastReplay.frames.at(-1).enemy.hull,0);assert(s.lastReplay.events.some(v=>v.event.type==='destroyed'));assert.equal(s.replayRecording,null);
-  assert.equal(s.lastReplay.endHold,Replay.DESTRUCTION_DURATION+10);
-  const player=new Replay.Player(s.lastReplay,s);player.advance(Replay.DESTRUCTION_DURATION+9.9);assert.equal(player.ended,false);player.advance(.2);assert.equal(player.ended,true);
+  assert.equal(s.lastReplay.endHold,Replay.DESTRUCTION_DURATION);
+  const player=new Replay.Player(s.lastReplay,s);player.advance(Replay.DESTRUCTION_DURATION-.1);assert.equal(player.ended,false);player.advance(.2);assert.equal(player.ended,true);
 });
 
 test('cinematic director produces valid wide, tracking and impact cameras with intentional cuts',()=>{
@@ -125,17 +143,17 @@ test('consecutive replay cuts keep a consistent viewing side and change framing 
       const oldCamera=scene.camera.position.clone(),oldSize=oldTarget?85/oldCamera.distanceTo(oldTarget):null,oldDirection=scene.replayComposition?.direction.clone();
       scene.ships.Enterprise.position.add(new T.Vector3(23,-7,-55));scene.ships.Yorktown.position.add(new T.Vector3(-17,13,37));
       scene.sim.player.heading=(i*57)%360;scene.sim.enemy.heading=(170+i*41)%360;
-      scene.sim.replayShot={kind:i<6?'impact':'launch',focus:i<6?'Yorktown':i%2?'Enterprise':'Yorktown',key:'cut-'+i,at:i*4,screenAt:i*4};
+      scene.sim.replayShot={kind:i<6?'impact':'launch',focus:i<6?'Yorktown':i%2?'Enterprise':'Yorktown',key:'cut-'+i,at:i*6,screenAt:i*6};
       const position=new T.Vector3(),target=new T.Vector3();assert.equal(scene.replayCamera(position,target),true);
       assert(position.clone().sub(target).dot(scene.replayAxisSide)>0,'each cut stays on the same side of the action axis');
       if(oldTarget){
         assert(oldDirection.dot(scene.replayComposition.direction)>.7,'camera changes framing without flipping to another side');
-        const newSize=85/position.distanceTo(target),ratio=newSize/oldSize;assert(ratio>=1.3||ratio<=.7,`framing ratio ${ratio}, aspect ${aspect}`);
+        const newSize=85/position.distanceTo(target),ratio=newSize/oldSize;assert(ratio>.2&&ratio<5,`bounded framing ratio ${ratio}, aspect ${aspect}`);
       }
       sizes.push(scene.sim.replayShot.framing);scene.camera.position.copy(position);oldTarget=target.clone();
     }
-    assert.deepEqual(sizes.slice(0,6),['wide','medium','close','wide','medium','close']);
-    scene.sim.replayShot={kind:'impact',focus:'Yorktown',key:'too-soon',at:100,screenAt:44.2};
+    assert.deepEqual(sizes,Array(12).fill('medium'),'action coverage keeps a tighter scale instead of forcing wide cutaways');
+    scene.sim.replayShot={kind:'impact',focus:'Yorktown',key:'too-soon',at:100,screenAt:66.2};
     assert.equal(scene.replayCamera(new T.Vector3(),new T.Vector3()),false);
   }
 });

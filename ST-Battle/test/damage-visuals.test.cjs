@@ -5,16 +5,16 @@ const path=require('node:path');
 const vm=require('node:vm');
 const B=require('../engine.js');
 
-test('shields deplete sooner while penetrating hits cause less internal damage',()=>{
-  for(const [weapon,remaining] of [['phaser',58],['torpedo',71]]){
+test('weaker shields deplete sooner and penetrating hits heavily damage internal systems',()=>{
+  for(const [weapon,remaining] of [['phaser',44],['torpedo',61]]){
     const s=new B.Simulation(),p=s.player,e=s.enemy,arc=B.facing(e,p);
     s.damage(e,p,20,weapon,'weapons');assert.equal(e.shields[arc],remaining);assert.equal(e.hull,100);
     e.shields[arc]=0;s.damage(e,p,40,weapon,'weapons');
     const impact=s.events.filter(e=>e.type==='impact').at(-1);
     assert(impact.hullDamage>0);
     const internalLoss=Object.values(e.integrity).reduce((sum,value)=>sum+100-value,0);
-    assert(Math.abs(internalLoss-impact.hullDamage*.85)<1e-8);
-    assert(Math.abs((100-e.reactor)-impact.hullDamage*.08)<1e-8);
+    assert(Math.abs(internalLoss-impact.hullDamage*1.8)<1e-8);
+    assert(Math.abs((100-e.reactor)-impact.hullDamage*.12)<1e-8);
   }
 });
 
@@ -40,6 +40,10 @@ test('both ship models have invisible shields, hull contact flashes and scars on
     s.event({type:'impact',ship:name,weapon:'torpedo',hullDamage:4,shieldDepleted:true});
     assert.equal(ship.userData.scars.length,1);assert.equal(ship.userData.scars[0].parent,ship.userData.saucer);
     const layers=ship.userData.scars[0].children;assert.equal(layers.length,3);assert(layers[2].material.opacity>.9);
+    assert.equal(layers[2].material.color.getHex(),0x010101,'damage center is charred black');
+    assert(layers[1].material.userData.damageEmbers,'the burn edge has glowing embers');assert.equal(layers[1].material.toneMapped,false,'embers stay luminous under dark lighting');
+    assert.equal(layers[1].geometry.attributes.scarPoint.count,layers[1].geometry.attributes.position.count,'ember pattern follows the wrapped hull geometry');
+    assert.equal(layers[1].material.uniforms.scarPlanes.value.length,26);
     for(const layer of layers)assert(layer.geometry.attributes.position.array.every(Number.isFinite));
   }
 });
@@ -60,7 +64,7 @@ test('saucer phasers, actual hull intersections, scorch marks and subsystem dama
   const endpoints=scene.weaponEndpoints('Enterprise','Yorktown',beam.hit),hitAgain=scene.traceHull(scene.ships.Yorktown,endpoints.start,endpoints.end);
   assert(hitAgain);assert(hitAgain.point.distanceTo(endpoints.end)<.001);
   scene.event(impact);const scar=scene.ships.Yorktown.userData.scars[0];
-  assert.equal(scar.parent,scene.ships.Yorktown.userData.model);
+  assert(scene.ships.Yorktown.userData.breakupParts.includes(scar.parent),'scorch travels with the struck hull piece');
   assert(scar.getWorldPosition(new T.Vector3()).distanceTo(endpoints.end)<.2,'scorch is at the beam endpoint');
   const localPoint=scene.ships.Yorktown.userData.model.worldToLocal(endpoints.end.clone());
   scene.ships.Yorktown.position.add(new T.Vector3(200,50,-100));scene.ships.Yorktown.rotation.y+=.6;scene.ships.Yorktown.updateMatrixWorld(true);
@@ -75,12 +79,12 @@ test('saucer phasers, actual hull intersections, scorch marks and subsystem dama
   }
   Object.assign(sim.enemy,{heading:0,pitch:0,bank:0});Object.assign(sim.player,{y:0});
   const aftHit=scene.resolveWeaponHit(sim.enemy,sim.player,'hull');
-  assert(aftHit);assert.equal(aftHit.emitter.z,.8,'Yorktown aft phasers originate at the stern');
+  assert(aftHit);assert(aftHit.emitter.z>0&&aftHit.emitter.z<.49,'Yorktown aft phasers originate on the rear lower hull');assert(aftHit.emitter.y>.02&&aftHit.emitter.y<.2,'aft beam starts on top of the engineering hull');
   const aftEndpoints=scene.weaponEndpoints('Yorktown','Enterprise',aftHit);
   assert(aftEndpoints.start.z>sim.enemy.z);assert(aftEndpoints.end.z>aftEndpoints.start.z);
   sim.turnBased=true;sim.turn.maneuver='close';sim.turn.phase='approach';sim.player.heading=180;
   const closeHit=scene.resolveWeaponHit(sim.player,sim.enemy,'hull');
-  assert(closeHit);assert.equal(closeHit.emitter.z,.8,'Enterprise can use its aft emitter during Close battle');
+  assert(closeHit);assert(closeHit.emitter.z>0&&closeHit.emitter.z<.49,'Enterprise uses the rear engineering-hull emitter during Close battle');assert(closeHit.emitter.y>.02&&closeHit.emitter.y<.2);
   sim.turnBased=false;sim.player.heading=0;
   const target=sim.enemy;
   assert.equal(scene.resolveWeaponHit(sim.player,target,'hull','torpedo',{x:target.x+200,y:target.y,z:target.z+100},{x:target.x+200,y:target.y,z:target.z-100}),undefined,'a straight torpedo segment missing the hull cannot redirect to its selected target');
@@ -102,4 +106,68 @@ test('a destroyed ship breaks into independent hull, pylon and nacelle pieces wi
     const count=scene.effects.length;scene.breakApart(name);assert.equal(scene.effects.length,count,'destruction event cannot duplicate debris');
     assert.equal(scene.effects.find(effect=>effect.kind==='detonations').centers.length,4);
   }
+});
+
+
+test('impact burns wrap engine curvature and remain on their moving hull piece',()=>{
+  const c={window:{},console,AbortController};vm.createContext(c);
+  for(const file of ['vendor/three.js','scene.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),c);
+  const T=c.window.AlpineThree,scene=Object.create(c.window.BattleScene.prototype);scene.T=T;
+  const ship=new T.Group(),model=new T.Group();ship.add(model);
+  const tube=new T.Mesh(new T.CylinderGeometry(.1,.1,1,64),new T.MeshStandardMaterial({color:0xbbc6bf}));model.add(tube);
+  ship.userData={model,breakupParts:[tube],scars:[]};
+  scene.addImpactScar(ship,'torpedo',{point:{x:.1,y:0,z:0},normal:{x:1,y:0,z:0}});
+  const scar=ship.userData.scars[0];assert.equal(scar.parent,tube);assert.equal(scar.children.length,3);
+  const points=[];for(const layer of scar.children){
+    const positions=layer.geometry.attributes.position;
+    for(let i=0;i<positions.count;i++)points.push(new T.Vector3().fromBufferAttribute(positions,i).add(scar.position));
+  }
+  assert(points.some(p=>p.x<.06&&Math.abs(p.z)>.08),'burn curves around the side of the tube');
+  assert(points.every(p=>Math.abs(Math.hypot(p.x,p.z)-.1)<.0015),'every burn vertex hugs the cylinder, without a floating plane');
+  const before=scar.getWorldPosition(new T.Vector3());tube.position.set(2,3,4);tube.rotation.z=.6;ship.updateMatrixWorld(true);
+  assert(scar.getWorldPosition(new T.Vector3()).distanceTo(before)>4,'damage follows hull motion');
+  const fragment=tube.clone(true);assert(fragment.children.some(child=>child.userData.scorch),'breakup clones retain the wrapped damage');
+  const ember=fragment.children.find(child=>child.userData.scorch).children[1].material;
+  const time=ember.uniforms.emberTime.value;scene.advanceDebris({object:fragment,velocity:new T.Vector3(),spin:new T.Vector3()},.5);assert.equal(ember.uniforms.emberTime.value,time+.5,'embers keep flickering on detached wreckage');
+  scene.disposeScar(scar);assert.equal(tube.children.length,0,'cleanup removes the attached burn');
+});
+
+test('blast marks wrap a thin hull edge without bridging empty space or painting lights',()=>{
+  const c={window:{},console,AbortController};vm.createContext(c);
+  for(const file of ['vendor/three.js','scene.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),c);
+  const T=c.window.AlpineThree,scene=Object.create(c.window.BattleScene.prototype);scene.T=T;
+  const ship=new T.Group(),model=new T.Group();ship.add(model);
+  const plate=new T.Mesh(new T.BoxGeometry(.5,.04,.5),new T.MeshStandardMaterial({color:0xbbc6bf}));model.add(plate);
+  const light=new T.Mesh(new T.SphereGeometry(.025,12,8),new T.MeshStandardMaterial({emissive:0xffaa00}));light.position.set(.24,.03,0);plate.add(light);
+  ship.userData={model,breakupParts:[plate],scars:[]};
+  scene.addImpactScar(ship,'phaser',{point:{x:.245,y:.02,z:0},normal:{x:0,y:1,z:0}});
+  const scar=ship.userData.scars[0],positions=scar.children[0].geometry.attributes.position,points=[];
+  for(let i=0;i<positions.count;i++)points.push(new T.Vector3().fromBufferAttribute(positions,i).add(scar.position));
+  assert(points.some(p=>p.y>.02)&&points.some(p=>p.x>.25)&&points.some(p=>p.y<-.02),'burn follows the top, edge and underside');
+  assert(points.every(p=>Math.abs(Math.abs(p.x)-.25)<.0015||Math.abs(Math.abs(p.y)-.02)<.0015||Math.abs(Math.abs(p.z)-.25)<.0015),'all vertices lie on actual hull faces');
+  assert.equal(light.children.length,0,'illuminated parts remain unpainted');
+});
+
+
+test('a phaser with no confirmed surface contact spends its shot but cannot damage either ship',()=>{
+  for(const attacker of ['player','enemy']){
+    const sim=new B.Simulation(97,{turnBased:false});sim.running=true;Object.assign(sim.player,{x:2000,y:0,z:0,heading:0});Object.assign(sim.enemy,{x:2000,y:0,z:-500,heading:180});
+    sim.resolveWeaponHit=()=>undefined;const source=sim[attacker],target=sim[attacker==='player'?'enemy':'player'],before=JSON.stringify({hull:target.hull,shields:target.shields,integrity:target.integrity});
+    assert(sim.fire('phaser',source,target,false));assert(source.capacitor<100);assert(source.cooldown.phaser>0);
+    assert.equal(JSON.stringify({hull:target.hull,shields:target.shields,integrity:target.integrity}),before);assert(!sim.events.some(e=>e.type==='impact'));assert.equal(sim.events.find(e=>e.type==='beam').missed,true);
+  }
+});
+
+test('HD hull materials with emissive window maps still receive black burns and ember edges',()=>{
+  const c={window:{},console,AbortController};vm.createContext(c);for(const file of ['vendor/three.js','scene.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),c);
+  const T=c.window.AlpineThree,scene=Object.create(c.window.BattleScene.prototype);scene.T=T;
+  const ship=new T.Group(),model=new T.Group(),plate=new T.Mesh(new T.BoxGeometry(.5,.04,.5),new T.MeshStandardMaterial({color:0xbbc6bf,emissive:0xffffff,emissiveMap:{}}));ship.add(model);model.add(plate);ship.userData={model,breakupParts:[plate],scars:[]};
+  const scar=scene.addImpactScar(ship,'torpedo',{point:{x:0,y:.02,z:0},normal:{x:0,y:1,z:0}});
+  assert(scar);assert.equal(scar.parent,plate);assert(scar.children[1].material.userData.damageEmbers);assert.equal(scar.children[2].material.color.getHex(),0x010101);
+});
+
+test('hull-hit events report actual lost hull, never nominal damage that did not change health',()=>{
+  const sim=new B.Simulation(),p=sim.player,e=sim.enemy,arc=B.facing(e,p);e.shields[arc]=0;
+  sim.damage(e,p,Number.EPSILON,'phaser','hull');const tiny=sim.events.findLast(event=>event.type==='impact');assert.equal(e.hull,100);assert.equal(tiny.hullDamage,0);assert.equal(tiny.system,null);
+  const before=e.hull;sim.damage(e,p,1e6,'torpedo','hull');const fatal=sim.events.findLast(event=>event.type==='impact');assert.equal(fatal.hullDamage,before-e.hull);assert.equal(fatal.hullDamage,100);
 });

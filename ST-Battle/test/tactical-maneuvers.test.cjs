@@ -52,6 +52,7 @@ test('Close battle follows a changing Yorktown course and matches its speed alon
 });
 test('Chase pursues after its attacks are spent and finishes without a withdrawal phase',()=>{
   const s=duel('chase');for(const order of s.turn.orders){order.status='hit';order.firedStage=0;order.firedAt=-20;}
+  s.enemy.heading=s.player.heading;
   for(const order of s.turn.enemyOrders)order.status='skipped';
   s.time=20;s.turn.navigation.elapsed=20;s.advanceTurn(.05);
   assert.equal(s.turn.stageCompletedAt,null);assert.notEqual(s.turn.phase,'disengage');

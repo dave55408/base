@@ -1,0 +1,1 @@
+Built-in imagegen edit: Replace the continental layout with separate rust highlands, hooked peninsulas, scattered smaller landforms, branching diagonal canyons and relocated craters. Preserve simplified flat illustration, burnt-orange/rust palette, brightness and contrast. Seamless 2:1 equirectangular albedo. No clouds, atmosphere, baked lighting, text or stars.

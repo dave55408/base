@@ -51,7 +51,8 @@ test('warp rejects an occupied destination without spending the charge',()=>{
 });
 
 test('K7 procedural model has finite geometry, three pod towers and batched windows',()=>{
-  const c={window:{},console,AbortController,document:{createElement:()=>({getContext:()=>({fillRect(){},fillText(){}})})}};vm.createContext(c);
+  const drawing=new Proxy({}, {get:(object,key)=>object[key]??(()=>{}),set:(object,key,value)=>(object[key]=value,true)});
+  const c={window:{},console,AbortController,document:{createElement:()=>({getContext:()=>drawing})}};vm.createContext(c);
   const root=path.join(__dirname,'..');for(const file of ['vendor/three.js','geometry.js','engine.js','scene.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),c);
   const s=Object.create(c.window.BattleScene.prototype);s.T=c.window.AlpineThree;s.sim=new c.Battle.Simulation();s.texture=()=>null;
   const station=s.makeStation();assert.equal(station.scale.x,1.4);assert.equal(s.sim.station.parts[0].rx,110*1.4);let batches=0,windows=0,meshes=0;

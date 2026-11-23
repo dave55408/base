@@ -19,7 +19,7 @@ test('complete dashboard fits common browser sizes and refits on resize',()=>{
   for(const [w,h] of [[1366,768],[1920,1080],[2560,1440],[1024,600],[390,844]])assertFits(harness(w,h));
   const h=harness(1920,1080);h.window.innerWidth=1280;h.window.innerHeight=720;h.resize();assertFits(h);
 });
-test('fit layout reserves room for overflowing controls before scaling',()=>{
+test('bottom consoles expand the fitted canvas until all controls are visible',()=>{
   const h=harness(1366,768,true);assertFits(h);assert(parseFloat(h.style.height)>1000);
   const panel=h.shell.querySelector('.engineering');assert(panel.scrollHeight-panel.clientHeight<2);
 });

@@ -1,0 +1,7 @@
+Allison synthesized reports
+Voice: Microsoft Zira Desktop (English US, Female)
+Rate: 0; source volume: 100. MP3 loudness: -18 LUFS, true peak limit -2 dBTP.
+
+allison-direct-hit-synth.mp3: Direct hit to Yorktown!
+allison-port-engine-lost-synth.mp3: We've lost the port engine!
+allison-starboard-engine-lost-synth.mp3: We've lost the starboard engine!
