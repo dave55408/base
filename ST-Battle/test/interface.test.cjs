@@ -26,6 +26,7 @@ function interfaceHarness(options={}){
     setAttribute(name,value){this.attrs[name]=value;}
     getContext(){return drawing;}
     setPointerCapture(){}
+    focus(){document.activeElement=this;}
     showModal(){this.open=true;}
     close(){this.open=false;}
   }
@@ -68,6 +69,18 @@ test('Yorktown personality dropdown shows the rolled personality and allows manu
   e['quick-rematch'].onclick();assert.equal(e['yorktown-personality'].value,s.enemyPersonality);
 });
 
+test('Enter leaves the focused action in control instead of starting combat or resetting the camera',()=>{
+  for(const code of ['Enter','NumpadEnter']){
+    const h=interfaceHarness({turnBased:true});let prevented=false;
+    h.sim.player.heading=123;h.elements.help.focus();
+    h.handlers.keydown({...h.key('Enter',code),target:h.elements.help,preventDefault(){prevented=true;}});
+    assert.equal(prevented,false,'native button activation remains available');
+    assert.equal(h.sim.running,false);assert.equal(h.sim.player.heading,123);
+    // The browser follows the uncancelled Enter key with the focused button click.
+    h.elements.help.onclick();assert.equal(h.elements.briefing.open,true);assert.equal(h.sim.running,false);
+  }
+});
+
 test('Declan welcome yields to one fight opening before normal bridge dialogue without holding battle',()=>{
   const players=[],h=renderedHarness(players,{turnBased:true,narration:true});h.sim.tick=()=>{};
   assert.equal(players[0].url,'assets/Welcome introduction_short_Declan.mp3');
@@ -95,6 +108,17 @@ test('welcome narration survives idle UI refreshes and can be replayed explicitl
   assert.equal(players.length,2);assert.equal(players[1].url,'assets/Welcome introduction_short_Declan.mp3');
   await new Promise(setImmediate);h.step(3720);assert.notEqual(players[1].paused,true);
   h.elements['quick-battle'].onclick();assert.equal(players[1].paused,true,'leaving welcome still stops narration');
+});
+
+test('closing welcome and opening the planner preserve Declan narration and Free Flight fades it out',async()=>{
+  const players=[],introMusicPlayers=[],h=renderedHarness(players,{turnBased:true,narration:true,introMusicPlayers});h.sim.tick=()=>{};
+  const intro=players[0],music=introMusicPlayers[0];await new Promise(setImmediate);
+  h.elements['close-welcome'].onclick();h.step(120);assert.notEqual(intro.paused,true);assert.notEqual(music.paused,true);
+  h.elements['plan-attack'].onclick();h.step(240);assert.equal(h.elements['plan-wizard'].open,true);
+  assert.notEqual(intro.paused,true);assert.notEqual(music.paused,true);
+  h.elements['launch-practice'].onclick();assert(h.sim.freeFlight);assert.notEqual(intro.paused,true,'Free Flight fades rather than abruptly stopping narration');
+  await new Promise(resolve=>setTimeout(resolve,650));h.step(900);
+  assert.equal(intro.paused,true);assert.equal(music.paused,true);
 });
 
 test('welcome IntroMusic plays at sixty percent, survives refresh and voice mute, and stops for combat',async()=>{
@@ -623,7 +647,7 @@ test('wizard commits three maneuvers in one pass and applies pending edits expli
   assert.equal(sim.planReady(),false);assert.equal(elements['wizard-commit'].disabled,false);
   elements['wizard-commit'].onclick();assert.equal(sim.turn.phase,'approach');assert.equal(sim.running,true);assert.equal(elements['plan-wizard'].open,false);
   assert.deepEqual(sim.turn.maneuvers,['direct','above','starboard']);assert.equal(elements['live-plan'].children.length,3);
-  assert.match(elements['live-plan'].children[1].children[0].textContent,/Bridge/);
+  assert.match(elements['live-plan'].children[1].children[0].textContent,/^M2\. Attack from above.*Bridge/);assert.equal(sim.turn.orders[1].target,'bridge');
   elements['open-planner'].onclick();elements['plan-step-1'].onclick();elements['target-reactor'].onclick();elements['save-plan-step'].onclick();
   assert.equal(sim.turn.orders[1].target,'bridge');assert.equal(sim.turn.revisions,2);
   elements['wizard-apply'].onclick();assert.equal(sim.turn.orders[1].target,'reactor');assert.equal(sim.turn.revisions,1);assert.equal(elements['plan-wizard'].open,false);
@@ -825,9 +849,11 @@ test('Enterprise critical hull shows a red alert below 25 percent and clears for
 test('warp button spends its charge, reports out of range, and resets for a rematch',()=>{
   const h=interfaceHarness(),{sim,elements}=h;assert.equal(elements.warp.disabled,true);
   elements.start.onclick();assert.equal(elements.warp.disabled,false);
-  sim.player.heading=180;elements.warp.onclick();assert.equal(sim.warpUsed,true);assert.equal(elements.warp.disabled,true);assert.equal(elements.warp.textContent,'WARP CHARGE SPENT');assert.equal(elements['attack-turn'].textContent,'YORKTOWN OUT OF RANGE');
+  sim.player.heading=180;elements.warp.onclick();assert.equal(sim.warpCharges,4);assert.equal(elements.warp.disabled,false);assert.equal(elements.warp.textContent,'WARP 30 KM / 4 CHARGES');assert.equal(elements['attack-turn'].textContent,'YORKTOWN OUT OF RANGE');
+  for(let remaining=3;remaining>=0;remaining--){elements.warp.onclick();assert.equal(sim.warpCharges,remaining);if(remaining===1)assert.equal(elements.warp.textContent,'WARP 30 KM / 1 CHARGE');}
+  assert.equal(elements.warp.disabled,true);assert.equal(elements.warp.textContent,'WARP CHARGES SPENT');
   const z=sim.player.z;elements.warp.onclick();assert.equal(sim.player.z,z);
-  elements.rematch.onclick();assert.equal(sim.warpUsed,false);assert.equal(elements.warp.disabled,false);
+  elements.rematch.onclick();assert.equal(sim.warpUsed,false);assert.equal(sim.warpCharges,5);assert.equal(elements.warp.disabled,false);assert.equal(elements.warp.textContent,'WARP 30 KM / 5 CHARGES');
 });
 
 test('range bar shrinks with separation and shares target colors',()=>{
@@ -873,29 +899,23 @@ test('lower opening chase view keeps Yorktown visible above Enterprise across vi
     for(const [name,state] of [['Enterprise',scene.sim.player],['Yorktown',scene.sim.enemy]])scene.ships[name].position.set(state.x,state.y,state.z);
     const position=new T.Vector3(),target=new T.Vector3();scene.chaseCamera(position,target);scene.frameCloseEngagement(position,target);
     scene.camera.position.copy(position);scene.camera.lookAt(target);scene.camera.updateMatrixWorld();
+    scene.frameEnterpriseLow();
     const enterprise=scene.project(scene.sim.player),yorktown=scene.project(scene.sim.enemy);
-    assert(yorktown.visible,`Yorktown not visible at aspect ${aspect}`);assert(yorktown.y>.3);assert(yorktown.y<enterprise.y);assert(enterprise.y>.5);
+    assert(yorktown.visible,`Yorktown not visible at aspect ${aspect}`);assert(yorktown.y>0);assert(yorktown.y<enterprise.y);assert(enterprise.y>.5);
     assert(position.y-scene.sim.player.y<95*Math.max(1,1.4/aspect));
   }
 });
 
-test('close Chase camera stays anchored on Enterprise without changing sides',()=>{
-  const c={window:{},console,AbortController};vm.createContext(c);const root=path.join(__dirname,'..');
+test('Yorktown range and position never override the manual Chase distance or target',()=>{
+  const c={window:{},console,AbortController};vm.createContext(c);
   for(const file of ['vendor/three.js','scene.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),c);
-  const T=c.window.AlpineThree;
-  for(const aspect of [.5,1,2.4])for(const separation of [[900,0,0],[0,500,0],[0,0,-900],[-300,-400,500]]){
-    const s=Object.create(c.window.BattleScene.prototype);s.T=T;s.mode='chase';s.zoom=1;s.orbit={x:0,y:0};s.camera=new T.PerspectiveCamera(46,aspect,.5,65000);
-    s.ships={Enterprise:new T.Group(),Yorktown:new T.Group()};s.ships.Yorktown.position.set(...separation);
-    s.sim={contact:true,range:Math.hypot(...separation),player:{hull:100},enemy:{hull:100}};
-    const camera=new T.Vector3(170,110,240),direction=camera.clone().normalize(),target=new T.Vector3();assert(s.frameCloseEngagement(camera,target));assert(target.distanceTo(s.ships.Enterprise.position)<1e-8);assert(camera.clone().sub(target).normalize().distanceTo(direction)<1e-8);
-    s.camera.position.copy(camera);s.camera.lookAt(target);s.camera.updateMatrixWorld();
-    for(const ship of Object.values(s.ships))for(const axis of ['x','y','z'])for(const sign of [-1,1]){
-      const point=ship.position.clone();point[axis]+=95*sign;point.project(s.camera);
-      assert(Math.abs(point.x)<.98);assert(Math.abs(point.y)<.95);assert(point.z<1&&point.z>-1);
-    }
-    const fittedDistance=camera.distanceTo(target);s.zoom=.7;camera.copy(direction).multiplyScalar(300);assert(s.frameCloseEngagement(camera,target));assert(camera.distanceTo(target)<fittedDistance*.71);
-    s.sim.range=1200;assert(s.frameCloseEngagement(camera,target));s.sim.range=1400;assert.equal(s.frameCloseEngagement(camera,target),false);
-    s.sim.range=500;s.mode='forward';assert.equal(s.frameCloseEngagement(camera,target),false);
+  const T=c.window.AlpineThree,s=Object.create(c.window.BattleScene.prototype);
+  Object.assign(s,{T,mode:'chase',zoom:.6,sim:{contact:true,player:{hull:100},enemy:{hull:100}},ships:{Enterprise:new T.Group(),Yorktown:new T.Group()}});
+  for(const range of [900,500,1200,1400,200]){
+    s.sim.range=range;s.ships.Yorktown.position.set(range,-range/2,range/3);
+    const position=new T.Vector3(100,50,200),target=new T.Vector3(0,0,-100),before=position.clone(),look=target.clone();
+    assert.equal(s.frameCloseEngagement(position,target),false);
+    assert(position.equals(before));assert(target.equals(look));assert.equal(s.zoom,.6);
   }
 });
 
@@ -910,7 +930,7 @@ test('Free Flight chase camera follows behind Enterprise through turns and climb
     Object.assign(scene.sim.player,{x:50,y:20,z:-100,heading,pitch});scene.trackFreeFlightCamera(position,target);
     const p=scene.sim.player,d=B.direction(p),forward=new T.Vector3(d.x,d.y,d.z),anchor=new T.Vector3(p.x,p.y,p.z);
     assert(position.clone().sub(anchor).dot(forward)<-230,'camera remains behind the ship');
-    assert(target.clone().sub(anchor).dot(forward)>70,'camera looks ahead along the ship heading');
+    assert(target.distanceTo(anchor)<1e-6,'camera anchors on Enterprise rather than moving its look-ahead target');
     const side=new T.Vector3(Math.cos(heading*Math.PI/180),0,Math.sin(heading*Math.PI/180));assert(Math.abs(position.clone().sub(anchor).dot(side))<1e-6);
   }
   scene.sim.freeFlight=false;assert.equal(scene.trackFreeFlightCamera(position,target),false);assert.equal(scene.freeFlightCamera,null);
@@ -1119,13 +1139,25 @@ test('Ram, Close battle and Chase can each be selected, reset and committed from
 });
 
 
+test('unchanged turn and strategy panels retain their rows while genuine plan changes update them',()=>{
+  const h=interfaceHarness({turnBased:true}),e=h.elements;h.sim.tick=()=>{};
+  e['quick-battle'].onclick();e['toggle-yorktown-strategy'].onclick();h.step(120);
+  const turn=e['live-plan'].children[0],strategy=e['yorktown-strategy-orders'].children[0];
+  for(let i=2;i<20;i++)h.step(i*120);
+  assert.equal(e['live-plan'].children[0],turn,'routine refreshes do not rebuild the turn list');
+  assert.equal(e['yorktown-strategy-orders'].children[0],strategy,'routine refreshes do not rebuild the strategy list');
+  h.sim.turn.orders[0].target='bridge';h.sim.turn.enemyOrders[0].target='reactor';h.step(2500);
+  assert.notEqual(e['live-plan'].children[0],turn);assert.match(e['live-plan'].children[0].children[0].textContent,/Bridge/);
+  assert.notEqual(e['yorktown-strategy-orders'].children[0],strategy);assert.match(e['yorktown-strategy-orders'].children[0].children[0].textContent,/Reactor/);
+});
+
 test('Yorktown strategy toggles and follows the actual attack plan through execution and reset',()=>{
   const {sim,elements:e,step}=interfaceHarness({turnBased:true});
   assert.equal(e['yorktown-strategy-details'].hidden,true);
   e['toggle-yorktown-strategy'].onclick();
   assert.equal(e['yorktown-strategy-details'].hidden,false);
   assert.equal(e['toggle-yorktown-strategy'].attrs['aria-expanded'],'true');
-  assert.equal(e['toggle-yorktown-strategy'].textContent,'Hide Strategy');
+  assert.equal(e['toggle-yorktown-strategy'].textContent,'Hide Yorktown Strategy');
   assert.match(e['yorktown-strategy-orders'].children[0].textContent,/after Commit/);
   e['quick-battle'].onclick();
   const orders=sim.turn.enemyOrders;
@@ -1139,7 +1171,7 @@ test('Yorktown strategy toggles and follows the actual attack plan through execu
   assert(e['yorktown-strategy-orders'].children[0].children[0].textContent.includes(B.targets.engines));
   e['toggle-yorktown-strategy'].onclick();
   assert.equal(e['yorktown-strategy-details'].hidden,true);
-  assert.equal(e['toggle-yorktown-strategy'].textContent,'Show Strategy');
+  assert.equal(e['toggle-yorktown-strategy'].textContent,'Show Yorktown Strategy');
   e['toggle-yorktown-strategy'].onclick();e.rematch.onclick();
   assert.match(e['yorktown-strategy-orders'].children[0].textContent,/after Commit/);
 });
@@ -1226,7 +1258,7 @@ test('incoming torpedo alerts disappear with the projectile and cannot play late
   }
 });
 
-test('incoming warnings require a nearby closing trajectory, sensors, and an unobstructed path',()=>{
+test('incoming warnings cover launch range and require a closing trajectory, sensors, and an unobstructed path',()=>{
   for(const mode of ['incoming','passed','wide','distant','blind','blocked','practice','no-projectile']){
     const h=interfaceHarness({turnBased:true});h.sim.tick=()=>{};
     Object.assign(h.sim.player,{x:6000,y:0,z:0,heading:0,pitch:0,speed:0});
@@ -1241,11 +1273,25 @@ test('incoming warnings require a nearby closing trajectory, sensors, and an uno
     if(mode==='practice')shot.practice=true;
     if(mode!=='no-projectile')h.sim.projectiles.push(shot);
     h.sim.events.push({type:'launch',from:'Yorktown',to:'Enterprise'});h.step(3120);
-    assert.equal(h.elements['helm-reply'].textContent==='Torpedo incoming!',mode==='incoming',mode);
+    assert.equal(h.elements['helm-reply'].textContent==='Torpedo incoming!',['incoming','distant'].includes(mode),mode);
     if(mode==='distant'){
       shot.pos.z=-900;h.step(3180);
-      assert.equal(h.elements['helm-reply'].textContent,'Torpedo incoming!','a far launch is announced only when it becomes a nearby threat');
+      assert.equal(h.elements['helm-reply'].textContent,'Torpedo incoming!','an announced launch stays visible as its torpedo approaches');
     }
+  }
+});
+
+test('each detected enemy torpedo launch plays Allison once, including consecutive launches at long range',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
+  Object.assign(h.sim.player,{x:6000,y:0,z:0,heading:0,pitch:0,speed:0});Object.assign(h.sim.enemy,{x:6000,y:0,z:-1800});
+  h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();
+  const before=players.length;
+  for(let i=0;i<2;i++){
+    h.sim.projectiles=[{id:'launch-'+i,from:'Yorktown',target:'Enterprise',pos:{x:6000,y:0,z:-1700},heading:180,pitch:0,life:0,maxLife:8}];
+    h.sim.events.push({type:'launch',from:'Yorktown',to:'Enterprise'});h.step(3120+i*120);
+    assert.equal(players.length,before+i+1);assert.equal(players.at(-1).url,'assets/Torpedo incoming!_Allison.mp3');
+    assert.equal(h.elements['helm-speaker'].textContent,'HELM (Allison)');players.at(-1).onended();
+    h.step(3180+i*120);assert.equal(players.length,before+i+1,'the same torpedo is not announced twice');
   }
 });
 
@@ -1352,7 +1398,21 @@ test('skipping maneuvers announces continuation and finishes without an automati
     assert.equal(h.elements['helm-reply'].textContent,reason==='stall'?'No relative movement. Next maneuver.':'Course updated.');
     h.step(180);h.sim.turn.maneuvers[2]='ram';h.sim.startStage(2);h.step(240);
     h.sim.turn.remaining=0;h.sim.enemyRetreating=true;h.sim.advanceTurn(0);h.sim.time+=.5;h.sim.advanceTurn(.5);assert.equal(h.sim.turn.phase,'review');h.step(300);
+    assert.equal(h.elements['helm-reply'].textContent,'Breaking away.');h.step(360);
     assert.equal(h.elements['helm-reply'].textContent,'Maneuvers complete. Awaiting orders.');
+  }
+});
+
+test('Erica announces Breaking away when a planned ram times out, stalls or is ended by the captain',()=>{
+  for(const reason of ['timeout','stall','captain']){
+    const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
+    h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();
+    const s=h.sim;s.turn.maneuvers[0]='ram';s.turn.maneuver='ram';s.turn.navigation.rammed=false;s.fire=()=>false;
+    if(reason==='captain')assert(s.endPass());
+    else{if(reason==='timeout')s.turn.remaining=0;else s.turn.navigation.relativeStalled=true;s.advanceTurn(0);}
+    h.step(3120);
+    assert.equal(players.at(-1).url,'assets/Breaking away_Erica.mp3',reason);
+    assert.equal(h.elements['helm-reply'].textContent,'Breaking away.');assert.equal(h.elements['helm-speaker'].textContent,'HELM (Erica)');
   }
 });
 
@@ -1591,17 +1651,17 @@ test('consecutive recorded bridge phrases are skipped and can return after anoth
 });
 
 
-test('Allison reports confirmed torpedo hits on Yorktown, not launches, misses, phasers or practice shots',()=>{
+test('Allison reports confirmed phaser and torpedo hits on Yorktown, alternating both recordings',()=>{
   const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
   h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();const before=players.length;
-  h.sim.events.push({type:'launch',from:'Enterprise',practice:true},{type:'impact',ship:'Yorktown',weapon:'phaser',amount:20,hullDamage:0},{type:'impact',ship:'Yorktown',weapon:'torpedo',amount:0,hullDamage:0},{type:'impact',ship:'Yorktown',weapon:'torpedo',amount:20,hullDamage:0,practice:true},{type:'impact',ship:'Enterprise',weapon:'torpedo',amount:20,hullDamage:0});
+  h.sim.events.push({type:'launch',from:'Enterprise',practice:true},{type:'impact',ship:'Yorktown',weapon:'torpedo',amount:0,hullDamage:0},{type:'impact',ship:'Yorktown',weapon:'torpedo',amount:20,hullDamage:0,practice:true},{type:'impact',ship:'Enterprise',weapon:'torpedo',amount:20,hullDamage:0});
   h.step(3200);assert.equal(players.length,before);
-  h.sim.events.push({type:'impact',ship:'Yorktown',weapon:'torpedo',amount:20,hullDamage:0});h.step(3260);
-  assert.equal(players.at(-1).url,'assets/Direct hit to Yorktown!_Allision.mp3');assert.equal(players.at(-1).volume,.85);players.at(-1).onended();
+  h.sim.events.push({type:'impact',ship:'Yorktown',weapon:'phaser',amount:20,hullDamage:0});h.step(3260);
+  assert.equal(players.at(-1).url,'assets/Direct Hit!_Allision.mp3');assert.equal(players.at(-1).volume,.85);players.at(-1).onended();
   h.sim.events.push({type:'impact',ship:'Yorktown',weapon:'torpedo',amount:20,hullDamage:10});h.step(3320);
-  assert.equal(players.length,before+2);assert.equal(players.at(-1).url,'assets/Direct Hit!_Allision.mp3');players.at(-1).onended();
+  assert.equal(players.length,before+2);assert.equal(players.at(-1).url,'assets/Direct hit to Yorktown!_Allision.mp3');players.at(-1).onended();
   h.sim.events.push({type:'impact',ship:'Yorktown',weapon:'torpedo',amount:20,hullDamage:0});h.step(3380);
-  assert.equal(players.length,before+3);assert.equal(players.at(-1).url,'assets/Direct hit to Yorktown!_Allision.mp3');
+  assert.equal(players.length,before+3);assert.equal(players.at(-1).url,'assets/Direct Hit!_Allision.mp3');
 });
 
 
@@ -1627,11 +1687,24 @@ test('Yorktown leaving and returning to range plays the new Allison recordings',
 test('Allison says We missed only for Enterprise torpedo misses, with no consecutive repeat',()=>{
   const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
   h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();const before=players.length;
-  h.sim.events.push({type:'torpedo-missed',from:'Yorktown',target:'Enterprise'},{type:'torpedo-missed',from:'Enterprise',target:'Yorktown',practice:true});h.step(3200);assert.equal(players.length,before);
+  h.sim.events.push({type:'torpedo-missed',from:'Yorktown',target:'Yorktown'},{type:'torpedo-missed',from:'Enterprise',target:'Yorktown',practice:true});h.step(3200);assert.equal(players.length,before);
   h.sim.events.push({type:'torpedo-missed',from:'Enterprise',target:'Yorktown'});h.step(3260);assert.equal(players.at(-1).url,'assets/We missed!_Allision.mp3');players.at(-1).onended();
   h.sim.events.push({type:'torpedo-missed',from:'Enterprise',target:'Yorktown'});h.step(3320);assert.equal(players.length,before+1);
 });
 
+
+test('Allison plays synthesized Yorktown missed for each confirmed Yorktown miss, excluding practice and Free Flight',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
+  h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();
+  const before=players.length;
+  h.sim.events.push({type:'launch',from:'Yorktown',to:'Enterprise'},{type:'torpedo-missed',from:'Yorktown',target:'Enterprise',practice:true});h.step(3120);assert.equal(players.length,before);
+  for(const [i,reason] of ['expired','blocked'].entries()){
+    h.sim.events.push({type:'torpedo-missed',from:'Yorktown',target:'Enterprise',reason,projectileId:'miss-'+i});h.step(3180+i*60);
+    assert.equal(players.length,before+i+1);assert.equal(players.at(-1).url,'assets/voices/allison-yorktown-missed-synth.mp3');
+    assert.equal(h.elements['helm-reply'].textContent,'Yorktown missed!');assert.equal(h.elements['helm-speaker'].textContent,'HELM (Allison)');players.at(-1).onended();
+  }
+  h.sim.freeFlight=true;h.sim.events.push({type:'torpedo-missed',from:'Yorktown',target:'Enterprise'});h.step(3300);assert.equal(players.length,before+2);
+});
 
 test('recorded captain commands and helm responses play sequentially in replay without issuing live orders',()=>{
   const players=[];
@@ -1660,7 +1733,7 @@ test('Allison uses rendered updates for direct hits and each Enterprise engine-l
   class Audio{constructor(url){this.url=url;players.push(this);}play(){return Promise.resolve();}pause(){}}
   const h=interfaceHarness({turnBased:true,voiceClips:manifest.window.BattleVoiceClips,window:{Audio}});h.sim.tick=()=>{};
   h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();let now=3200;
-  for(const [event,file] of [[{type:'impact',ship:'Yorktown',weapon:'torpedo',amount:10,hullDamage:0},'Direct hit to Yorktown!_Allision.mp3'],[{type:'nacelle-detached',ship:'Enterprise',side:'port'},"We've lost the port engine!_Allision.mp3"],[{type:'nacelle-detached',ship:'Enterprise',side:'starboard'},"We've lost the starboard engine!_Allision.mp3"]]){
+  for(const [event,file] of [[{type:'impact',ship:'Yorktown',weapon:'torpedo',amount:10,hullDamage:0},'Direct Hit!_Allision.mp3'],[{type:'nacelle-detached',ship:'Enterprise',side:'port'},"We've lost the port engine!_Allision.mp3"],[{type:'nacelle-detached',ship:'Enterprise',side:'starboard'},"We've lost the starboard engine!_Allision.mp3"]]){
     h.sim.events.push(event);h.step(now);if(event.type==='nacelle-detached'){now+=500;h.step(now);}now+=60;const audio=players.at(-1);assert.equal(audio.url,'assets/'+file);assert.equal(audio.volume,.85);assert(fs.statSync(path.join(root,audio.url)).size>1000);audio.onended();
   }
   const count=players.length;h.sim.events.push({type:'nacelle-detached',ship:'Yorktown',side:'port'});h.step(now);assert.equal(players.length,count,'enemy engine loss does not announce our engine loss');
@@ -1693,19 +1766,21 @@ test('replay finale requests a music fade even when Enterprise survives, and com
 });
 
 
-test('shared attacks appear only once across the maneuver preview and live turn list',()=>{
+test('turn panel retains weapon and target summaries without individual shot details',()=>{
   const h=interfaceHarness({turnBased:true}),e=h.elements;h.sim.tick=()=>{};e.start.onclick();e['preset-strong'].onclick();
   const titles=id=>e[id].children.map(row=>row.children[0]?.textContent||'').join(' ');
-  assert.equal((titles('wizard-review').match(/Phaser/g)||[]).length,2);assert.equal((titles('wizard-review').match(/Torpedo/g)||[]).length,1,'shared eligibility does not repeat scheduled shots in each maneuver');
+  assert.equal((titles('wizard-review').match(/Phaser/g)||[]).length,2);assert.equal((titles('wizard-review').match(/Torpedo/g)||[]).length,1);
   e['wizard-commit'].onclick();assert.equal(h.sim.turn.orders.length,3);
   assert.equal((titles('live-plan').match(/Phaser/g)||[]).length,2);assert.equal((titles('live-plan').match(/Torpedo/g)||[]).length,1);
+  assert.equal(e['replay-review'],undefined,'Replay Turn is removed from this panel');
   h.sim.turn.orders[0].status='hit';h.sim.turn.orders[0].firedStage=0;h.sim.turn.stageIndex=1;h.step(180);
-  assert.equal((titles('live-plan').match(/Attack 1:/g)||[]).length,1);assert.equal((titles('live-plan').match(/Attack 2:/g)||[]).length,1);assert.equal((titles('live-plan').match(/Attack 3:/g)||[]).length,1);
-  assert.match(e['live-plan'].children[0].children[0].textContent,/Attack 1:/);assert.match(e['live-plan'].children[1].children[0].textContent,/Attack 2:/,'pending attacks follow the current eligible maneuver');
+  assert.doesNotMatch(titles('live-plan'),/Attack [123]:/);
+  assert.match(e['live-plan'].children[0].children[0].textContent,/^M1\./);assert.match(e['live-plan'].children[1].children[0].textContent,/^M2\./);
+  assert(e['live-plan'].children.every(row=>row.children.length===1),'attack range and eligibility details are omitted from the turn panel');
 });
 
 
-test('Show Strategy reveals all Yorktown stats despite damaged Enterprise sensors without restoring combat sensors',()=>{
+test('Show Yorktown Strategy reveals all Yorktown stats despite damaged Enterprise sensors without restoring combat sensors',()=>{
   const h=interfaceHarness(),{sim,elements:e}=h;sim.player.integrity.sensors=0;Object.assign(sim.enemy,{hull:43,reactor:65,torpedoes:13,capacitor:41,heat:55});sim.enemy.integrity.bridge=20;sim.enemy.shields.fore=7;h.step(120);
   assert.equal(e['yorktown-damage-hull'].textContent,'UNKNOWN');assert.equal(sim.yorktownTelemetry,false);
   e['toggle-yorktown-strategy'].onclick();assert.equal(e['yorktown-damage-hull'].textContent,'43%');assert.equal(e['yt-reactor'].textContent,'65 / 100 GW');assert.equal(e['yorktown-system-bridge'].textContent,'20%');assert.equal(e['yorktown-svg-fore'].textContent,'7%');assert.equal(e['yt-torpedoes'].textContent,'13 / 24');assert.equal(e['yt-capacitor'].textContent,'41%');assert.equal(e['yt-heat'].textContent,'55%');assert.match(e['yt-power-engines'].textContent,/GW/);

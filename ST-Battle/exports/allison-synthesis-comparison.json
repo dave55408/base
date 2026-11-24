@@ -1,0 +1,58 @@
+{
+  "method": "Offline acoustic measurements; no listening evaluation",
+  "referenceClips": [
+    {
+      "file": "assets/We missed!_Allision.mp3",
+      "medianPitchHz": 333.3333333333333,
+      "voicedFrames": 28,
+      "activeSeconds": 0.45,
+      "spanSeconds": 0.5
+    },
+    {
+      "file": "assets/TorpedoMissed_Allision.mp3",
+      "medianPitchHz": 262.2950819672131,
+      "voicedFrames": 56,
+      "activeSeconds": 0.87,
+      "spanSeconds": 0.94
+    },
+    {
+      "file": "assets/Direct hit to Yorktown!_Allision.mp3",
+      "medianPitchHz": 216.21621621621622,
+      "voicedFrames": 19,
+      "activeSeconds": 1.25,
+      "spanSeconds": 1.46
+    },
+    {
+      "file": "assets/They're out of range_Allision.mp3",
+      "medianPitchHz": 183.90804597701148,
+      "voicedFrames": 56,
+      "activeSeconds": 1.04,
+      "spanSeconds": 1.09
+    },
+    {
+      "file": "assets/Torpedo incoming!_Allison.mp3",
+      "medianPitchHz": 238.80597014925374,
+      "voicedFrames": 81,
+      "activeSeconds": 1.32,
+      "spanSeconds": 1.46
+    }
+  ],
+  "original": {
+    "file": "exports/allison-yorktown-missed-original.mp3",
+    "medianPitchHz": 205.12820512820514,
+    "voicedFrames": 62,
+    "activeSeconds": 0.91,
+    "spanSeconds": 1.09
+  },
+  "referencePitchHz": 238.80597014925374,
+  "pitchRatio": 1.164179104477612,
+  "tempo": 1.25,
+  "filter": "rubberband=pitch=1.164179104477612:tempo=1.25:formant=preserved,loudnorm=I=-16:TP=-2:LRA=11",
+  "current": {
+    "file": "assets/voices/allison-yorktown-missed-synth.mp3",
+    "medianPitchHz": 238.80597014925374,
+    "voicedFrames": 50,
+    "activeSeconds": 0.64,
+    "spanSeconds": 0.75
+  }
+}

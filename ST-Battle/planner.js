@@ -270,7 +270,14 @@
       this.diagram.setSelection(selected.target,this.mapLayer||'systems');this.list('wizard-review',t.draft,false,s);
     }
     list(id,orders,live,source=this.sim){
+      const compact=id==='live-plan';
       const t=source.turn,routes=live?t.maneuvers:t.draftManeuvers,next=live?source.nextOrder():null;
+      const signature=JSON.stringify([live,routes,t.number,t.stageIndex,t.phase,t.maneuverStatus,t.stageDuration,
+        (orders||[]).map((shot,i)=>shot&&[shot.weapon,shot.target,compact?null:shot.range,source.attackAssignments(shot,i),shot.status,shot.firedStage]),
+        !compact&&live&&next?source.status(next.weapon):null]);
+      this.listCache??={};
+      if(this.listCache[id]?.turn===t&&this.listCache[id].signature===signature)return;
+      this.listCache[id]={turn:t,signature};
       let activeRow=null;
       const rows=[0,1,2].filter(i=>routes?.[i]).map(m=>{
         const route=routes[m],row=document.createElement('li'),title=document.createElement('strong');
@@ -280,9 +287,9 @@
           return live&&Number.isInteger(shot.firedStage)?shot.firedStage:live?stages.find(stage=>stage>=t.stageIndex)??stages[0]:stages[0];
         };
         const assigned=eligible.filter(entry=>owner(entry)===m);
-        title.textContent=`M${m+1}. ${Battle.maneuvers[route].name}`+assigned.map(({shot,i})=>` / Attack ${i+1}: ${Battle.weaponSpecs[shot.weapon].name} -> ${Battle.targets[shot.target]}`).join('');row.append(title);
-        if(route==='flee'||!assigned.length){const note=document.createElement('span');note.textContent=route==='flee'?Math.round(live?(t.stageDuration||Battle.TURN.execution/routes.filter(Boolean).length):Battle.TURN.execution/routes.filter(Boolean).length)+'s / withdrawal and repairs':eligible.length?'Shared turn attacks remain eligible here until fired; see their entries.':'Flight only / no attack assigned';row.append(note);}
-        for(const {shot,i} of assigned){
+        title.textContent=`M${m+1}. ${Battle.maneuvers[route].name}`+assigned.map(({shot,i})=>` / ${compact?'':`Attack ${i+1}: `}${Battle.weaponSpecs[shot.weapon].name} -> ${Battle.targets[shot.target]}`).join('');row.append(title);
+        if(route==='flee'||!compact&&!assigned.length){const note=document.createElement('span');note.textContent=route==='flee'?Math.round(live?(t.stageDuration||Battle.TURN.execution/routes.filter(Boolean).length):Battle.TURN.execution/routes.filter(Boolean).length)+'s / withdrawal and repairs':eligible.length?'Shared turn attacks remain eligible here until fired; see their entries.':'Flight only / no attack assigned';row.append(note);}
+        for(const {shot,i} of compact?[]:assigned){
           const note=document.createElement('span');let status=shot.status||'queued';
           if(live&&shot===next)status=source.maneuvering?source.status(shot.weapon):'queued';
           if(live&&shot.status!=='pending'&&shot.firedStage!==undefined&&shot.firedStage!==m)status=`USED IN M${shot.firedStage+1} / ${status}`;
@@ -304,10 +311,14 @@
     }
     refresh(){
       const t=this.sim.turn;
-      this.$('planner-progress').textContent=`${t.draftManeuvers.filter(Boolean).length}/3 maneuvers / one turn`;
-      this.$('open-planner').textContent=this.sim.maneuvering?'REVIEW / EDIT PLAN':'BUILD ATTACK PLAN';
+      const progress=`${t.draftManeuvers.filter(Boolean).length}/3 maneuvers / one turn`,action=this.sim.maneuvering?'REVIEW / EDIT PLAN':'BUILD ATTACK PLAN';
+      if(this.$('planner-progress').textContent!==progress)this.$('planner-progress').textContent=progress;
+      if(this.$('open-planner').textContent!==action)this.$('open-planner').textContent=action;
       this.list('live-plan',t.orders||t.draft,!!t.orders);
-      if(this.dialog.open)this.render();
+      if(this.dialog.open){
+        const key=JSON.stringify([t.number,t.phase,t.stageIndex,t.revisions,t.maneuvers,t.orders,t.spent,this.sim.result,this.sim.player.torpedoes]);
+        if(this.refreshTurn!==t||this.refreshKey!==key){this.refreshTurn=t;this.refreshKey=key;this.render();}
+      }else this.refreshKey=null;
     }
   }
   window.BattlePlanner=BattlePlanner;

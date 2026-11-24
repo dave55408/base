@@ -19,7 +19,7 @@ window.BattleScene=class{
     canvas.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,ox:this.orbit.x,oy:this.orbit.y};canvas.setPointerCapture(e.pointerId);});
     canvas.addEventListener('pointermove',e=>{if(!drag)return;this.orbit.x=drag.ox+(e.clientX-drag.x)*.006;this.orbit.y=Battle.clamp(drag.oy+(e.clientY-drag.y)*.004,-.8,.9);});
     const end=()=>drag=null;canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
-    canvas.addEventListener('wheel',e=>{e.preventDefault();this.zoom=Battle.clamp(this.zoom*Math.exp(e.deltaY*.0008),.5,2.5);},{passive:false});
+    canvas.addEventListener('wheel',e=>{e.preventDefault();this.zoom=Battle.clamp(this.zoom*Math.exp(e.deltaY*.0008),['chase','cinematic'].includes(this.mode)?.35:.5,2.5);},{passive:false});
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();window.dispatchEvent(new CustomEvent('battle-render-error',{detail:'Graphics context lost. Reload the page to restore the viewscreen.'}));});
     this.update(0,true);
   }
@@ -283,6 +283,7 @@ window.BattleScene=class{
     root.updateMatrixWorld(true);
     // Shields absorb damage in the simulation but have no visible bubble.
     root.userData={model,engineeringHull:eng,nacelles:{port:nacelles[0],starboard:nacelles[1]},detachedVisuals:new Set(),nacelleAftOffset:aftShift,saucer:sa,windows:rimWindows,lowerHullWindows,scars:[],engineGlows,damageGlows:[],impulse,breakupParts:[sa,eng,neck,...pylons,...nacelles]};root.name=name;
+    this.addPhaserEmitters(root);
     root.userData.trails=this.makeEngineTrails(model);
     for(let i=0;i<7;i++){const glow=sphere((i%2?1:-1)*(.11+(i%3)*.16),.44,-1.10+i*.17,.025,.012,.025,new T.MeshBasicMaterial({color:0xff5822,transparent:true,opacity:0}));root.userData.damageGlows.push(glow);}
     return root;
@@ -578,7 +579,7 @@ window.BattleScene=class{
   updateSpatialGuides(){
     const p=this.sim.player,e=this.sim.enemy,T=this.T,tactical=this.mode==='tactical',chase=this.mode==='chase';
     const active=this.spatialEnabled&&!this.sim.freeFlight&&this.mode!=='cinematic'&&!this.sim.result;
-    for(const [key,o] of Object.entries(this.spatial))o.visible=active&&!(tactical&&['levels','rings'].includes(key))&&!(this.sim.freeFlight&&['player','enemy'].includes(key))&&(key!=='enemy'||this.sim.contact);
+    for(const [key,o] of Object.entries(this.spatial))o.visible=active&&!(tactical&&['levels','rings','player','enemy'].includes(key))&&!(this.sim.freeFlight&&['player','enemy'].includes(key))&&(key!=='enemy'||this.sim.contact);
     if(!active)return;
     const write=(o,points)=>{const a=o.geometry.attributes.position;a.array.set(points);a.needsUpdate=true;o.geometry.setDrawRange(0,points.length/3);};
     // Fixed world axes: pitching or turning never tilts the reference plane.
@@ -610,6 +611,7 @@ window.BattleScene=class{
     write(this.spatial.rings,rings);
     const marker=Math.max(15,Math.min(step*.13,90));
     for(const [key,s] of [['player',p],['enemy',e]]){
+      if(tactical){write(this.spatial[key],[]);continue;}
       const points=[s.x,p.y,s.z,s.x,s.y,s.z];
       for(let i=0;i<32;i++){
         const a=i*Math.PI/16,b=(i+1)*Math.PI/16;
@@ -625,31 +627,15 @@ window.BattleScene=class{
     this.targetGuideColor=Battle.targetingColor(this.sim,seen);
     this.targetGuideState=obstruction?'K7 BLOCKING SHOT':aligned&&inRange?'IN PHASER ARC / RANGE':aligned?'ALIGNED / CLOSE RANGE':seen?'IN VIEW':'TRACKING CONTACT';
   }
-  frameCloseEngagement(camPos,targetPos){
-    const T=this.T,sim=this.sim;
-    const eligible=['chase','cinematic'].includes(this.mode)&&sim.contact&&!sim.result&&sim.player.hull>0&&sim.enemy.hull>0;
-    // Separate entry/exit distances prevent camera flicker at the boundary.
-    this.closeFraming=eligible&&sim.range<(this.closeFraming?1300:1000);
-    if(!this.closeFraming)return false;
-    const a=this.ships.Enterprise.position,b=this.ships.Yorktown.position;
-    // Keep Enterprise as the anchor and preserve the existing chase/orbit angle.
-    // Yorktown can only change the camera distance, never which side it views from.
-    const direction=camPos.clone().sub(a).normalize();
-    targetPos.copy(a);
-    // Fit both hulls, allowing space above and below for HUD and controls.
-    const right=new T.Vector3().crossVectors(direction,new T.Vector3(0,1,0)).normalize();
-    const up=new T.Vector3().crossVectors(right,direction).normalize();
-    const tanV=Math.tan(this.framingFov*Math.PI/360),tanH=tanV*this.framingAspect;
-    const horizontal=Math.max(.04,tanH*.9),vertical=tanV*.82,radius=85;
-    let distance=280;
-    for(const ship of [a,b]){
-      const relative=ship.clone().sub(targetPos),depth=relative.dot(direction);
-      distance=Math.max(distance,depth+(Math.abs(relative.dot(right))+radius)/horizontal+radius,depth+(Math.abs(relative.dot(up))+radius)/vertical+radius);
-    }
-    camPos.copy(targetPos).addScaledVector(direction,distance*Math.max(.7,this.zoom));
-    return true;
+  frameCloseEngagement(){
+    // Keep the user's distance: enemy range must not trigger camera reframing.
+    this.closeFraming=false;return false;
   }
-  setCamera(mode){if(mode==='tactical'&&this.mode!=='tactical')this.tacticalBaseDistance=null;const chaseStyle=value=>value==='chase'||value==='cinematic';const preserve=mode!==this.mode&&chaseStyle(mode)&&chaseStyle(this.mode);this.mode=mode;if(!preserve){this.closeFraming=false;this.orbit={x:0,y:0};this.zoom=1;if(mode!=='tactical'&&this.camera&&this.camera.zoom!==1){this.camera.zoom=1;this.camera.updateProjectionMatrix();}}}
+  levelChaseRotation(){
+    const ship=this.ships.Enterprise,euler=ship.rotation.clone();
+    euler.z=0;return ship.quaternion.clone().setFromEuler(euler);
+  }
+  setCamera(mode){if(mode!==this.mode)this.cinemaTracking=null;if(mode==='tactical'&&this.mode!=='tactical')this.tacticalBaseDistance=null;const chaseStyle=value=>value==='chase'||value==='cinematic';const preserve=mode!==this.mode&&chaseStyle(mode)&&chaseStyle(this.mode);this.mode=mode;if(!preserve){this.closeFraming=false;this.orbit={x:0,y:0};this.zoom=1;if(mode!=='tactical'&&this.camera&&this.camera.zoom!==1){this.camera.zoom=1;this.camera.updateProjectionMatrix();}}}
   trackFreeFlightCamera(position,target){
     if(!this.sim.freeFlight||this.sim.replayShot||this.sim.result){this.freeFlightCamera=null;return false;}
     const p=this.sim.player,anchor=new this.T.Vector3(p.x,p.y,p.z);
@@ -657,7 +643,8 @@ window.BattleScene=class{
       const T=this.T,yaw=-(p.heading||0)*Math.PI/180,pitch=(p.pitch||0)*Math.PI/180,up=new T.Vector3(0,1,0),right=new T.Vector3(1,0,0);
       const offset=new T.Vector3(0,48,235).applyAxisAngle(up,this.orbit.x);offset.y+=this.orbit.y*230;
       offset.multiplyScalar(this.zoom*Math.max(1,1.4/this.framingAspect)).applyAxisAngle(right,pitch).applyAxisAngle(up,yaw);
-      position.copy(anchor).add(offset);target.copy(anchor).add(new T.Vector3(0,15,-75).applyAxisAngle(right,pitch).applyAxisAngle(up,yaw));return true;
+      if(offset.length()<110)offset.setLength(110);
+      position.copy(anchor).add(offset);target.copy(anchor);return true;
     }
     const key=[this.mode,this.zoom,this.orbit.x,this.orbit.y].join('/');
     if(this.freeFlightCamera?.key!==key)this.freeFlightCamera={key,position:position.clone().sub(anchor),target:target.clone().sub(anchor)};
@@ -676,21 +663,21 @@ window.BattleScene=class{
     camPos.copy(targetPos).addScaledVector(direction,distance);
     this.camera.far=Math.max(65000,distance+a.distanceTo(b)+1000);
   }
-  frameEnterpriseLow(){
-    // Shift the lens rather than changing distance, orbit or zoom.
+  frameEnterpriseLow(dt=0,snap=false){
+    // Extra wheel zoom uses the lens once the camera reaches safe hull clearance.
+    const eligible=(this.mode==='chase'||this.mode==='cinematic'&&this.sim.freeFlight)&&!this.sim.replayShot&&!this.sim.result;
+    if(this.mode!=='tactical'&&!this.sim.replayShot){
+      const desired=eligible?Math.max(1,.5/(this.zoom||1)):1;
+      this.gameplayLensZoom=snap||!Number.isFinite(this.gameplayLensZoom)||dt<=0?desired:this.gameplayLensZoom+(desired-this.gameplayLensZoom)*(1-Math.exp(-dt*3));
+      this.camera.zoom=this.gameplayLensZoom;
+    }
     this.camera.updateProjectionMatrix();
-    if(!['chase','cinematic'].includes(this.mode)||this.sim.replayShot||this.sim.result)return;
+    if(!eligible)return;
     const anchor=this.ships.Enterprise.position.clone().project(this.camera);
     if(anchor.z<-1||anchor.z>1)return;
-    let shift=anchor.y+.44; // Enterprise center at 72% of the screen height.
-    if(!this.sim.freeFlight&&this.sim.contact&&this.sim.enemy.hull>0){
-      const enemy=this.ships.Yorktown.position.clone().project(this.camera);
-      if(enemy.z>=-1&&enemy.z<=1&&Math.abs(enemy.x)<.9&&Math.abs(enemy.y)<.9){
-        // Keep a visible opponent within the shot when the ships cross vertically.
-        shift=Math.max(anchor.y+.2,Math.max(enemy.y-.85,Math.min(enemy.y+.85,shift)));
-      }
-    }
-    this.camera.projectionMatrix.elements[9]+=shift;
+    // Stable bottom-center framing, independent of Yorktown's screen position.
+    this.camera.projectionMatrix.elements[8]+=anchor.x;
+    this.camera.projectionMatrix.elements[9]+=anchor.y+.44;
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
   }
   applyReplayDrift(){
@@ -702,22 +689,67 @@ window.BattleScene=class{
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
   }
   chaseCamera(camPos,targetPos){
-    const T=this.T,p=this.sim.player,q=this.ships.Enterprise.quaternion;
-    const offset=new T.Vector3(35*Math.min(1,this.framingAspect),45,235).applyAxisAngle(new T.Vector3(0,1,0),this.orbit.x);
+    const T=this.T,q=this.levelChaseRotation();
+    const offset=new T.Vector3(0,45,235).applyAxisAngle(new T.Vector3(0,1,0),this.orbit.x);
     offset.y+=this.orbit.y*230;offset.multiplyScalar(this.zoom*Math.max(1,1.4/this.framingAspect)).applyQuaternion(q);
+    if(offset.length()<110)offset.setLength(110);
     camPos.copy(this.ships.Enterprise.position).add(offset);
-    const lookAhead=Battle.clamp((this.sim.range-900)/700,0,1);
-    targetPos.copy(this.ships.Enterprise.position).add(new T.Vector3(0,45,-110).multiplyScalar(lookAhead).applyQuaternion(q));
+    targetPos.copy(this.ships.Enterprise.position);
+  }
+  cinemaCamera(position,target,dt=0,snap=false){
+    const T=this.T,a=this.ships.Enterprise.position,b=this.ships.Yorktown.position;
+    const paired=this.sim.enemy.hull>0,center=paired?a.clone().lerp(b,.5):a.clone();
+    if(!this.cinemaTracking){
+      const along=b.clone().sub(a);along.y=0;
+      if(along.lengthSq()<1)along.set(0,0,-1);along.normalize();
+      // Establish one viewing side, then let the ships turn within the shot.
+      const side=new T.Vector3(-along.z,0,along.x);
+      const direction=side.addScaledVector(along,-.3);direction.y=.4;direction.normalize();
+      const initial=snap?center.clone():this.camera.getWorldDirection(new T.Vector3()).multiplyScalar(Math.max(360,this.camera.position.distanceTo(center))).add(this.camera.position);
+      this.cinemaTracking={direction,center:initial,previousCenter:center.clone(),offset:this.camera.position.clone().sub(initial)};
+      if(this.cinemaTracking.offset.length()<110)this.cinemaTracking.offset.copy(direction).multiplyScalar(400);
+    }
+    const state=this.cinemaTracking,step=Math.min(.1,Math.max(0,dt));
+    const direction=state.direction.clone().applyAxisAngle(new T.Vector3(0,1,0),this.orbit.x);
+    direction.y=Battle.clamp(direction.y+this.orbit.y*.4,.15,.8);direction.normalize();
+    const right=new T.Vector3().crossVectors(direction,new T.Vector3(0,1,0)).normalize();
+    const up=new T.Vector3().crossVectors(right,direction).normalize();
+    const tan=Math.tan(this.framingFov*Math.PI/360),aspect=this.framingAspect;
+    const subjects=paired?[a,b]:[a],radius=100;
+    let distance=360*Math.max(1,1/aspect);
+    for(const point of subjects){
+      const v=point.clone().sub(center),depth=v.dot(direction);
+      distance=Math.max(distance,depth+radius+(Math.abs(v.dot(right))+radius)/(tan*aspect*.8),depth+radius+(Math.abs(v.dot(up))+radius)/(tan*.78));
+    }
+    distance*=Math.max(.8,this.zoom);
+    if(snap){state.center.copy(center);state.offset.copy(direction).multiplyScalar(distance);}
+    else if(step>0){
+      // Translate with the engagement; ease reframing independently of ship bank.
+      state.center.add(center.clone().sub(state.previousCenter)).lerp(center,1-Math.exp(-step*1.6));
+      const current=state.offset.clone().normalize(),angle=current.angleTo(direction);
+      const rotation=this.camera.quaternion.clone().setFromUnitVectors(current,direction);
+      rotation.slerp(this.camera.quaternion.clone().identity(),1-Math.min(1,step*Math.PI/10/Math.max(angle,1e-6)));
+      const length=state.offset.length()+(distance-state.offset.length())*(1-Math.exp(-step*.9));
+      state.offset.copy(current.applyQuaternion(rotation)).multiplyScalar(Math.max(110,length));
+    }
+    state.previousCenter.copy(center);
+    target.copy(state.center);position.copy(target).add(state.offset);
+    this.camera.up.set(0,1,0);
   }
   trackGameplayCamera(position,dt,snap=false){
-    if(this.sim.replayShot||this.sim.result||!['chase','cinematic'].includes(this.mode)){this.gameplayCameraOffset=null;return false;}
+    if(this.sim.replayShot||this.sim.result||!['chase','cinematic'].includes(this.mode)||this.mode==='cinematic'&&!this.sim.freeFlight){this.gameplayCameraOffset=null;return false;}
     const ship=this.ships.Enterprise;
-    // Smooth distance and orbit in Enterprise's frame so turns cannot leave
-    // the camera on the wrong side of the ship or looking back at its bow.
-    const offset=position.clone().sub(ship.position).applyQuaternion(ship.quaternion.clone().invert());
-    if(snap||!this.gameplayCameraOffset)this.gameplayCameraOffset=offset;
-    else this.gameplayCameraOffset.lerp(offset,1-Math.exp(-dt*5));
-    this.camera.position.copy(this.gameplayCameraOffset).applyQuaternion(ship.quaternion).add(ship.position);
+    const frame=this.levelChaseRotation();
+    const offset=position.clone().sub(ship.position).applyQuaternion(frame.clone().invert());
+    if(snap||!this.gameplayCameraOffset){this.gameplayCameraOffset=offset;this.gameplayCameraRotation=frame;}
+    else{
+      this.gameplayCameraOffset.lerp(offset,1-Math.exp(-dt*3));
+      this.gameplayCameraRotation??=frame.clone();
+      this.gameplayCameraRotation.slerp(frame,1-Math.exp(-dt*2));
+    }
+    if(this.gameplayCameraOffset.length()<110)this.gameplayCameraOffset.setLength(110);
+    this.camera.position.copy(this.gameplayCameraOffset).applyQuaternion(this.gameplayCameraRotation).add(ship.position);
+    this.camera.up.set(0,1,0);
     return true;
   }
   replayDamageDirection(ship,hit,preferred,distance){
@@ -963,7 +995,7 @@ window.BattleScene=class{
   }
   event(event){
     const T=this.T;
-    if(event.type==='station-impact'||event.type==='station-collision'||event.type==='ship-collision'){this.burst(new T.Vector3(event.pos.x,event.pos.y,event.pos.z),0xffc486,30);if(event.ship==='Enterprise')this.shake=.35;}
+    if(event.type==='station-impact'||event.type==='station-collision'||event.type==='ship-collision'){this.burst(new T.Vector3(event.pos.x,event.pos.y,event.pos.z),0xffc486,30);}
     if(event.type==='warp'){
       // Move the viewscreen immediately to the destination instead of flying the camera across the gap.
       this.update(0,true);
@@ -1070,6 +1102,23 @@ window.BattleScene=class{
       }
     });return nearest;
   }
+  addPhaserEmitters(ship){
+    const T=this.T,u=ship.userData,model=u.model;
+    if(u.phaserEmitters)return;
+    const hull=[].concat(u.engineeringHull?.material||[]).find(material=>material.map);
+    const material=new T.MeshStandardMaterial({color:hull?.color.clone()||0xbbc6bf,metalness:hull?.metalness??.4,roughness:hull?.roughness??.55,map:hull?.map||null});
+    const forward=this.phaserEmitter({ship}),aft=this.phaserEmitter({aft:true,ship});
+    u.phaserEmitters=[];
+    for(const [name,point,parent,offset] of [['Forward',forward,u.saucer,.012],['Aft',aft,u.engineeringHull,-.007]]){
+      const nub=new T.Mesh(new T.SphereGeometry(.012,16,12),material);
+      nub.name=name+' phaser emitter';nub.userData.phaserEmitter=name.toLowerCase();
+      nub.position.copy(point);nub.position.y+=offset;
+      model.add(nub);ship.updateMatrixWorld(true);if(parent)parent.attach(nub);
+      u.phaserEmitters.push(nub);
+    }
+    // The aft beam starts just above the exposed tip of its new mount.
+    u.aftPhaserEmitter=aft.clone();u.aftPhaserEmitter.y+=.007;
+  }
   phaserEmitter({aft=false,ship}={}){
     const T=this.T;if(!aft)return new T.Vector3(0,.265,-1.65);
     const u=ship?.userData;if(u?.aftPhaserEmitter)return u.aftPhaserEmitter.clone();
@@ -1084,7 +1133,7 @@ window.BattleScene=class{
   }
   resolveWeaponHit(shooter,target,aim,weapon='phaser',projectilePosition=null,projectileEnd=null){
     const T=this.T,from=this.syncWeaponShip(shooter),to=this.syncWeaponShip(target),model=to.userData.model;
-    const close=this.sim.turnBased&&!this.sim.freeFlight&&['approach','attack','withdraw'].includes(this.sim.turn?.phase)&&(this.sim.turn?.maneuver==='close'||Battle.angle(shooter,target)>(weapon==='phaser'?65:28));
+    const close=this.sim.turnBased&&!this.sim.freeFlight&&['approach','attack','withdraw'].includes(this.sim.turn?.phase)&&(this.sim.turn?.maneuver==='close'||Battle.angle(shooter,target)>65);
     const aft=(shooter.name===this.sim.enemy.name||close)&&Battle.angle(shooter,target)>90;
     const emitter=this.phaserEmitter({aft,ship:from});
     const r=Battle.distance(shooter,target)||1,forward=close?{x:(target.x-shooter.x)/r,y:(target.y-shooter.y)/r,z:(target.z-shooter.z)/r}:Battle.direction(shooter);
@@ -1288,10 +1337,12 @@ window.BattleScene=class{
   glowMap(){if(this.glow)return this.glow;const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d'),g=x.createRadialGradient(32,32,0,32,32,32);g.addColorStop(0,'#fff');g.addColorStop(.1,'#fff');g.addColorStop(.25,'#ffffff90');g.addColorStop(1,'#ffffff00');x.fillStyle=g;x.fillRect(0,0,64,64);return this.glow=this.texture(c);}
   disposeEffect(effect){this.scene.remove(effect.object);effect.object.traverse(o=>{o.geometry?.dispose();if(o.material){for(const m of [].concat(o.material))m.dispose();}});}
   updateStationRotation(){if(this.station)this.station.rotation.y=(this.sim.time||0)*Battle.K7_ROTATION_RATE;}
+  updatePlanetRotation(){if(this.planet)this.planet.rotation.y=((this.sim.time||0)%1200)*Math.PI*2/1200;}
   update(dt,snap=false){
     const T=this.T,sim=this.sim,p=sim.player,e=sim.enemy;this.clock+=dt;
     this.updateStationRotation();
-    if(!sim.replayShot&&this.mode!=='tactical'&&this.camera.zoom!==1){this.camera.zoom=1;this.camera.updateProjectionMatrix();}
+    this.updatePlanetRotation();
+    if(!sim.replayShot&&!['tactical','chase','cinematic'].includes(this.mode)&&this.camera.zoom!==1){this.camera.zoom=1;this.camera.updateProjectionMatrix();}
     for(const [name,state] of [['Enterprise',p],['Yorktown',e]]){
       const ship=this.ships[name],pose=sim.replayShot&&sim.replayPoses?.[name]||state;this.syncNacelles(ship,state);this.updateEngineTrails(ship,state);ship.position.set(state.x,state.y,state.z);ship.rotation.order='YXZ';ship.rotation.set(pose.pitch*Math.PI/180,-pose.heading*Math.PI/180,pose.bank||0,'YXZ');
       ship.visible=state.hull>0;const u=ship.userData;
@@ -1308,6 +1359,8 @@ window.BattleScene=class{
       camPos.copy(this.ships.Enterprise.position).add(new T.Vector3(0,30,-90).applyQuaternion(q));targetPos.copy(camPos).addScaledVector(forward,1000);this.ships.Enterprise.visible=false;
     }else if(this.mode==='tactical'){
       this.tacticalCamera(camPos,targetPos);
+    }else if(this.mode==='cinematic'&&!sim.freeFlight&&!sim.result){
+      this.cinemaCamera(camPos,targetPos,dt,snap);
     }else{
       this.chaseCamera(camPos,targetPos);
     }
@@ -1321,16 +1374,16 @@ window.BattleScene=class{
     }
     else if(!sim.replayShot)this.frameCloseEngagement(camPos,targetPos);
     this.trackFreeFlightCamera(camPos,targetPos);
-    if(sim.freeFlight)this.shake=0;
+    if(sim.freeFlight||!sim.replayShot&&!sim.result&&['chase','cinematic'].includes(this.mode))this.shake=0;
     if(sim.replayShot){
       this.gameplayCameraOffset=null;
       this.trackReplayCamera(camPos,targetPos,sim.replayShot.frameDt??dt,snap);
     }else if(!this.trackGameplayCamera(camPos,dt,snap)){
-      if(snap||this.mode==='tactical')this.camera.position.copy(camPos);else this.camera.position.lerp(camPos,1-Math.exp(-dt*5));
+      if(snap||this.mode==='tactical'||this.mode==='cinematic'&&!sim.freeFlight&&!sim.result)this.camera.position.copy(camPos);else this.camera.position.lerp(camPos,1-Math.exp(-dt*5));
     }
     this.shake=Math.max(0,this.shake-dt);if(this.shake>0&&!sim.replayShot)this.camera.position.add(new T.Vector3(Math.sin(this.clock*100),Math.cos(this.clock*119),0).multiplyScalar(this.shake*1.4));
     if(sim.replayShot)this.keepReplayScreenDirection(this.camera.position,targetPos);
-    this.keepCameraOutsidePlanet();this.camera.lookAt(targetPos);this.camera.updateMatrixWorld();this.frameEnterpriseLow();this.applyReplayDrift();this.updateRedSun();
+    this.keepCameraOutsidePlanet();this.camera.lookAt(targetPos);this.camera.updateMatrixWorld();this.frameEnterpriseLow(dt,snap);this.applyReplayDrift();this.updateRedSun();
     const active=new Set();for(const t of sim.projectiles){active.add(t.id);let o=this.projectiles.get(t.id);if(!o){o=new T.Sprite(new T.SpriteMaterial({map:this.glowMap(),color:t.from==='Enterprise'?0xffbe77:0xff6555,depthWrite:false,blending:T.AdditiveBlending}));o.scale.setScalar(22);this.scene.add(o);this.projectiles.set(t.id,o);}o.position.set(t.pos.x,t.pos.y,t.pos.z);}
     for(const [id,o] of this.projectiles)if(!active.has(id)){this.scene.remove(o);o.material.dispose();this.projectiles.delete(id);}
     for(const fx of [...this.effects]){

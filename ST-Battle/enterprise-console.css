@@ -1,8 +1,17 @@
 /* Shuttle-console finish: blue Enterprise controls and neutral Yorktown fills. */
 #game-shell>.masthead{
-  background:linear-gradient(110deg,#54a1d613,transparent 78%),linear-gradient(#172a3a,#0a1520);
-  border-bottom-color:#28516c;box-shadow:inset 0 1px #9bdcff18;
+  background:#0b1219;
+  border-bottom-color:#1c2a34;box-shadow:none;
 }
+#game-shell{grid-template-rows:48px minmax(0,1fr)}
+#game-shell>.masthead{height:48px}
+#game-shell .brand{font-size:18px;letter-spacing:3px;color:#c8b08c}
+#game-shell .brand b{font-weight:500}
+#game-shell .brand small{margin-top:3px;letter-spacing:1.7px}
+#game-shell .operation{color:#91a2ac}
+#game-shell .score-strip strong{font-size:15px;font-weight:400;color:#cbb38f}
+#game-shell .header-actions button{color:#aabac3;border-color:#25323b}
+#game-shell .header-actions button:hover{color:#e0e8ec;border-color:#647d88}
 #game-shell main>.enterprise-console{
   --panel:#0a1826;--line:#285572;--cyan:#6bcaff;--amber:#ffc769;--text:#fff;--muted:#fff;
   color:var(--text);border-color:#24465e;border-top-color:#478ab4;border-radius:10px;

@@ -4,7 +4,7 @@
   class ReplayView{
     constructor(sim,options){
       this.sim=sim;this.options=options;this.active=false;this.$=id=>document.getElementById(id);this.dialog=this.$('replay-dialog');
-      for(const id of ['replay-last-pass','replay-review','replay-result'])this.$(id).onclick=()=>this.open();
+      for(const id of ['replay-last-pass','replay-result'])this.$(id).onclick=()=>this.open();
       this.$('replay-download').onclick=()=>{if(this.exporter)this.cancelExport();else this.download();};
       this.$('replay-record-hd').onclick=()=>this.replayHD();
       this.$('replay-close').onclick=()=>this.close();this.$('replay-restart').onclick=()=>{if(!this.exporter)this.restart();};
@@ -94,7 +94,7 @@
       this.$('replay-progress').value=p.ended?100:selected?elapsed/selected*100:100;
       this.$('replay-play').textContent=p.ended?'PLAY AGAIN':p.paused?'RESUME':'PAUSE';this.$('replay-play').setAttribute('aria-pressed',String(!p.paused&&!p.ended));
     }
-    refresh(){for(const id of ['replay-last-pass','replay-review','replay-result'])this.$(id).disabled=!this.sim.lastReplay?.frames.length||this.active;}
+    refresh(){for(const id of ['replay-last-pass','replay-result'])this.$(id).disabled=!this.sim.lastReplay?.frames.length||this.active;}
   }
   window.BattleReplayView=ReplayView;
 })();

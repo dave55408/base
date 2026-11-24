@@ -1,14 +1,15 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-function fixture({blocked=false,random=()=>0}={}){
+function fixture({blocked=false,random=()=>0,now=()=>0}={}){
+  let blockedPlays=blocked?2:0;
   const players=[],introMusic=[];
   class Audio{
     constructor(url){this.url=url;this.plays=0;this.paused=true;(url==='assets/IntroMusic.mp3'?introMusic:players).push(this);}
-    play(){this.plays++;if(blocked){blocked=false;return Promise.reject(Object.assign(new Error('Autoplay blocked'),{name:'NotAllowedError'}));}this.paused=false;return Promise.resolve();}
+    play(){this.plays++;if(blockedPlays>0){blockedPlays--;return Promise.reject(Object.assign(new Error('Autoplay blocked'),{name:'NotAllowedError'}));}this.paused=false;return Promise.resolve();}
     pause(){this.paused=true;}
   }
   const c={window:{Audio,BattleVoiceClips:{}}};vm.createContext(c);
   for(const file of ['captain-narration.js','assets/voices/voice-overrides.js'])vm.runInContext(fs.readFileSync(file,'utf8'),c);
-  return {narration:new c.window.BattleCaptainNarration({random}),players,introMusic,window:c.window};
+  return {narration:new c.window.BattleCaptainNarration({random,now}),players,introMusic,window:c.window};
 }
 test('welcome narration plays once, stops when dismissed, respects mute, and resets for a new welcome',async()=>{
   const {narration:n,players}=fixture();
@@ -21,6 +22,28 @@ test('welcome narration plays once, stops when dismissed, respects mute, and res
   n.reset();n.updateWelcome({visible:true,enabled:true});assert.equal(players.length,2);
   n.updateWelcome({visible:true,enabled:false});assert(players[1].paused);
 });
+test('continuing a hidden welcome preserves narration, intro music and the ColdOpen transition',()=>{
+  const {narration:n,players,introMusic}=fixture();
+  n.updateWelcome({visible:false,enabled:true,continueWhenHidden:true});assert.equal(players.length,0,'hidden screens cannot start a new introduction');
+  n.updateWelcome({visible:true,enabled:true,continueWhenHidden:true});
+  n.updateWelcome({visible:false,enabled:true,continueWhenHidden:true});
+  const voice=players[0];assert.equal(voice.paused,false);assert.equal(introMusic[0].paused,false);
+  voice.duration=10;voice.currentTime=8.75;voice.ontimeupdate();
+  assert.equal(players[1].url,'assets/ColdOpenHit.mp3');voice.onended();
+  n.updateWelcome({visible:false,enabled:true,continueWhenHidden:true});assert.equal(players[1].paused,false);
+});
+
+test('Free Flight fade lowers narration and music together, then stops without starting ColdOpen',()=>{
+  let now=0;const {narration:n,players,introMusic}=fixture({now:()=>now});
+  n.updateWelcome({visible:true,enabled:true,continueWhenHidden:true});const voice=players[0],music=introMusic[0];
+  n.fadeWelcome();now=300;n.updateWelcome({visible:false,enabled:true,continueWhenHidden:true});
+  assert.equal(voice.volume,.425);assert.equal(music.volume,.3);assert.equal(voice.paused,false);
+  voice.duration=10;voice.currentTime=9;voice.ontimeupdate();assert.equal(music.volume,.3);assert.equal(players.length,1);
+  n.fadeWelcome();now=600;n.updateWelcome({visible:false,enabled:true,continueWhenHidden:true});
+  assert.equal(voice.paused,true);assert.equal(music.paused,true);assert.equal(n.welcomeAudio,null);
+  n.updateWelcome({visible:false,enabled:true,continueWhenHidden:true});assert.equal(players.length,1);
+});
+
 test('blocked welcome autoplay waits for a user interaction instead of retrying every frame',async()=>{
   const {narration:n,players}=fixture({blocked:true});
   n.updateWelcome({visible:true,enabled:true});await new Promise(setImmediate);assert(players[0].paused);
@@ -29,10 +52,19 @@ test('blocked welcome autoplay waits for a user interaction instead of retrying 
   assert.equal(players.length,2);assert.equal(players[1].paused,false);
 });
 
-test('IntroMusic starts with the narration at sixty percent and stays aligned with its playback',async()=>{
+test('intro music and Declan start together with no scheduled lead-in',()=>{
+  const {narration:n,players,introMusic}=fixture();
+  n.updateWelcome({visible:true,enabled:true,continueWhenHidden:true});
+  assert.equal(introMusic[0].plays,1);assert.equal(introMusic[0].volume,.6);assert.equal(players[0].plays,1);
+  n.updateWelcome({visible:false,enabled:true,continueWhenHidden:true});
+  assert.equal(players[0].plays,1,'closing welcome does not restart narration');
+  n.stopWelcome();assert(players[0].paused);assert(introMusic[0].paused);
+});
+
+test('IntroMusic stays at sixty percent and aligned with narration',async()=>{
   const {narration:n,players,introMusic}=fixture();
   n.updateWelcome({visible:true,enabled:true});
-  assert.equal(players[0].plays,1);assert.equal(introMusic[0].plays,1,'both play calls occur in the same interaction');
+  assert.equal(players[0].plays,1);assert.equal(introMusic[0].plays,1);
   const voice=players[0],music=introMusic[0];
   assert.equal(music.url,'assets/IntroMusic.mp3');assert.equal(music.volume,.6);assert.equal(music.loop,false);assert(fs.statSync(music.url).size>1000);
   await new Promise(setImmediate);voice.duration=10;voice.currentTime=3;music.currentTime=1;

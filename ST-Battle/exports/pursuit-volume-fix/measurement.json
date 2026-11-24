@@ -1,0 +1,11 @@
+{
+  "file": "assets/Pursuit course_Allison.mp3",
+  "targetLUFS": -16,
+  "beforeLUFS": -26.52,
+  "afterLUFS": -16,
+  "truePeakDBTP": -4.4,
+  "compressed": true,
+  "bytes": 17492,
+  "playbackVolume": 0.85,
+  "backup": "exports\\pursuit-volume-fix\\Pursuit course_Allison.before.mp3"
+}

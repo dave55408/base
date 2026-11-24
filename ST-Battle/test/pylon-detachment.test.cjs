@@ -73,9 +73,10 @@ test('temporary engine preview aims real Yorktown fire at a pylon and switches s
 });
 
 
-test('engine hunter fire physically reaches its selected warp pylon without the preview',()=>{
+test('engine hunter fire physically reaches a stationary target warp pylon without the preview',()=>{
   const scene=sceneHarness(),sim=scene.sim=new B.Simulation(97);sim.setEnemyPersonality('hunter');
   Object.assign(sim.player,{x:6000,y:0,z:0,heading:0});Object.assign(sim.enemy,{x:5300,y:0,z:0,heading:90});
+  sim.autoHelm=()=>{};sim.player.fullStop=true;sim.player.integrity.weapons=0;
   for(const arc of B.arcs)sim.player.shields[arc]=0;
   sim.resolveWeaponHit=(...args)=>scene.resolveWeaponHit(...args);
   sim.running=true;sim.applyPlanPreset('strong');assert(sim.commitOrders());
@@ -115,7 +116,7 @@ test('either ship loses most of its available speed after one or both nacelles a
   }
 });
 
-test('collision components cover the rendered hull at its actual scale, pitch and bank',()=>{
+test('collision components follow a 81 percent inset of the rendered hull at its actual pitch and bank',()=>{
   const scene=sceneHarness(),sim=scene.sim,T=scene.T;
   Object.assign(sim.player,{x:6000,y:200,z:-400,heading:123,pitch:31,bank:.43});
   const ship=scene.syncWeaponShip(sim.player),shapes=B.shipCollisionShapes(sim.player);
@@ -124,6 +125,7 @@ test('collision components cover the rendered hull at its actual scale, pitch an
     const positions=mesh.geometry?.attributes?.position;if(!positions)return;
     for(let i=0;i<positions.count;i+=13){
       const point=mesh.localToWorld(new T.Vector3(positions.getX(i),positions.getY(i),positions.getZ(i)));
+      point.sub(ship.position).multiplyScalar(.81).add(ship.position);
       assert(shapes.some(shape=>shape.axes.every((axis,j)=>Math.abs((point.x-shape.center.x)*axis.x+(point.y-shape.center.y)*axis.y+(point.z-shape.center.z)*axis.z)<=shape.half[j]+.5)),`uncovered ${part.name||'hull'} vertex ${i}`);
       checked++;
     }

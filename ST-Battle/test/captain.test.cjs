@@ -6,6 +6,32 @@ function duel(range=900){
   Object.assign(s.player,{x:2000,y:0,z:0,heading:0});Object.assign(s.enemy,{x:2000,y:0,z:-range,heading:180});
   ['phaser','phaser','torpedo'].forEach((weapon,i)=>s.updateStep(i,{weapon,target:'hull',range:1000}));s.commitOrders();return s;
 }
+test('a healthier Yorktown pursues and fires during Enterprise repair withdrawal within its normal salvo',()=>{
+  const s=new B.Simulation(97);s.running=true;s.selectManeuver('flee');
+  Object.assign(s.player,{x:6000,y:0,z:0,heading:0,hull:60});Object.assign(s.enemy,{x:6000,y:0,z:-900,heading:180});
+  assert(s.commitOrders());assert.equal(s.turn.phase,'withdraw');assert(s.enemyPursuesRepairs());
+  s.enemyRetreating=true;s.enemyMind.reengageUntil=30;
+  let pursued=false;const adjust=s.adjustFlightSpeed.bind(s);
+  s.adjustFlightSpeed=(ship,target,aim,options,dt)=>{if(ship===s.enemy&&options.mode==='pursuit')pursued=true;return adjust(ship,target,aim,options,dt);};
+  for(let i=0;i<60&&!s.result;i++)s.tick(.1);
+  assert(pursued);assert.equal(s.enemyRetreating,false);assert.equal(s.enemy.tactic,'PURSUING REPAIR WITHDRAWAL');
+  assert(s.events.some(event=>event.type==='beam'&&event.from==='Yorktown'),'Yorktown fires instead of waiting for a flank');
+  assert(s.turn.spent.enemy.phaser<=2&&s.turn.spent.enemy.torpedo<=1);
+  assert.equal(s.shots,0,'Enterprise remains on weapons hold while repairing');
+  assert(Math.abs(Object.values(s.enemy.power).reduce((sum,value)=>sum+value,0)-100)<1e-8);
+});
+
+test('repair pursuit requires a real withdrawal, better condition, working weapons and detailed contact',()=>{
+  const s=duel();s.player.hull=60;
+  assert.equal(s.enemyPursuesRepairs(),false,'an attack plan does not trigger the repair pursuit');
+  s.turn.phase='withdraw';assert(s.enemyPursuesRepairs());
+  s.enemy.hull=50;assert.equal(s.enemyPursuesRepairs(),false);
+  s.enemy.hull=100;s.enemy.integrity.weapons=0;assert.equal(s.enemyPursuesRepairs(),false);
+  s.enemy.integrity.weapons=100;s.enemy.integrity.sensors=0;assert.equal(s.enemyPursuesRepairs(),false);
+  s.enemy.integrity.sensors=100;s.player.hull=100;assert.equal(s.enemyPursuesRepairs(),false);
+  s.player.hull=60;s.freeFlight=true;assert.equal(s.enemyPursuesRepairs(),false);
+});
+
 test('Yorktown exploits an observed breach with a torpedo first and aims at vulnerable internal systems',()=>{
   const s=duel();s.player.shields.fore=0;s.player.integrity.weapons=35;
   const plan=s.planEnemy();assert.equal(plan[0].weapon,'torpedo');assert.equal(plan[0].target,'weapons');assert.equal(plan[0].attackArc,'fore');

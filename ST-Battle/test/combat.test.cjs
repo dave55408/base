@@ -98,12 +98,14 @@ test('badly damaged Yorktown breaks off, flees in 3D, and respects engine damage
   assert.equal(Object.values(s.enemy.power).reduce((a,b)=>a+b,0),100);assert.equal(s.enemy.repair,'engines');
   const before=s.range;advance(s,8);assert.ok(s.range>before+100);assert.ok(s.enemy.y>s.player.y);assert.equal(s.shots,0);
   assert.equal(s.log.filter(l=>l.text.includes('attempting to retreat')).length,1);
-  const fast=s.enemy.speed;s.enemy.integrity.engines=0;s.enemy.repairBudget=0;s.tick(.05);assert.ok(s.enemy.speed<fast);
+  const fast=s.enemy.speed;s.enemy.integrity.engines=0;s.enemy.repairBudget=0;
+  // Existing thrust eases away after damage before the heavy hull sheds speed.
+  advance(s,3);assert.ok(s.enemy.speed<fast);
   advance(s,3);assert.equal(s.enemyRetreating,false);assert(s.enemyMind.returnManeuver);assert(s.enemyMind.reengageUntil>s.time);
   s.reset();assert.equal(s.enemyRetreating,false);assert.equal(s.enemy.power.engines,24);
 });
 
-test('emergency warp jumps exactly 30 km along attitude once per engagement',()=>{
+test('emergency warp has five 30 km charges per engagement and reset restores them',()=>{
   for(const [heading,pitch] of [[0,0],[90,30],[350,-45]]){
     const s=new B.Simulation(97,{turnBased:false});assert.equal(s.warp(),false);assert.equal(s.warpUsed,false);
     s.running=true;Object.assign(s.player,{heading,pitch,throttle:40,speed:35});
@@ -112,8 +114,14 @@ test('emergency warp jumps exactly 30 km along attitude once per engagement',()=
     for(const axis of ['x','y','z'])assert.ok(Math.abs(s.player[axis]-from[axis]-d[axis]*3000)<1e-8);
     assert.equal(s.player.heading,heading);assert.equal(s.player.pitch,pitch);assert.equal(s.player.speed,35);assert.equal(s.player.throttle,40);
     assert.deepEqual({x:s.enemy.x,y:s.enemy.y,z:s.enemy.z},enemy);
+    assert.equal(s.warpCharges,4);assert.equal(s.warpUsed,false);
+    for(let remaining=3;remaining>=0;remaining--){
+      const previous={...s.player};assert.equal(s.warp(),true);assert.equal(s.warpCharges,remaining);
+      assert.ok(Math.abs(B.distance(previous,s.player)-3000)<1e-8);
+    }
+    assert.equal(s.warpUsed,true);assert.equal(s.events.filter(event=>event.type==='warp').length,5);
     const destination={x:s.player.x,y:s.player.y,z:s.player.z};assert.equal(s.warp(),false);assert.deepEqual({x:s.player.x,y:s.player.y,z:s.player.z},destination);
-    s.reset();assert.equal(s.warpUsed,false);s.running=true;s.result='victory';assert.equal(s.warp(),false);
+    s.reset();assert.equal(s.warpUsed,false);assert.equal(s.warpCharges,5);s.running=true;s.result='victory';assert.equal(s.warp(),false);assert.equal(s.warpCharges,5);
   }
 });
 

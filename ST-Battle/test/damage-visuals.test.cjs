@@ -27,6 +27,21 @@ test('both ship models have invisible shields, hull contact flashes and scars on
   s.sim={player:{x:0,y:200,z:0},enemy:{x:300,y:0,z:0}};
   for(const name of ['Enterprise','Yorktown']){
     const ship=s.ships[name];assert.equal(ship.userData.shield,undefined);assert.equal(ship.userData.shell,undefined);assert(ship.children.every(child=>child===ship.userData.model),'no protective sphere exists outside the hull model');
+    const emitters=ship.userData.phaserEmitters;assert.equal(emitters.length,2);
+    const hullMaterial=[].concat(ship.userData.engineeringHull.material).find(material=>material.map);
+    for(const emitter of emitters){
+      emitter.geometry.computeBoundingSphere();assert(Math.abs(emitter.geometry.boundingSphere.radius-.012)<1e-6,'nubs have half their previous radius');
+      assert.equal(emitter.material.color.getHex(),hullMaterial.color.getHex());
+      assert.equal(emitter.material.map,hullMaterial.map);assert.equal(emitter.material.metalness,hullMaterial.metalness);assert.equal(emitter.material.roughness,hullMaterial.roughness);
+    }
+    assert.equal(emitters[0].parent,ship.userData.saucer);assert.equal(emitters[1].parent,ship.userData.engineeringHull);
+    ship.updateMatrixWorld(true);
+    for(const [index,aft] of [false,true].entries()){
+      const center=ship.userData.model.worldToLocal(emitters[index].getWorldPosition(new T.Vector3())),origin=s.phaserEmitter({aft,ship});
+      assert(Math.abs(center.x-origin.x)<1e-6&&Math.abs(center.z-origin.z)<1e-6,'beam aligns with its visible nub');
+      assert(Math.abs(center.y-origin.y)<.031);
+    }
+    s.addPhaserEmitters(ship);assert.equal(ship.userData.phaserEmitters.length,2);
     let contact;s.burst=position=>{contact=position.clone();};
     const hit={point:{x:0,y:.265,z:-1.65},normal:{x:0,y:-1,z:0}};
     s.event({type:'impact',ship:name,weapon:'phaser',hullDamage:0,shieldDepleted:false,hit});

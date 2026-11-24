@@ -5,3 +5,12 @@ Rate: 0; source volume: 100. MP3 loudness: -18 LUFS, true peak limit -2 dBTP.
 allison-direct-hit-synth.mp3: Direct hit to Yorktown!
 allison-port-engine-lost-synth.mp3: We've lost the port engine!
 allison-starboard-engine-lost-synth.mp3: We've lost the starboard engine!
+allison-yorktown-missed-synth.mp3: Yorktown missed!
+
+Yorktown missed tuning: pitch matched to the median of five Allison reference
+clip medians (~239 Hz); tempo 1.25x with vowel formants preserved; -16 LUFS,
+true peak limit -2 dBTP. Other synthesized reports retain the settings above.
+Measurements only; no listening evaluation was available in this session.
+Reproduce: node exports/tune-allison-synthesis.cjs --apply
+Original synthesis: exports/allison-yorktown-missed-original.mp3
+Measurement report: exports/allison-synthesis-comparison.json

@@ -111,7 +111,7 @@
    }
   }
   root.userData={model,hd:true,engineeringHull:find('secondary-hull'),saucer:find('movie-saucer'),nacelles:{port:find('port-movie-nacelle'),starboard:find('starboard-movie-nacelle')},detachedVisuals:new Set(),scars:[],mountScars:{},engineGlows:[],damageGlows:[],breakupParts:[find('reference-saucer-assembly'),find('reference-engineering-assembly'),...pylons,find('port-movie-nacelle'),find('starboard-movie-nacelle')].filter(Boolean)};
-  root.userData.trails=scene.makeEngineTrails(model);return root;
+  scene.addPhaserEmitters(root);root.userData.trails=scene.makeEngineTrails(model);return root;
  }
  window.BattleReplayHD={load,createShip};
 })();

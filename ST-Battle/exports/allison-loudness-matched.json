@@ -258,11 +258,11 @@
     {
       "file": "assets/Pursuit course_Allison.mp3",
       "targetLUFS": -16,
-      "beforeLUFS": -26.98,
+      "beforeLUFS": -26.52,
       "afterLUFS": -16,
-      "truePeakDBTP": -4.53,
+      "truePeakDBTP": -4.4,
       "compressed": true,
-      "bytes": 17636
+      "bytes": 17492
     },
     {
       "file": "assets/Shields down to [X] percent!_Allision.mp3",

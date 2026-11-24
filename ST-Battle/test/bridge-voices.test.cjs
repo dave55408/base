@@ -62,11 +62,11 @@ test('Allison plays That might be hard followed by Ill try sequentially and can 
   h.tick(1);assert.equal(h.players[1].url,'try.mp3');h.players[1].onended();assert.equal(completed,1);
   h.voice.play(response);h.players[2].onended();h.voice.stop();h.tick(200);assert.equal(h.players.length,3);
 });
-test('local helm selections use the seven Allison exceptions and Erica for the other 22 phrases',async()=>{
+test('local helm selections use the eight Allison exceptions and Erica for the other 21 phrases',async()=>{
   const context={window:{BattleVoiceClips:{'captain\nAttack run.':'declan.mp3'}}};
   vm.runInNewContext(await fs.readFile(path.join(__dirname,'../assets/voices/voice-overrides.js'),'utf8'),context);
   const selections=context.window.BattleVoiceClips;
-  const exceptions=new Set(['Coming to port.','Coming to starboard.','Climbing.','Descending.','Moving astern.','Making for cover.','Pursuit course.']);
+  const exceptions=new Set(['Coming to port.','Coming to starboard.','Climbing.','Descending.','Moving astern.','Making for cover.','Pursuit course.','Torpedo incoming!']);
   let count=0;
   for(const {role,text} of catalog.lines())if(role==='helm'){
     const file=selections[role+'\n'+text];
@@ -82,7 +82,8 @@ test('local helm selections use the seven Allison exceptions and Erica for the o
   }
   assert.equal(captainCount,14);
   for(const [key,file] of Object.entries(selections)){
-    assert(!file.includes('-synth.mp3'),key);
+    if(['allison\nYorktown missed!','helm\nYorktown missed!'].includes(key))assert.equal(file,'assets/voices/allison-yorktown-missed-synth.mp3');
+    else assert(!file.includes('-synth.mp3'),key);
     assert((await fs.stat(path.join(__dirname,'..',file))).size>0,key);
   }
   for(const role of ['allison','helm'])for(const text of ['We missed!',"They're out of range.","They're back in range.",'Direct hit to Yorktown!',"We've lost the port engine!","We've lost the starboard engine!"]){

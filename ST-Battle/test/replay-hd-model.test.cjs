@@ -35,6 +35,7 @@ test('HD import preserves composed hull and window shaders, including on detache
 
 test('HD aft phasers mount just above the actual rear engineering hull and update legacy replay origins',async()=>{
  const scene=await modelScene(),T=scene.T,ship=scene.ships.Yorktown,model=ship.userData.model,emitter=scene.phaserEmitter({aft:true,ship});
+ for(const name of ['Enterprise','Yorktown'])assert.equal(scene.ships[name].userData.phaserEmitters.length,2,'HD ships also carry the visible emitter nubs');
  assert.equal(emitter.x,0);assert(emitter.z>-.3&&emitter.z<0,'HD emitter is on the aft lower hull instead of beyond the stern');assert(emitter.y>0&&emitter.y<.25);
  ship.updateMatrixWorld(true);const top=model.localToWorld(emitter.clone().add(new T.Vector3(0,.1,0))),below=model.localToWorld(emitter.clone().add(new T.Vector3(0,-.05,0))),surface=scene.traceHull(ship,top,below,{camera:true});assert(surface);
  assert(Math.abs(model.worldToLocal(surface.point.clone()).y+.002-emitter.y)<1e-5);
