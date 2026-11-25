@@ -1,0 +1,46 @@
+const assert=require('node:assert/strict'),path=require('node:path');
+const {chromium}=require(require.resolve('playwright',{paths:[path.resolve(__dirname,'../../elf-adventure')]})),server=require('../server.cjs');
+(async()=>{
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));let browser;
+  try{
+    browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
+    const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+    await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>!!window.battleScene);
+    await page.click('#plan-attack');await page.waitForSelector('#plan-wizard[open]');
+    assert.equal(await page.locator('#done-maneuvers').count(),0);
+    assert.equal(await page.locator('#wizard-apply').isVisible(),false);
+    await page.click('#preset-strong');
+    await page.evaluate(()=>{window.battle.openingApproach=false;});
+    await page.click('#wizard-commit');
+    await page.evaluate(()=>{window.battle.running=false;});
+    await page.click('#open-planner');await page.waitForSelector('#plan-wizard[open]');
+    assert.equal(await page.locator('#wizard-commit').isVisible(),true);assert.equal(await page.locator('#wizard-commit').isDisabled(),true);assert.equal(await page.locator('#save-plan-step').isVisible(),false);assert.equal(await page.locator('#commit-orders').count(),0);
+    for(const id of ['maneuver-step','preset-strong','choose-phaser','choose-torpedo','attack-range','attack-maneuver-0','attack-maneuver-1'])assert.equal(await page.locator('#'+id).isDisabled(),true,id);
+    await page.click('#plan-step-1');await page.click('#target-bridge');
+    const before=await page.evaluate(()=>({target:window.battle.turn.orders[1].target,routes:[...window.battle.turn.maneuvers]}));
+    await page.screenshot({path:path.resolve(__dirname,'../exports/planner-target-only.png')});
+    await page.click('#wizard-apply');
+    assert.equal(await page.evaluate(()=>window.battle.turn.orders[1].target),before.target);
+    assert.equal(await page.locator('#plan-wizard').evaluate(dialog=>dialog.open),true);
+    assert.equal(await page.locator('#wizard-commit').isDisabled(),false);
+    const commit=await page.locator('#wizard-commit').boundingBox(),apply=await page.locator('#wizard-apply').boundingBox();
+    assert(commit.x>apply.x,'Commit is the lower-right action after Apply');
+    await page.screenshot({path:path.resolve(__dirname,'../exports/planner-applied-changes.png')});
+    await page.click('#wizard-commit');
+    assert.equal(await page.evaluate(()=>window.battle.turn.orders[1].target),'bridge');
+    assert.deepEqual(await page.evaluate(()=>window.battle.turn.maneuvers),before.routes);
+    await page.evaluate(()=>{window.battle.finishPass();});
+    await page.click('#open-planner');await page.click('#preset-berserk');
+    assert.equal(await page.locator('#wizard-apply').isVisible(),false);
+    await page.click('#plan-step-1');assert.equal(await page.locator('#attack-range').isDisabled(),false);
+    await page.click('#wizard-commit');
+    assert.equal(await page.evaluate(()=>window.battle.turn.number),2);
+    await page.evaluate(()=>window.battle.finishPass());
+    await page.waitForFunction(()=>!document.getElementById('commit-next-turn').disabled);
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'commit-next-turn');
+    assert.equal(await page.getAttribute('#commit-next-turn','data-next-action'),'true');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(()=>window.battle.turn.number),3);assert.equal(await page.locator('#plan-wizard').evaluate(dialog=>dialog.open),false);assert.deepEqual(errors,[]);
+    console.log('Initial and between-turn plans commit directly; live targets require Apply then Commit.');
+  }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}
+})().catch(error=>{console.error(error);process.exitCode=1;});

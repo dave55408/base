@@ -3,6 +3,25 @@ const B=require('../engine.js'),Warnings=require('../bridge-warnings.js');
 function harness(){const sim=new B.Simulation(97),warnings=new Warnings();sim.running=true;warnings.update(sim);return {sim,warnings};}
 const labels={fore:'Foreward',aft:'Aft',starboard:'Starboard',port:'Port',dorsal:'Dorsal',ventral:'Ventral'};
 const hit=arc=>({type:'impact',ship:'Enterprise',arc,amount:15,hullDamage:0});
+test('Allison announces a sustained loss of an acquired weapon lock and drops a stale report',()=>{
+  const {sim,warnings}=harness();sim.turn.phase='attack';sim.player.x=sim.enemy.x;sim.player.heading=0;sim.player.pitch=0;
+  warnings.update(sim);assert(sim.lock);
+  sim.player.heading=180;sim.time=1;assert(!warnings.update(sim).some(line=>line.text==="Weapon's lock lost."));
+  sim.time=1.4;const line=warnings.update(sim).find(line=>line.text==="Weapon's lock lost.");assert(line);assert.equal(line.speaker,'allison');assert(line.valid());
+  assert(!warnings.update(sim).some(line=>line.text==="Weapon's lock lost."),'do not repeat while lock remains lost');
+  sim.player.heading=0;assert.equal(line.valid(),false);warnings.update(sim);
+  sim.player.heading=180;sim.time=2;warnings.update(sim);sim.player.heading=0;sim.time=2.2;warnings.update(sim);sim.time=3;
+  assert(!warnings.update(sim).some(line=>line.text==="Weapon's lock lost."),'brief lock flicker is ignored');
+});
+
+test('the lock-loss callout ignores an initial lack of lock, planning and Free Flight',()=>{
+  const {sim,warnings}=harness();sim.turn.phase='attack';sim.player.heading=180;warnings.update(sim);sim.time=1;
+  assert(!warnings.update(sim).some(line=>line.text==="Weapon's lock lost."));
+  sim.turn.phase='planning';sim.player.heading=0;warnings.update(sim);sim.player.heading=180;sim.time=2;warnings.update(sim);sim.time=3;
+  assert(!warnings.update(sim).some(line=>line.text==="Weapon's lock lost."));
+  sim.freeFlight=true;assert.deepEqual(warnings.update(sim),[]);
+});
+
 test('each shield facing uses the matching hit and critical recordings, with critical taking precedence',()=>{
   for(const [arc,label] of Object.entries(labels)){
     const {sim,warnings}=harness();sim.player.shields[arc]=80;

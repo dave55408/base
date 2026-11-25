@@ -5,10 +5,10 @@ function plan(count,route='direct'){
   assert(sim.commitOrders());sim.fire=()=>false;return sim;
 }
 
-test('one, two and three maneuvers execute within the same shared turn window',()=>{
+test('non-Direct maneuvers execute within the same shared turn window',()=>{
   const durations=[];
-  for(const count of [1,2,3]){
-    const sim=plan(count),starts=[{at:sim.time,remaining:sim.turn.remaining}],visited=new Set([0]);assert.equal(sim.turn.remaining,B.TURN.execution/count);
+  for(const count of [1,2]){
+    const sim=plan(count,'flank'),starts=[{at:sim.time,remaining:sim.turn.remaining}],visited=new Set([0]);assert.equal(sim.turn.remaining,B.TURN.execution/count);
     for(let i=0;i<1000&&sim.turn.phase!=='review';i++){
       sim.time+=.05;sim.player.x+=2;sim.advanceTurn(.05);
       if(!visited.has(sim.turn.stageIndex)){visited.add(sim.turn.stageIndex);starts.push({at:sim.time,remaining:sim.turn.remaining});}
@@ -20,7 +20,7 @@ test('one, two and three maneuvers execute within the same shared turn window',(
 });
 
 test('repair maneuvers share the same execution budget instead of adding thirty seconds each',()=>{
-  for(const count of [1,2,3]){const sim=plan(count,'flee');assert.equal(sim.turn.remaining,B.TURN.execution/count);assert.equal(sim.turn.executionDeadline,B.TURN.execution);}
+  for(const count of [1,2]){const sim=plan(count,'flee');assert.equal(sim.turn.remaining,B.TURN.execution/count);assert.equal(sim.turn.executionDeadline,B.TURN.execution);}
 });
 
 test('finishing scheduled attacks early does not prematurely end a normally progressing maneuver',()=>{

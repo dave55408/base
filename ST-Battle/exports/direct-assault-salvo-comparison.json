@@ -1,0 +1,24 @@
+{
+  "before": {
+    "runs": 40,
+    "shots": 2.9,
+    "directShots": 2.88,
+    "combos": 0.05,
+    "hull": 9.08,
+    "firstRange": 6.71,
+    "collisions": []
+  },
+  "after": {
+    "runs": 40,
+    "shots": 2.85,
+    "directShots": 2.83,
+    "combos": 0.53,
+    "hull": 13.13,
+    "firstRange": 9.75,
+    "firsts": 40,
+    "collisions": [
+      5,
+      24
+    ]
+  }
+}

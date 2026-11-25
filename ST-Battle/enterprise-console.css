@@ -1,8 +1,15 @@
 /* Shuttle-console finish: blue Enterprise controls and neutral Yorktown fills. */
+#game-shell{--banner-background:#0b1219}
 #game-shell>.masthead{
-  background:#0b1219;
+  background:var(--banner-background);
   border-bottom-color:#1c2a34;box-shadow:none;
 }
+#game-shell .launch-card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-height:calc(100% - 28px);background:var(--banner-background);backdrop-filter:none}
+#game-shell .launch-card h2{font-family:var(--sans);font-weight:300;letter-spacing:.8px;line-height:1.15}
+/* Keep the welcome card clear while the rest of the bridge recedes. */
+#game-shell:has(#launch-card:not([hidden]))>.masthead,
+#game-shell:has(#launch-card:not([hidden])) main>:not(#battle-screen),
+#game-shell #battle-screen:has(>#launch-card:not([hidden]))>:not(#launch-card){filter:brightness(.35)}
 #game-shell{grid-template-rows:48px minmax(0,1fr)}
 #game-shell>.masthead{height:48px}
 #game-shell .brand{font-size:18px;letter-spacing:3px;color:#c8b08c}
@@ -68,6 +75,9 @@
 #game-shell .view-bottom .commit-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px;--amber:#ffc769}
 #game-shell .view-bottom .commit-actions button{font:10px var(--mono);padding:8px 10px;margin:0;white-space:nowrap}
 #game-shell .view-bottom .commit-actions #random-turn{display:flex;align-items:center;justify-content:center;gap:6px}
+#game-shell .view-bottom .commit-actions #random-selection{display:flex;align-items:center;justify-content:center;gap:6px;color:var(--amber)}
+#game-shell .view-bottom .commit-actions #random-selection[aria-checked="true"]{background:#3a2c19;border-color:var(--amber);color:#ffe0a6;box-shadow:inset 0 0 0 1px var(--amber)}
+#random-selection:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
 #game-shell .view-bottom .flight-mode-actions button{
   background:#24282d;color:#ffc769;border:1px solid #62676e;border-radius:3px;
   box-shadow:none;text-shadow:none;
@@ -81,6 +91,7 @@
 }
 #game-shell .view-bottom .flight-mode-actions button:active:not(:disabled){background:#1c2025;box-shadow:none}
 #game-shell .view-bottom .flight-mode-actions button:focus-visible{outline-color:#ffc769}
+#game-shell .view-bottom #commit-next-turn[data-next-action="true"]{background:#edba7c;color:#21190e;border-color:#ffdcaa;font-weight:700;box-shadow:0 0 8px #ffc76926}
 #game-shell #cameras button[aria-pressed="true"]{background:#273842;color:#c5e7e9;border-color:#506d79}
 
 /* Match the layered fill style while retaining Yorktown's gunmetal palette and controls. */
@@ -93,3 +104,8 @@
   background-image:linear-gradient(110deg,#d0d3d613,transparent 78%),linear-gradient(#2b2e32,#1b1d20);
 }
 #game-shell .yorktown-rail>.panel :is(.target-name,.contact-stats,.target-bars,.enemy-systems,.enemy-damage-body,.yorktown-console-body){background:transparent}
+.integrity-bullet{display:block!important;width:90%;height:7px;margin-top:4px;border:1px solid #559dff;padding:1px;background:transparent;box-sizing:border-box}
+.integrity-bullet>i{display:block;height:100%;width:100%;background:var(--cyan)}
+#game-shell .power-row{row-gap:0}
+#game-shell .power-row>.integrity-bullet{grid-column:1/-1}
+#game-shell .yt-power-controls small{display:block;margin-top:3px;font:7px var(--mono);color:var(--muted)}

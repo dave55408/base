@@ -1,0 +1,76 @@
+[
+  {
+    "variant": "normal",
+    "timings": {
+      "scene": {
+        "ms": 336.1999999731779,
+        "n": 238
+      },
+      "hud": {
+        "ms": 46.300000101327896,
+        "n": 238
+      },
+      "radar": {
+        "ms": 32.199999898672104,
+        "n": 238
+      },
+      "inset": {
+        "ms": 72.30000005662441,
+        "n": 238
+      }
+    },
+    "frames": 238,
+    "medianFrame": 16.69999999999891,
+    "p95Frame": 16.899999999999636,
+    "render": {
+      "frame": 381,
+      "calls": 176,
+      "triangles": 41128,
+      "points": 6000,
+      "lines": 0
+    },
+    "metrics": {
+      "ScriptDuration": 0.616449,
+      "LayoutDuration": 0.070286,
+      "RecalcStyleDuration": 0.876496,
+      "TaskDuration": 2.1109240000000002
+    }
+  },
+  {
+    "variant": "without-controls",
+    "timings": {
+      "scene": {
+        "ms": 462.3999999463558,
+        "n": 213
+      },
+      "hud": {
+        "ms": 76.90000011026859,
+        "n": 213
+      },
+      "radar": {
+        "ms": 26.000000089406967,
+        "n": 213
+      },
+      "inset": {
+        "ms": 59.099999874830246,
+        "n": 213
+      }
+    },
+    "frames": 213,
+    "medianFrame": 16.69999999999891,
+    "p95Frame": 33.30000000000109,
+    "render": {
+      "frame": 391,
+      "calls": 178,
+      "triangles": 65320,
+      "points": 6000,
+      "lines": 0
+    },
+    "metrics": {
+      "ScriptDuration": 0.822273,
+      "LayoutDuration": 0.034654,
+      "RecalcStyleDuration": 0.304926,
+      "TaskDuration": 1.556557
+    }
+  }
+]

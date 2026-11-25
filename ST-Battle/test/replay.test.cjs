@@ -58,10 +58,10 @@ test('weapon replay cameras include both ships and destruction uses a fixed wrec
   scene.sim.replayShot.destructionElapsed=5;scene.sim.replayShot.screenAt=15;scene.replayCamera(camera,target);
   assert.deepEqual(Array.from(target.toArray()),[300,100,-1000]);assert.equal(camera.distanceTo(target),near,'finale holds the camera instead of pulling back');
 });
-test('flight recorder captures the entire three-maneuver pass, projectiles, and each combat event once',()=>{
-  const s=pass(),r=s.lastReplay;assert(r);assert.equal(s.turn.phase,'review');assert.equal(r.pass,1);assert.deepEqual(r.maneuvers,['direct','direct','direct']);
+test('flight recorder captures the entire two-maneuver pass, projectiles, and each combat event once',()=>{
+  const s=pass(),r=s.lastReplay;assert(r);assert.equal(s.turn.phase,'review');assert.equal(r.pass,1);assert.deepEqual(r.maneuvers,['direct','direct']);
   assert.equal(r.frames[0].at,0);assert.equal(r.frames.at(-1).at,r.duration);assert(r.duration>3);
-  assert.deepEqual([...new Set(r.frames.map(f=>f.stageIndex))],[0,1,2]);
+  assert.deepEqual([...new Set(r.frames.map(f=>f.stageIndex))],[0,1]);
   assert.equal(r.events.filter(v=>v.event.type==='beam'&&v.event.from==='Enterprise').length,2);assert.equal(r.events.filter(v=>v.event.type==='launch').length,1);
   assert(r.events.some(v=>v.event.type==='impact'));assert(r.frames.some(f=>f.projectiles.length));
   for(let i=1;i<r.frames.length;i++)assert(r.frames[i].at>r.frames[i-1].at);

@@ -10,3 +10,8 @@ Direct Hit! 1s
 I'll do what I can... 1s
 We took a direct hit! 1s
 We're losing power. 1s
+
+Declan: Let's grab this opportunity. Fire!
+
+Declan: Come about.
+Allison: Weapon's lock lost.

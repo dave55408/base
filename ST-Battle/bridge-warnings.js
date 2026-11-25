@@ -1,7 +1,7 @@
 /* State changes and confirmed Enterprise impacts drive Erica's damage reports. */
 (function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory();else root.BattleBridgeWarnings=factory();})(typeof window==='object'?window:globalThis,()=>class{
   constructor(){this.reset();}
-  reset(){this.player=null;this.latched=new Set();this.recent=new Map();this.hits=[];this.rangeArmed=false;this.rangeInitialized=false;this.rangeDeparted=false;}
+  reset(){this.player=null;this.latched=new Set();this.recent=new Map();this.hits=[];this.rangeArmed=false;this.rangeInitialized=false;this.rangeDeparted=false;this.weaponLocked=null;this.lockLostAt=null;}
   update(sim,events=[],maxRange=1900){
     const p=sim.player;
     if(this.player!==p){this.reset();this.player=p;}
@@ -15,6 +15,18 @@
       if(active&&!this.latched.has(key)){this.latched.add(key);emit(key,text,priority,()=>this.conditions(sim)[key]);}
       else if(recovered)this.latched.delete(key);
     };
+    const tracking=sim.enemy.hull>0&&sim.maneuvering;
+    if(tracking){
+      if(sim.lock){this.weaponLocked=true;this.lockLostAt=null;}
+      else{
+        if(this.weaponLocked===true)this.lockLostAt=now;
+        this.weaponLocked=false;
+        if(this.lockLostAt!==null&&now-this.lockLostAt>=.35){
+          emit('weapon-lock-lost',"Weapon's lock lost.",3,()=>sim.running&&!sim.freeFlight&&!sim.result&&sim.maneuvering&&sim.enemy.hull>0&&!sim.lock,20,'allison');
+          this.lockLostAt=null;
+        }
+      }
+    }else{this.weaponLocked=null;this.lockLostAt=null;}
     const range=sim.range;
     if(!this.rangeInitialized){this.rangeArmed=range<=maxRange;this.rangeInitialized=true;}
     if(range<=maxRange-50){

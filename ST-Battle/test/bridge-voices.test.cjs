@@ -77,6 +77,7 @@ test('local helm selections use the eight Allison exceptions and Erica for the o
   let captainCount=0;
   for(const {role,text} of catalog.lines())if(role==='captain'){
     const file=selections[role+'\n'+text];
+    if(["Let's grab this opportunity. Fire!","Come about."].includes(text)){assert.equal(file,undefined,'the new recording is pending; do not point at a nonexistent asset');continue;}
     assert.equal(file,'assets/'+text.replace(/\.$/,'')+'_Declan.mp3');
     assert((await fs.stat(path.join(__dirname,'..',file))).size>0);captainCount++;
   }

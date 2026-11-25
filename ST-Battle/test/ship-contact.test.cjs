@@ -29,6 +29,22 @@ test('vertically separated ships can pass closer than 100 units without a phanto
   for(const [i,ship] of [s.player,s.enemy].entries())for(const axis of ['x','y','z'])assert.equal(ship[axis],positions[i][axis]);
 });
 
+test('head-on contact absorbs closing momentum instead of sending the ships bouncing backward',()=>{
+  const s=duel();s.player.speed=100;s.enemy.speed=100;
+  const headings=[s.player.heading,s.enemy.heading];s.resolveShipCollision();
+  assert(s.player.speed<1e-8&&s.enemy.speed<1e-8,'equal opposing motion is absorbed');
+  assert.equal(s.player.heading,headings[0]);assert.equal(s.enemy.heading,headings[1]);
+  assert.equal(B.shipContact(s.player,s.enemy),null);
+});
+
+test('glancing contact retains sideways drift while cancelling relative closing motion',()=>{
+  const s=duel();s.player.flightVelocity={x:40,y:0,z:-100};s.player.speed=Math.hypot(40,100);
+  s.resolveShipCollision();
+  assert(Math.abs(s.player.flightVelocity.x-40)<1e-8,'sideways momentum remains a slide');
+  assert(Math.abs(s.player.flightVelocity.z-s.enemy.flightVelocity.z)<1e-8,'the hulls do not spring apart');
+  assert(s.player.flightVelocity.z<=0,'Enterprise does not bounce backward');
+});
+
 test('approaching through the contact margin still emits the first collision sound cue',()=>{
   for(const freeFlight of [true,false]){
     const s=duel();s.freeFlight=freeFlight;Object.assign(s.enemy,{x:6066,y:0,z:0,heading:0});
@@ -83,5 +99,13 @@ test('Free Flight and combat clear Enterprise without moving Yorktown',()=>{
     const s=duel();s.freeFlight=freeFlight;const before={...s.enemy};
     s.resolveShipCollision();assert(s.shipsTouching);assert.equal(B.shipContact(s.player,s.enemy),null);
     for(const axis of ['x','y','z'])assert.equal(s.enemy[axis],before[axis]);
+  }
+});
+
+test('collision events distinguish a committed ram from an accidental contact',()=>{
+  for(const deliberate of [false,true]){
+    const s=duel();s.turnBased=true;s.turn.phase='attack';s.turn.maneuver=deliberate?'ram':'direct';s.turn.remaining=10;s.turn.navigation={rammed:false};
+    s.resolveShipCollision();
+    assert.equal(s.events.find(event=>event.type==='ship-collision').intentional,deliberate);
   }
 });

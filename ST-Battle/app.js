@@ -4,11 +4,11 @@
   // Temporary visual test: Yorktown targets both pylons until both nacelles break off.
   const NACELLE_BREAKOFF_PREVIEW=false;sim.previewNacelleBreakoff=NACELLE_BREAKOFF_PREVIEW;
   const colors={engines:'#d9aa73',shields:'#7bd3da',weapons:'#dd8278',sensors:'#ad9ac9'};
-  const career=loadCareer();let welcomeDismissed=false,resultSaved=false,newBest=false,calloutUntil=0,bestGuessEnabled=false,yorktownStrategyVisible=false,introPlayed=false,voiceStartsAt=0,yorktownStrategyRenderKey='';
+  const career=loadCareer();let welcomeDismissed=false,resultSaved=false,newBest=false,calloutUntil=0,bestGuessEnabled=false,randomSelectionEnabled=false,yorktownStrategyVisible=false,introPlayed=false,voiceStartsAt=0,yorktownStrategyRenderKey='';
   let lastSpokenPhrase='',replayLastSpokenPhrase='',replayVoiceQueue=[],replayVoiceSpeaking=false,replayVoiceGeneration=0,replayReplyAt=0,replayFarewellAt=0,replayVoiceAudio;
   function claimBridgePhrase(words,speaker='helm',clip){
     const phrase=String(words).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-    if(!phrase||phrase===lastSpokenPhrase&&!['torpedo incoming','yorktown missed'].includes(phrase))return false;lastSpokenPhrase=phrase;
+    if(!phrase||phrase===lastSpokenPhrase&&!['scanning','torpedo incoming','we missed','yorktown missed','collision','let s grab this opportunity fire'].includes(phrase))return false;lastSpokenPhrase=phrase;
     const record=sim.replayRecording?.record||(sim.lastReplay?.pass===sim.turn.number?sim.lastReplay:null);
     if(record&&!sim.freeFlight&&!replayView?.active){
       const at=Math.max(0,Math.min(record.duration,sim.time-record.startTime));
@@ -18,7 +18,14 @@
   }
   let bridgeVoiceAudio,engineLossAudio,engineLossCurrent=null,engineLossQueue=[],firingVoice,manualShots=[],helmSpeechGeneration=0,helmSpeaking=false,captainFarewellAt=0;
   const captainNarration=window.BattleCaptainNarration?new window.BattleCaptainNarration():null;
+  function setCrewVoiceDucking(speaking){
+    const gain=window.BattleCrewVoiceGain=speaking ? .2 : 1;
+    for(const audio of [bridgeVoiceAudio?.current,engineLossAudio?.current,replayVoiceAudio?.current,firingVoice?.active,firingVoice?.pending?.audio])if(audio)audio.volume=.85*gain;
+  }
+  const cinemaQAVoice=window.BattleCinemaQAVoice?new window.BattleCinemaQAVoice({onSpeakingChange:setCrewVoiceDucking,getAudioContext:()=>ctx}):null;
+  let welcomeIntroSuppressed=false;
   function updateWelcomeNarration(retry=false){
+    if(welcomeIntroSuppressed||$('briefing').open){captainNarration?.stopWelcome();return;}
     captainNarration?.updateWelcome({visible:!welcomeDismissed&&!sim.running&&!sim.result&&!sim.freeFlight&&!$('launch-card').hidden,enabled:audioOn&&helmSpeechEnabled&&!document.hidden,musicEnabled:audioOn&&!document.hidden,retry,continueWhenHidden:true});
   }
   function loadCareer(){
@@ -49,7 +56,7 @@
   const fmt=n=>Math.round(n),deg=n=>String(Math.round(n)%360).padStart(3,'0')+'°',signed=n=>(n<0?'−':'+')+String(Math.abs(Math.round(n))).padStart(2,'0')+'°';
   const time=t=>String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
   const text=(id,value)=>{const e=$(id);if(e.textContent!==String(value))e.textContent=value;};
-  function toast(message,belowDialogue=false){$('toast').classList.toggle('below-dialogue',belowDialogue);text('toast',message);$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),2800);}
+  function toast(message,belowDialogue=false,duration=2800){$('toast').classList.toggle('below-dialogue',belowDialogue);text('toast',message);$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),duration);}
   function tone(freq,duration=.15,wave='sine',volume=.025,endFreq=freq){if(!audioOn||!ctx)return;const o=ctx.createOscillator(),g=ctx.createGain();o.type=wave;o.frequency.setValueAtTime(freq,ctx.currentTime);o.frequency.exponentialRampToValueAtTime(Math.max(20,endFreq),ctx.currentTime+duration);g.gain.setValueAtTime(volume,ctx.currentTime);g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+duration);o.connect(g).connect(ctx.destination);window.BattleReplayCapture?.trackNode(g,ctx);o.start();o.stop(ctx.currentTime+duration);}
   function syncAudioButton(){
     $('audio').setAttribute('aria-pressed',String(audioOn));
@@ -90,18 +97,27 @@
     weaponAudio?.setEnabled(true);engineAudio?.setEnabled(true);yorktownEngineAudio?.setEnabled(true);redAlertAudio?.setEnabled(true);introAudio?.setEnabled(true);viewscreenAudio?.setEnabled(true);updateViewscreenAudio();
     if(await unlockAudio())tone(550,.18,'sine',.06,750);updateWelcomeNarration(true);
   }
-  document.addEventListener('pointerdown',()=>{if(audioOn)unlockAudio();updateWelcomeNarration(true);},{capture:true});
+  document.addEventListener('pointerdown',e=>{if(['help','welcome-briefing'].includes(e?.target?.id)||e?.target?.closest?.('#help,#welcome-briefing,#briefing')){welcomeIntroSuppressed=true;captainNarration?.stopWelcome();return;}if(audioOn)unlockAudio();updateWelcomeNarration(true);},{capture:true});
+  function integrityChart(ship,key){return `<span class="integrity-bullet" id="${ship}-intact-${key}" role="meter" aria-label="${ship} ${key} integrity" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i id="${ship}-intact-fill-${key}"></i></span>`;}
+  function updateIntegrity(ship,key,value,known=true){
+    const bar=$(ship+'-intact-'+key),fill=$(ship+'-intact-fill-'+key);
+    fill.style.width=known?B.clamp(value)+'%':'0%';
+    fill.style.background=!known?'transparent':value<30?'var(--red)':value<60?'var(--amber)':'var(--cyan)';
+    bar.setAttribute('aria-valuetext',known?fmt(value)+' percent intact':'Integrity unknown');
+    if(known)bar.setAttribute('aria-valuenow',String(B.clamp(value)));else bar.removeAttribute('aria-valuenow');
+    bar.title=known?fmt(value)+'% intact / 100% original integrity':'Integrity unknown';
+  }
   function buildControls(){
     for(const arc of B.arcs){const row=document.createElement('div');row.className='shield-control';row.innerHTML=`<div class="shield-label"><label for="bias-${arc}">${arc==='starboard'?'STBD':arc}</label><b id="shield-${arc}">100%</b></div><input id="bias-${arc}" type="range" min="0" max="100" value="${sim.player.bias[arc]}" aria-label="${arc} shield recharge allocation" title="Share of shield recharge power">`;row.querySelector('input').addEventListener('input',e=>B.redistribute(sim.player.bias,arc,+e.target.value));$('shield-controls').append(row);}
-    for(const key of B.systems){const row=document.createElement('div');row.className='power-row';row.style.setProperty('--system-color',colors[key]);row.innerHTML=`<label for="power-${key}"><span>${key}<small id="integrity-${key}">100% intact</small></span></label><input id="power-${key}" type="range" min="0" max="100" value="${sim.player.power[key]}" aria-label="${key} reactor allocation"><output id="output-${key}"></output>`;row.querySelector('input').addEventListener('input',e=>B.redistribute(sim.player.power,key,+e.target.value));$('power-controls').append(row);const segment=document.createElement('i');segment.id='stack-'+key;segment.style.background=colors[key];$('power-stack').append(segment);}
+    for(const key of B.systems){const row=document.createElement('div');row.className='power-row';row.style.setProperty('--system-color',colors[key]);row.innerHTML=`<label for="power-${key}"><span>${key}<small id="integrity-${key}">100% intact</small></span></label><input id="power-${key}" type="range" min="0" max="100" value="${sim.player.power[key]}" aria-label="${key} reactor allocation"><output id="output-${key}"></output>${integrityChart("enterprise",key)}`;row.querySelector('input').addEventListener('input',e=>B.redistribute(sim.player.power,key,+e.target.value));$('power-controls').append(row);const segment=document.createElement('i');segment.id='stack-'+key;segment.style.background=colors[key];$('power-stack').append(segment);}
     for(const key of ['engines','mainEngines','bridge','sensors']){const row=document.createElement('div');row.innerHTML=`<span>${B.targets[key]}</span><b id="yorktown-system-${key}">UNKNOWN</b>`;$('yt-system-integrity').append(row);}
     for(let i=0;i<12;i++)$('magazine').append(document.createElement('i'));
-    for(const key of B.systems){const row=document.createElement('div');row.style.setProperty('--system-color',colors[key]);row.innerHTML=`<span>${key.toUpperCase()}</span><b id="yt-power-${key}">UNKNOWN</b>`;$('yt-power').append(row);const segment=document.createElement('i');segment.id='yt-stack-'+key;segment.style.background=colors[key];$('yt-power-stack').append(segment);}
+    for(const key of B.systems){const row=document.createElement('div');row.style.setProperty('--system-color',colors[key]);row.innerHTML=`<span>${key.toUpperCase()}<small id="yt-intact-${key}">UNKNOWN</small></span><b id="yt-power-${key}">UNKNOWN</b>${integrityChart("yorktown",key)}`;$('yt-power').append(row);const segment=document.createElement('i');segment.id='yt-stack-'+key;segment.style.background=colors[key];$('yt-power-stack').append(segment);}
     for(const arc of B.arcs){const row=document.createElement('div');row.innerHTML=`<span>${arc.toUpperCase()}</span><b id="yt-shield-${arc}">UNKNOWN</b>`;$('yt-shield-readouts').append(row);}
   }
   function begin(){if(sim.freeFlight)reset();if(sim.result)return;if(!scene){toast('The 3D viewscreen must be available before starting.');return;}sim.running=true;$('start').hidden=true;tone(450,.25,'triangle',.025,880);sim.message('CONN','Engagement underway. Yorktown closing. Helm is yours.');ui();if(sim.turnBased&&!sim.maneuvering&&!sim.planReady())planner.open();}
   function pause(){if(sim.result)return;if(!sim.freeFlight&&!sim.running&&sim.time===0){begin();return;}sim.running=!sim.running;keysClear();ui();}
-  function reset({preserveWelcome=false}={}){welcomeDismissed=false;clearHelm({welcome:!preserveWelcome});if(!preserveWelcome)captainNarration?.reset();introPlayed=false;voiceStartsAt=0;introAudio?.reset();resultSaved=false;newBest=false;calloutUntil=0;$('combat-callout').hidden=true;endingElapsed=0;endingStarted=false;engineAudio?.stop();yorktownEngineAudio?.stop();redAlertAudio?.stop();introAudio?.update({active:false});replayView?.close(false);weaponAudio?.stopAll(.03);sim.reset();sim.previewNacelleBreakoff=NACELLE_BREAKOFF_PREVIEW;sim.previewAttackArc=null;sim.environment=$('environment').value;$('repair-system').value='sensors';scene?.reset();camera('chase');held.clear();keysClear();$('result').hidden=true;$('start').hidden=false;document.querySelectorAll('[data-camera]').forEach(b=>b.classList.toggle('active',b.dataset.camera==='chase'));ui();}
+  function reset({preserveWelcome=false}={}){welcomeDismissed=false;clearHelm({welcome:!preserveWelcome});if(!preserveWelcome){welcomeIntroSuppressed=false;captainNarration?.reset();}introPlayed=false;voiceStartsAt=0;introAudio?.reset();resultSaved=false;newBest=false;calloutUntil=0;$('combat-callout').hidden=true;endingElapsed=0;endingStarted=false;engineAudio?.stop();yorktownEngineAudio?.stop();redAlertAudio?.stop();introAudio?.update({active:false});replayView?.close(false);weaponAudio?.stopAll(.03);sim.reset();sim.previewNacelleBreakoff=NACELLE_BREAKOFF_PREVIEW;sim.previewAttackArc=null;sim.environment=$('environment').value;$('repair-system').value='sensors';scene?.reset();camera('chase');held.clear();keysClear();$('result').hidden=true;$('start').hidden=false;document.querySelectorAll('[data-camera]').forEach(b=>b.classList.toggle('active',b.dataset.camera==='chase'));ui();}
   function keysClear(){for(const k of Object.keys(keys))keys[k]=false;held.clear();}
   function cancelFiringVoice(){firingVoice?.stop();manualShots=[];}
   sim.beforePlayerFire=(type,scheduled)=>{
@@ -114,7 +130,8 @@
     const urgent=sim.player.hull<25||sim.projectiles.some(shot=>shot.target===sim.player.name&&!shot.practice&&Math.hypot(shot.pos.x-sim.player.x,shot.pos.y-sim.player.y,shot.pos.z-sim.player.z)<500);
     const player=sim.player,pass=sim.turn,passNumber=pass.number;
     const ready=()=>sim.running&&!sim.result&&sim.player===player&&sim.turn===pass&&sim.turn.number===passNumber&&(!scheduled||sim.nextOrder()===order)&&sim.status(type,sim.player,sim.enemy,scheduled)==='READY';
-    return firingVoice.prepare({type,order,context:player,urgent,torpedoes:1,beforeStart:title=>claimBridgePhrase(title==='Fire_urgent'?'Fire!':title,'captain','assets/'+title+'.mp3'),execute:()=>{
+    const opportunity=scheduled&&order&&order!==sim.nextPlannedOrder();
+    return firingVoice.prepare({type,order,context:player,urgent,opportunity,torpedoes:1,beforeStart:(title,clip)=>claimBridgePhrase(title==='Fire_urgent'?'Fire!':title,'captain',clip),execute:()=>{
       if(!ready())return false;
       const fired=sim.fire(type,sim.player,sim.enemy,scheduled);
       if(fired&&!scheduled&&manualShots[0]===type)manualShots.shift();
@@ -136,11 +153,33 @@
     if(sim.fire(type,sim.player,sim.enemy,false))manualShots.shift();
   }
   function scan(){if(!sim.scan())toast(sim.player.cooldown.scan>0?'Sensor sweep recharging.':!sim.running?'Engage the simulation first.':'Scan needs operating sensors and 12% capacitor.');}
-  function openHelp(){wasRunning=sim.running;sim.running=false;keysClear();$('briefing').showModal();ui();}
+  function openHelp(){welcomeIntroSuppressed=true;captainNarration?.stopWelcome();wasRunning=sim.running;sim.running=false;keysClear();$('briefing').showModal();ui();}
   function closeHelp(){sim.environment=$('environment').value;$('briefing').close();sim.running=wasRunning;ui();}
   function syncGridButton(){const enabled=!!scene?.spatialEnabled;$('spatial-guides').disabled=!scene||scene.mode==='cinematic';$('spatial-guides').setAttribute('aria-pressed',String(enabled));text('spatial-guides',enabled?'Grid on':'Grid off');}
   function camera(mode){scene?.setCamera(mode);if(scene&&mode==='cinematic')scene.spatialEnabled=false;if(scene&&mode==='tactical')scene.spatialEnabled=true;syncGridButton();$('game-shell').classList.toggle('cinema-view',mode==='cinematic'&&!replayView?.active);document.querySelectorAll('[data-camera]').forEach(b=>b.classList.toggle('active',b.dataset.camera===mode));}
-  function cycleCamera(){const modes=['chase','tactical','forward','cinematic'];camera(modes[(modes.indexOf(scene?.mode)+1)%4]);}
+  function cycleCamera(){const modes=['chase','forward','tactical','cinematic'];camera(modes[(modes.indexOf(scene?.mode)+1)%4]);}
+  for(const mode of ['cautious','reckless'])$('camera-'+mode).onclick=()=>{
+    if(!scene)return;scene.cinemaFlightMode=mode;updateCinemaCameraControls();
+  };
+  $('camera-shuttle-speed').addEventListener('input',event=>{
+    if(!scene)return;const value=Number(event.target.value);
+    if(Number.isFinite(value))scene.cinemaSpeedPercent=B.clamp(value,0,100);
+    updateCinemaCameraControls();
+  });
+  function updateCinemaCameraControls(){
+    const panel=$('cinema-camera-controls'),hidden=scene?.mode!=='cinematic'||!!replayView?.active||!!sim.result||!$('launch-card').hidden;
+    if(panel.hidden!==hidden)panel.hidden=hidden;
+    const attribute=(element,name,value)=>{if(element.getAttribute(name)!==value)element.setAttribute(name,value);};
+    for(const mode of ['cautious','reckless'])attribute($('camera-'+mode),'aria-pressed',String((scene?.cinemaFlightMode||'cautious')===mode));
+    const maximum=125*sim.flightMobility(sim.player)*1.5;
+    const percent=scene?.cinemaSpeedPercent??100,limit=maximum*percent/100,current=sim.running?(scene?.cinemaTracking?.velocity?.length()||0):0;
+    text('camera-shuttle-speed-current',Math.round(current*10)+' M/S'+(current>0&&scene?.cinemaTracking?.reversing?' ASTERN':''));
+    text('camera-shuttle-speed-limit',percent+'% / LIMIT '+Math.round(limit*10)+' M/S');
+    for(const [ship,key] of [[sim.player,'enterprise'],[sim.enemy,'yorktown']])text('camera-'+key+'-speed',Math.round(Math.abs(ship.speed)*10)+' M/S'+(ship.speed<0?' ASTERN':''));
+    const slider=$('camera-shuttle-speed');
+    attribute(slider,'aria-valuetext',percent+' percent of Enterprise maximum');
+    if(document.activeElement!==slider&&slider.value!==String(percent))slider.value=String(percent);
+  }
   buildControls();syncAudioButton();
   try{scene=window.battleScene=new BattleScene($('viewport'),sim);}catch(error){console.error(error);$('viewport').innerHTML='<div class="fallback"><h2>Viewscreen unavailable</h2><p>ST Battle needs WebGL. Enable graphics acceleration in Chrome or Edge, then reload this page.</p></div>';toast('3D renderer could not start.');$('start').disabled=true;}
   window.addEventListener('battle-audio-error',e=>toast(e.detail));
@@ -150,7 +189,8 @@
   $('quick-battle').onclick=quickBattle;$('quick-rematch').onclick=()=>{reset();quickBattle();};
   $('hide-hud-messages').onchange=()=>{if($('hide-hud-messages').checked){$('combat-callout').hidden=true;calloutUntil=0;}};
   $('plan-attack').onclick=begin;
-  $('play-welcome-intro').onclick=()=>{if(!audioOn||!helmSpeechEnabled)return;captainNarration?.reset();updateWelcomeNarration(true);};
+  $('play-welcome-intro').onclick=e=>{e?.preventDefault();if(!audioOn||!helmSpeechEnabled)return;welcomeIntroSuppressed=false;captainNarration?.reset();updateWelcomeNarration(true);};
+  $('welcome-briefing').onclick=e=>{e?.preventDefault();openHelp();};
   $('close-welcome').onclick=()=>{welcomeDismissed=true;ui();$('start').focus();};
   $('yorktown-personality').onchange=e=>{if(!replayView?.active)sim.setEnemyPersonality(e.target.value);ui();};
   $('toggle-yorktown-strategy').onclick=()=>{yorktownStrategyVisible=!yorktownStrategyVisible;ui();};
@@ -191,6 +231,10 @@
   function commitPlan(captain=false){
     if(sim.freeFlight)return false;
     if(!scene){toast('The viewscreen must be available before committing.');return false;}
+    if(planner?.hasAppliedRevision){
+      if(!planner.commitApplied()){toast('These edits are no longer valid. Reopen the planner to review them.');return false;}
+      sim.running=true;sim.captainEnabled=false;keysClear();ui();return true;
+    }
     const previous=sim.running,previousCaptain=sim.captainEnabled;sim.running=true;sim.captainEnabled=captain===true;
     if(!sim.commitOrders()){sim.running=previous;sim.captainEnabled=previousCaptain;toast('Configure three weapon orders before committing.');return false;}
     playIntroCue();
@@ -204,6 +248,10 @@
     if(!canBestGuessTurn()||!sim.bestGuessPlan())return false;
     return commitPlan(true);
   }
+  function randomSelectionTurn(){
+    if(!canBestGuessTurn()||!sim.randomMotionPlan())return false;
+    return commitPlan(false);
+  }
   planner=new window.BattlePlanner(sim,commitPlan,()=>ui());
   replayView=window.battleReplay=new window.BattleReplayView(sim,{
     createScene:(host,state)=>new BattleScene(host,state),stopSound:({music=true}={})=>{stopHelmSpeech();weaponAudio?.stopAll(.03);engineAudio?.stop();yorktownEngineAudio?.stop();redAlertAudio?.stop();if(music)introAudio?.update({active:false});},changed:()=>{keysClear();ui();},error:toast,
@@ -214,16 +262,26 @@
   $('replay-audio').onclick=audio;
 
   $('open-planner').onclick=()=>{sim.captainEnabled=false;keysClear();planner.open();};
+  $('commit-next-turn').onclick=()=>{if(!$('commit-next-turn').disabled)commitPlan();};
+  $('commit-next-turn').addEventListener('keydown',event=>{
+    if(event.key==='Enter'||event.code==='Space')event.stopPropagation();
+  });
   function startFreeFlight(){
     if(!scene)return;
     captainNarration?.fadeWelcome();if(planner.dialog.open)planner.cancel();reset({preserveWelcome:true});sim.startFreeFlight();keysClear();ui();
-    toast('Free Flight: arrows steer, W/S adjust speed. Space stops Enterprise. Yorktown is cruising near K7.');
+    toast('Free Flight: arrows steer, W/S adjust speed. Space stops Enterprise.\nDrag the mouse to adjust the camera; scroll to zoom.\nYorktown is cruising near K7.',false,7000);
   }
-  $('commit-orders').onclick=commitPlan;
   $('random-turn').onclick=()=>{
     if($('random-turn').disabled)return;
     bestGuessEnabled=!bestGuessEnabled;
+    if(bestGuessEnabled)randomSelectionEnabled=false;
     if(bestGuessEnabled&&canBestGuessTurn())bestGuessTurn();
+    ui();
+  };
+  $('random-selection').onclick=()=>{
+    if($('random-selection').disabled)return;
+    randomSelectionEnabled=!randomSelectionEnabled;
+    if(randomSelectionEnabled){bestGuessEnabled=false;if(canBestGuessTurn())randomSelectionTurn();}
     ui();
   };
   $('end-pass').onclick=()=>{
@@ -246,12 +304,14 @@
     // Let Enter activate the focused action through the browser's button behavior.
     // Do not also start an engagement or run the keypad camera shortcut.
     if(['Enter','NumpadEnter'].includes(code)&&(e.target.tagName==='BUTTON'||e.target.closest?.('button')))return;
-    if(['voices-mute','play-welcome-intro'].includes(e.target.id)&&['Space','Enter'].includes(code))return;
+    if(['voices-mute','play-welcome-intro','welcome-briefing','help'].includes(e.target.id)&&['Space','Enter'].includes(code))return;
     if(audioOn&&!e.ctrlKey&&!e.metaKey&&!e.altKey){unlockAudio();updateWelcomeNarration(true);}
     if(code==='KeyF'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)&&!$('plan-wizard').open&&!$('briefing').open){e.preventDefault();if(!e.repeat)toggleFullscreen();return;}
     if(replayView?.active&&!e.ctrlKey&&!e.metaKey&&!e.altKey){if(e.repeat)return;if(code==='Escape'){e.preventDefault();replayView.close();}if(code==='KeyP'||code==='Space'){e.preventDefault();$('replay-play').onclick();}if(code==='KeyR')replayView.restart();if(code==='KeyB')audio();return;}
     if($('plan-wizard').open||$('briefing').open||e.ctrlKey||e.metaKey||e.altKey||(['SELECT','TEXTAREA'].includes(e.target.tagName)||(e.target.tagName==='INPUT'&&e.target.type==='checkbox')))return;
     if(code==='Escape'&&document.fullscreenElement)return;
+    const flightControl=mapping[code]||['KeyR','KeyT','KeyC','NumpadEnter'].includes(code)||code==='Enter'&&e.location===3||code==='Home'&&['attitude','power-dial'].includes(e.target.id)||['PageUp','PageDown'].includes(code)&&e.target.id==='power-dial';
+    if(sim.freeFlight&&!sim.running&&!sim.result&&flightControl&&!['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)&&!e.target.isContentEditable)pause();
     if(code==='Space'){e.preventDefault();if(!e.repeat){keys.more=false;keys.less=false;if(sim.stopEnterprise()){toast('All stop. W/S resumes impulse.');ui();}}return;}
     if(mapping[code]&&(!sim.turnBased||code==='KeyW'||code==='KeyS')){e.preventDefault();keys[mapping[code]]=true;}
     if(code==='KeyR'&&sim.freeFlight){e.preventDefault();if(!e.repeat)fire('phaser');held.add('phaser');}
@@ -260,6 +320,10 @@
       e.preventDefault();keysClear();
       Object.assign(sim.player,{heading:0,pitch:0,bank:0,turnRate:0,pitchRate:0});
       camera('chase');ui();return;
+    }
+    if(code==='KeyN'){
+      if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)||e.target.isContentEditable)return;
+      e.preventDefault();if(sim.skipManeuver()){keysClear();cancelFiringVoice();ui();}return;
     }
     if(code==='KeyD'){e.preventDefault();if(sim.selfDestruct()){keysClear();ui();}return;}
     if(code==='KeyT'){e.preventDefault();fire('torpedo');}if(code==='KeyC')scan();if(code==='KeyP')pause();if(code==='KeyV')cycleCamera();if(code==='KeyB')audio();if(code==='Enter'&&!sim.running&&!sim.result)begin();if(code==='Escape'&&sim.running)pause();
@@ -320,12 +384,13 @@
     if(sim.turnBased)text('attack-solution',breaking?'WEAPONS HOLD / FOLLOW BREAKAWAY GUIDANCE':sim.maneuvering?sim.status(sim.nextOrder()?.weapon||'phaser')+' / AUTO SHOT':sim.turn.phase.toUpperCase()+' / SET YOUR ATTACK PLAN');
   }
   function meter(id,value){$(id).style.width=B.clamp(value)+'%';}
+  let nextTurnFocusTurn,nextTurnFocusNumber;
   function ui(){
     if(!sim.running&&!sim.result)stopHelmSpeech({welcome:false});
     $('game-shell').classList.toggle('cinema-view',scene?.mode==='cinematic'&&!replayView?.active);
     const standby=!sim.freeFlight&&!sim.result&&!sim.turn.orders&&!$('start').hidden&&!planner?.dialog.open;
     $('launch-card').hidden=!standby||welcomeDismissed;$('battle-screen').classList.toggle('standby',standby&&!welcomeDismissed);updateWelcomeNarration();
-    $('play-welcome-intro').disabled=!audioOn||!helmSpeechEnabled;
+    $('play-welcome-intro').setAttribute('aria-disabled',String(!audioOn||!helmSpeechEnabled));
     $('quick-battle').disabled=!scene;
     $('plan-attack').disabled=!scene;
     for(const level of ['cadet','captain','admiral'])$('difficulty-'+level).setAttribute('aria-pressed',String(sim.difficulty===level));
@@ -340,8 +405,19 @@
     attackGuidance();replayView?.refresh();
     const p=sim.player,e=sim.enemy,contact=sim.contact,sensorDetail=sim.yorktownTelemetry,detail=sensorDetail||yorktownStrategyVisible;
     const t=sim.turn,planning=['planning','review'].includes(t.phase),live=['approach','attack'].includes(t.phase);
+    $('cinema-turn').hidden=scene?.mode!=='cinematic'||!sim.turnBased||!!sim.freeFlight||!!sim.result||!!replayView?.active||standby;
+    text('cinema-turn-title',`ENTERPRISE / TURN ${t.number} / ${t.phase.toUpperCase()}`);
+    const cinemaRoutes=t.maneuvers||t.draftManeuvers,cinemaOrders=t.orders||t.draft;
+    const cinemaLines=[
+      ...(cinemaRoutes||[]).flatMap((key,i)=>key?[{label:`M${i+1}: ${B.maneuvers[key].name}${!planning&&i===t.stageIndex?' (active)':''}`,active:!planning&&i===t.stageIndex}]:[]),
+      ...(cinemaOrders||[]).flatMap((order,i)=>order?.weapon?[{label:`${i+1}. ${order.weapon==='phaser'?'Phasers':'Torpedo'} / ${B.targets[order.target]||order.target}${order.status?' / '+order.status:''}`,active:!planning&&order===sim.nextOrder()}]:[])
+    ],cinemaDetails=$('cinema-turn-details'),cinemaSignature=JSON.stringify(cinemaLines);
+    if(cinemaDetails.cinemaSignature!==cinemaSignature){
+      cinemaDetails.cinemaSignature=cinemaSignature;
+      cinemaDetails.replaceChildren(...cinemaLines.map(line=>{const row=document.createElement('span');row.textContent=line.label;if(line.active)row.classList.add('current-action');return row;}));
+    }
     $('game-shell').classList.toggle('auto-helm',sim.turnBased);
-    text('auto-flight-plan',planning?'Up to three maneuvers / one turn':`M${t.stageIndex+1} / ${B.maneuvers[t.maneuver]?.name||'Breakaway'}`);
+    text('auto-flight-plan',t.phase==='closing'?'Initial approach / weapons hold':planning?'Up to two maneuvers / one turn':`M${t.stageIndex+1} / ${B.maneuvers[t.maneuver]?.name||'Breakaway'}`);
     text('auto-flight-speed',fmt(Math.abs(p.speed)*10)+' M/S'+(p.speed<0?' ASTERN':''));
     const speedSlider=$('enterprise-speed'),speedLabel=fmt(Math.abs(p.speed)*10)+' M/S'+(p.speed<0?' ASTERN':'');
     if(document.activeElement!==speedSlider)speedSlider.value=String(Math.round(p.speed*10));
@@ -349,23 +425,41 @@
     speedSlider.title=sim.turnBased?'Current speed / hold W or S to override; release to resume the plan':'Set speed / astern to ahead';
     text('enterprise-speed-value',speedLabel);
     text('auto-flight-stage',planning?'Select a maneuver in the attack wizard.':'Automatic helm / '+t.phase.toUpperCase()+(p.speedIntent?' / '+p.speedIntent:''));
-    text('live-maneuver',planning?'Plan one to three maneuvers':`M${t.stageIndex+1} / ${B.maneuvers[t.maneuver]?.name||'Breakaway'}`);
+    text('live-maneuver',t.phase==='closing'?`Approaching Yorktown / ${Math.ceil(t.remaining)}s`:planning?'Plan one or two maneuvers':`M${t.stageIndex+1} / ${B.maneuvers[t.maneuver]?.name||'Breakaway'}`);
     for(const field of ['heading','pitch','throttle','level','stop'])$(field).disabled=sim.turnBased;
     for(const id of ['attitude','power-dial']){$(id).setAttribute('aria-disabled',String(sim.turnBased));$(id).tabIndex=sim.turnBased?-1:0;}
     document.querySelectorAll('[data-hold]').forEach(button=>button.disabled=sim.turnBased);
     text('pass-phase',`TURN ${t.number} / ${t.phase.toUpperCase()}`);text('pass-clock',t.phase==='review'?'-':Math.ceil(t.remaining)+'s');
     $('pass-clock').setAttribute('role',t.phase==='review'?'status':'timer');
-    text('pass-instruction',({planning:'Choose up to three maneuvers and assign attacks, then Commit.',approach:'Automatic helm is positioning for your attack plan.',attack:'Automatic helm is executing the shot sequence.',withdraw:'Withdrawing. Repair crews prioritize damage when clear of fire.',disengage:'Automatic breakaway. Weapons hold.',review:'Review the complete turn and plan up to three maneuvers.'})[t.phase]);
+    text('pass-instruction',({planning:'Choose up to two maneuvers and assign attacks, then Commit.',approach:'Automatic helm is positioning for your attack plan.',attack:'Automatic helm is executing the shot sequence.',withdraw:'Withdrawing. Repair crews prioritize damage when clear of fire.',disengage:'Automatic breakaway. Weapons hold.',review:'Review the complete turn and plan up to two maneuvers.'})[t.phase]);
+    if(t.maneuver==='direct'&&t.assaultTiming&&!t.assaultTiming.started&&['approach','attack'].includes(t.phase)){
+      const order=sim.nextPlannedOrder();
+      if(order)text('pass-instruction',`Closing to ${(order.range/100).toFixed(1)} km. The ${Math.round(t.stageDuration)}-second Direct Assault attack window begins at that range.`);
+    }
     text('orders-summary',t.orders?'COMMITTED PLAN / LIVE EXECUTION':'DRAFT / CHOOSE A FLIGHT PLAN');
+    if(t.phase==='closing'){
+      text('pass-phase','INITIAL APPROACH');
+      text('pass-instruction',`Closing on Yorktown for ${B.TURN.closing} seconds. Weapons hold; committed plans take over afterward.`);
+      text('orders-summary','COMMITTED PLAN / WAITING FOR APPROACH');
+    }
     const combo=e.phaserCombo,opening=!planning&&!sim.result&&e.hull>0&&combo?.source===p.name&&combo.turn===t.number&&combo.hits>=2&&!combo.used&&combo.until>sim.time;
     text('salvo-state',`PHASERS ${t.spent.player.phaser} / TORPEDOES ${t.spent.player.torpedo} FIRED / ${p.torpedoes} TORPEDOES LEFT`+(opening?` / ${combo.arc.toUpperCase()} DISRUPTED ${Math.ceil(combo.until-sim.time)}s`:''));
-    $('commit-orders').hidden=!planning;$('commit-orders').disabled=!sim.planReady()||!!sim.result;
-    text('commit-orders',t.phase==='review'?'COMMIT NEXT TURN':'COMMIT PLAN');
+    if(planner?.hasAppliedRevision)text('pass-instruction','Changes saved. Select Commit in the planner to execute and resume.');
     $('spatial-guides').hidden=!!sim.freeFlight;
     $('random-turn').disabled=!scene||!sim.turnBased||!!sim.freeFlight||!!sim.result;
     $('random-turn').setAttribute('aria-checked',String(bestGuessEnabled));
     text('best-guess-state',bestGuessEnabled?'ON':'OFF');
+    $('random-selection').disabled=$('random-turn').disabled;
+    $('random-selection').setAttribute('aria-checked',String(randomSelectionEnabled));
+    text('random-selection-state',randomSelectionEnabled?'ON':'OFF');
     $('open-planner').disabled=!!sim.result||!!sim.freeFlight;
+    const nextTurn=$('commit-next-turn');
+    nextTurn.disabled=!scene||!sim.turnBased||!!sim.freeFlight||!!sim.result||t.phase!=='review'||!sim.planReady()||!!planner?.dialog.open||!!$('briefing').open||!!replayView?.active;
+    const nextAction=String(!nextTurn.disabled);
+    if(nextTurn.getAttribute('data-next-action')!==nextAction)nextTurn.setAttribute('data-next-action',nextAction);
+    if(!nextTurn.disabled&&(nextTurnFocusTurn!==t||nextTurnFocusNumber!==t.number)){
+      nextTurnFocusTurn=t;nextTurnFocusNumber=t.number;nextTurn.focus({preventScroll:true});
+    }
     planner?.refresh();
     $('captain-advice').hidden=!sim.captainEnabled;text('captain-advice',sim.captainEnabled?'ENTERPRISE CAPTAIN / '+sim.captainStatus:'');
     $('damage-review').hidden=t.phase!=='review';
@@ -375,8 +469,8 @@
     }
     text('component-state',`BRIDGE ${fmt(p.integrity.bridge)}% / MAIN ENGINES ${fmt(p.integrity.mainEngines)}%`);
     $('pass-panel').hidden=!!sim.result||!!sim.freeFlight;
-    $('end-pass').disabled=!sim.turnBased||!!sim.result||planning||!!replayView?.active;
-    $('warp').disabled=!sim.running||!sim.maneuvering||!!sim.result||sim.warpUsed;
+    $('end-pass').disabled=!sim.turnBased||!!sim.result||planning||t.phase==='closing'||!!replayView?.active;
+    $('warp').disabled=!sim.running||!sim.maneuvering||!!sim.result||sim.warpUsed||t.phase==='closing';
     text('warp',sim.warpUsed?'WARP CHARGES SPENT':'WARP 30 KM / '+sim.warpCharges+' CHARGE'+(sim.warpCharges===1?'':'S'));
     const critical=!sim.freeFlight&&p.hull>0&&p.hull<25&&!sim.result;
     $('hull-warning').hidden=!critical;$('battle-screen').classList.toggle('hull-critical',critical);
@@ -431,7 +525,7 @@
     text('yorktown-damage-hull',detail?fmt(e.hull)+'%':'UNKNOWN');meter('yorktown-damage-hull-bar',detail?e.hull:0);
     for(const key of ['engines','mainEngines','bridge','sensors']){text('yorktown-system-'+key,detail?fmt(e.integrity[key])+'%':'--');$('yorktown-system-'+key).style.color=detail&&e.integrity[key]<30?'var(--red)':'var(--text)';}
     text('yt-reactor',detail?fmt(e.reactor)+' / 100 GW':'UNKNOWN');meter('yt-reactor-bar',detail?e.reactor:0);
-    for(const key of B.systems){text('yt-power-'+key,detail?fmt(e.power[key])+'% / '+sim.output(e,key).toFixed(1)+' GW':'UNKNOWN');$('yt-stack-'+key).style.width=detail?e.power[key]+'%':'0%';}
+    for(const key of B.systems){updateIntegrity('yorktown',key,e.integrity[key],detail);text('yt-intact-'+key,detail?fmt(e.integrity[key])+'% intact':'UNKNOWN');text('yt-power-'+key,detail?fmt(e.power[key])+'% / '+sim.output(e,key).toFixed(1)+' GW':'UNKNOWN');$('yt-stack-'+key).style.width=detail?e.power[key]+'%':'0%';}
     text('yt-repair',detail?'REPAIR: '+B.targets[e.repair]+' / '+e.repairBudget.toFixed(0)+' parts':'Repair telemetry unavailable');
     text('yt-propulsion',detail?'SPEED '+fmt(Math.abs(e.speed)*10)+' M/S':'Propulsion telemetry unavailable');
     for(const arc of B.arcs){
@@ -451,7 +545,7 @@
     $('scan').disabled=!sim.running||!sim.maneuvering||sim.result||p.cooldown.scan>0||sim.output(p,'sensors')<3.5||p.capacitor<12;$('scan').firstChild.textContent=p.cooldown.scan>0?'◎ SWEEP '+Math.ceil(p.cooldown.scan)+'s ':'◎ ACTIVE SCAN ';
     for(const a of B.arcs){text('shield-'+a,fmt(p.shields[a])+'%');if(document.activeElement!==$('bias-'+a))$('bias-'+a).value=p.bias[a];$('bias-'+a).setAttribute('aria-valuetext',fmt(p.bias[a])+'% recharge allocation, '+fmt(p.shields[a])+'% shield strength');if($('svg-'+a)){text('svg-'+a,fmt(p.shields[a])+'%');$('arc-'+a).style.stroke=p.shields[a]<25?'var(--red)':p.shields[a]<55?'var(--amber)':'var(--cyan)';}}
     const minimum=Math.min(...Object.values(p.shields));text('shield-status',minimum<25?'BREACH RISK':minimum<55?'WEAKENED':'NOMINAL');$('shield-status').classList.toggle('danger',minimum<25);
-    for(const key of B.systems){text('integrity-'+key,fmt(p.integrity[key])+'% intact');$('integrity-'+key).style.color=p.integrity[key]<30?'var(--red)':'var(--muted)';if(document.activeElement!==$('power-'+key))$('power-'+key).value=p.power[key];text('output-'+key,fmt(p.power[key])+'%');$('stack-'+key).style.width=p.power[key]+'%';$('power-'+key).setAttribute('aria-valuetext',fmt(p.power[key])+'% allocated, '+sim.output(p,key).toFixed(1)+' GW effective, '+fmt(p.integrity[key])+'% integrity');$('power-'+key).title=fmt(p.integrity[key])+'% system integrity · '+sim.output(p,key).toFixed(1)+' GW effective';}
+    for(const key of B.systems){updateIntegrity('enterprise',key,p.integrity[key]);text('integrity-'+key,fmt(p.integrity[key])+'% intact');$('integrity-'+key).style.color=p.integrity[key]<30?'var(--red)':'var(--muted)';if(document.activeElement!==$('power-'+key))$('power-'+key).value=p.power[key];text('output-'+key,fmt(p.power[key])+'%');$('stack-'+key).style.width=p.power[key]+'%';$('power-'+key).setAttribute('aria-valuetext',fmt(p.power[key])+'% allocated, '+sim.output(p,key).toFixed(1)+' GW effective, '+fmt(p.integrity[key])+'% integrity');$('power-'+key).title=fmt(p.integrity[key])+'% system integrity · '+sim.output(p,key).toFixed(1)+' GW effective';}
     const reserve=p.energyReserve,energyActive=sim.running&&!sim.result&&(!sim.turnBased||sim.maneuvering),energyRate=energyActive?p.energyRate:0;
     text('energy-reserve-value',reserve.toFixed(1)+'%');meter('energy-reserve-bar',reserve);
     $('energy-reserve-meter').setAttribute('aria-valuenow',reserve.toFixed(1));
@@ -469,6 +563,102 @@
     if(sim.result&&endingElapsed<B.DESTRUCTION_DURATION)$('result').hidden=true;
     if(sim.result&&endingElapsed>=B.DESTRUCTION_DURATION&&$('result').hidden){$('result').hidden=false;text('result-kicker',sim.result==='victory'?'TACTICAL OBJECTIVE COMPLETE':'COMMAND SIGNAL LOST');text('result-title',sim.result==='victory'?'Yorktown neutralized.':'Enterprise lost.');text('result-description',`Engagement ${time(sim.time)} · ${sim.shots} weapons fired · Enterprise hull ${fmt(p.hull)}%`);renderDebrief();}
   }
+  let cinemaTacticalSize,cinemaTacticalProjection,cinemaTacticalZoom=1;
+  const cinemaTacticalPan={x:0,z:0};
+  for(const [panelId,titleId,bodyId] of [['cinema-tactical','cinema-tactical-title','cinema-tactical-body'],['cinema-camera-controls','cinema-camera-title','cinema-camera-body']]){
+    const title=$(titleId),body=$(bodyId);
+    const toggle=event=>{
+      event.preventDefault();event.stopPropagation();body.hidden=!body.hidden;
+      title.setAttribute('aria-expanded',String(!body.hidden));title.title='Double-click to '+(body.hidden?'expand':'collapse');
+      $(panelId).classList.toggle('is-collapsed',body.hidden);
+    };
+    title.addEventListener('dblclick',toggle);
+    title.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){toggle(event);}});
+    title.addEventListener('click',event=>{if(event.detail===0)toggle(event);});
+  }
+  $('cinema-tactical').title='Scroll over the tactical map to zoom. Double-click to reset.';
+  $('cinema-tactical').addEventListener('wheel',event=>{
+    if($('cinema-tactical-body').hidden||!cinemaTacticalProjection||!event.deltaY)return;
+    event.preventDefault();event.stopPropagation();
+    const view=cinemaTacticalProjection,rect=$('cinema-tactical-map').getBoundingClientRect();
+    const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?view.h:1);
+    const next=B.clamp(cinemaTacticalZoom*Math.exp(-delta*.0015),.5,8),ratio=next/cinemaTacticalZoom;
+    // Keep the world point under the mouse in place while changing map scale.
+    const x=B.clamp((event.clientX-rect.left)/rect.width,0,1)*view.w-view.w/2;
+    const z=B.clamp((event.clientY-rect.top)/rect.height,0,1)*view.h-view.h/2;
+    cinemaTacticalPan.x+=x/view.scale*(1-1/ratio);cinemaTacticalPan.z+=z/view.scale*(1-1/ratio);
+    cinemaTacticalZoom=next;view.scale*=ratio;
+  },{passive:false});
+  $('cinema-tactical').addEventListener('dblclick',event=>{
+    event.preventDefault();event.stopPropagation();cinemaTacticalZoom=1;cinemaTacticalPan.x=cinemaTacticalPan.z=0;
+  });
+  function cinemaTactical(){
+    drawCinemaTactical();
+    updateCinemaCameraControls();
+  }
+  function drawCinemaTactical(){
+    const panel=$('cinema-tactical'),visible=scene?.mode==='cinematic'&&!replayView?.active&&!sim.result&&$('launch-card').hidden;
+    if(panel.hidden===visible)panel.hidden=!visible;if(!visible)return;
+    if($('cinema-tactical-body').hidden)return;
+    const canvas=$('cinema-tactical-map');
+    // Reading clientWidth after the HUD's DOM writes forces a full style/layout
+    // flush every frame. ResizeObserver supplies the map size after layout.
+    if(!cinemaTacticalSize){
+      cinemaTacticalSize={width:0,height:0};
+      new ResizeObserver(([entry])=>{cinemaTacticalSize=entry.contentRect;}).observe(canvas);
+    }
+    const {width:w,height:h}=cinemaTacticalSize;
+    if(!w||!h)return;
+    const dpr=Math.min(devicePixelRatio,2),width=Math.floor(w*dpr),height=Math.floor(h*dpr);
+    if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
+    const c=canvas.getContext('2d'),p=sim.player,e=sim.enemy,k=sim.station,shuttle=scene.cinemaShuttlePose;
+    const points=[p,e,k,...(shuttle?[{x:shuttle.position.x,z:shuttle.position.z}]:[])];
+    const minX=Math.min(...points.map(s=>s.x)),maxX=Math.max(...points.map(s=>s.x)),minZ=Math.min(...points.map(s=>s.z)),maxZ=Math.max(...points.map(s=>s.z));
+    const centerX=(minX+maxX)/2+cinemaTacticalPan.x,centerZ=(minZ+maxZ)/2+cinemaTacticalPan.z,padding=24;
+    const scale=Math.min((w-padding*2)/Math.max(1500,maxX-minX+700),(h-padding*2)/Math.max(1500,maxZ-minZ+700))*cinemaTacticalZoom;
+    cinemaTacticalProjection={w,h,scale};
+    const project=s=>({x:w/2+(s.x-centerX)*scale,y:h/2+(s.z-centerZ)*scale});
+    c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);c.save();
+    c.strokeStyle='#32506355';c.lineWidth=.6;c.beginPath();
+    const spanX=w/scale,spanZ=h/scale,grid=500;
+    for(let x=Math.ceil((centerX-spanX/2)/grid)*grid;x<centerX+spanX/2;x+=grid){const at=project({x,z:centerZ});c.moveTo(at.x,0);c.lineTo(at.x,h);}
+    for(let z=Math.ceil((centerZ-spanZ/2)/grid)*grid;z<centerZ+spanZ/2;z+=grid){const at=project({x:centerX,z});c.moveTo(0,at.y);c.lineTo(w,at.y);}
+    c.stroke();
+    const station=project(k),radius=Math.max(3,335*scale);c.strokeStyle='#7d929d';
+    c.beginPath();c.arc(station.x,station.y,radius,0,Math.PI*2);c.stroke();
+    c.fillStyle='#8ba0ad';c.font='7px Consolas';c.fillText('K7',station.x+radius+3,station.y+2);
+    for(const [ship,color] of [[p,'#7eb4ff'],[e,'#ed9889']]){
+      const at=project(ship);c.save();c.translate(at.x,at.y);c.rotate(ship.heading*Math.PI/180);
+      c.strokeStyle=color;c.lineWidth=.9;c.lineJoin='round';c.lineCap='round';
+      // Keep the sketch's clean component outlines, using the actual model's
+      // top projection for its saucer, hull, neck, pylons and nacelles.
+      const outline=scene.tacticalShipOutline?.(scene.ships?.[ship.name]);
+      for(const part of outline?.parts||[]){
+        if(part.side&&ship.detachedNacelles?.[part.side])continue;
+        c.beginPath();part.points.forEach(([x,z],i)=>{const px=x*outline.scale,py=(z-outline.centerZ)*outline.scale;if(i)c.lineTo(px,py);else c.moveTo(px,py);});
+        c.closePath();c.stroke();
+      }
+      c.restore();
+    }
+    if(shuttle&&window.BattleCameraShuttleOutline){
+      const at=project(shuttle.position),yaw=Math.atan2(shuttle.gaze.x,-shuttle.gaze.z);
+      // Yorktown's schematic is 25 pixels long; keep the shuttle at 50%.
+      const size=25*.5;
+      c.save();c.translate(at.x,at.y);c.rotate(yaw);c.strokeStyle='#eab273';c.lineWidth=.9;c.lineJoin='round';
+      const viewRadius=Math.max(Math.hypot(at.x,at.y),Math.hypot(w-at.x,at.y),Math.hypot(at.x,h-at.y),Math.hypot(w-at.x,h-at.y))+2,halfView=(shuttle.horizontalFov??Math.PI/3)/2;
+      c.fillStyle='#f5dc6212';c.beginPath();c.moveTo(0,0);c.arc(0,0,viewRadius,-Math.PI/2-halfView,-Math.PI/2+halfView);c.closePath();c.fill();
+      c.strokeStyle='#f5dc624d';c.beginPath();c.arc(0,0,viewRadius,-Math.PI/2-halfView,-Math.PI/2+halfView);c.stroke();
+      c.strokeStyle='#f5dc6226';c.beginPath();
+      for(const angle of [-halfView,halfView]){c.moveTo(0,0);c.lineTo(Math.sin(angle)*viewRadius,-Math.cos(angle)*viewRadius);}c.stroke();c.strokeStyle='#eab273';
+      for(const points of window.BattleCameraShuttleOutline.paths){
+        c.beginPath();points.forEach(([x,z],i)=>{if(i)c.lineTo(x*size,z*size);else c.moveTo(x*size,z*size);});c.closePath();c.stroke();
+      }
+      c.setLineDash([2,2]);c.beginPath();c.moveTo(0,-size*.5);c.lineTo(0,-viewRadius);c.stroke();c.restore();
+    }
+    const distance=w*.23/scale,unit=10**Math.floor(Math.log10(distance)),bar=[5,2,1].find(n=>n*unit<=distance)*unit;
+    c.strokeStyle='#718d9e';c.lineWidth=1;c.beginPath();c.moveTo(8,h-9);c.lineTo(8+bar*scale,h-9);c.stroke();
+    c.fillStyle='#91a6b4';c.font='7px Consolas';c.fillText(Number((bar/100).toPrecision(3))+' KM',8,h-13);c.restore();
+  }
   function radar(){
     const canvas=$('radar'),w=canvas.clientWidth,h=canvas.clientHeight,dpr=Math.min(devicePixelRatio,2);if(canvas.width!==Math.floor(w*dpr)||canvas.height!==Math.floor(h*dpr)){canvas.width=w*dpr;canvas.height=h*dpr;}const c=canvas.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);const x=w/2,y=h/2,r=h*.39;
     c.strokeStyle='#98a3ad';c.lineWidth=.7;for(const k of [.35,.7,1]){c.beginPath();c.ellipse(x,y,r*k*1.65,r*k*.72,0,0,Math.PI*2);c.stroke();}c.setLineDash([2,4]);c.beginPath();c.moveTo(x-r*1.9,y);c.lineTo(x+r*1.9,y);c.moveTo(x,y-r);c.lineTo(x,y+r);c.stroke();c.setLineDash([]);
@@ -483,15 +673,16 @@
   });
   function hud(){
     const canvas=$('hud'),w=canvas.clientWidth,h=canvas.clientHeight,dpr=Math.min(devicePixelRatio,2);if(canvas.width!==Math.floor(w*dpr)||canvas.height!==Math.floor(h*dpr)){canvas.width=w*dpr;canvas.height=h*dpr;}const c=canvas.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);
-    if(!scene)return;const projection=scene.project(sim.enemy),tag=$('target-tag'),targetHidden=!!sim.freeFlight||!sim.contact||!projection.visible||!!sim.result;
+    if(!scene)return;const annotationsVisible=scene.mode!=='forward'||!!scene.spatialEnabled;
+    const projection=scene.project(sim.enemy),tag=$('target-tag'),targetHidden=!annotationsVisible||!!sim.freeFlight||!sim.contact||!projection.visible||!!sim.result;
     if(tag.hidden!==targetHidden)tag.hidden=targetHidden;
-    if(!sim.freeFlight&&sim.contact&&projection.visible&&!sim.result){const x=projection.x*w,y=projection.y*h,s=17;c.strokeStyle=sim.lock?'#e59b80aa':'#d66c65aa';c.lineWidth=1;if(scene.mode!=='tactical')for(const [sx,sy] of [[-1,-1],[1,-1],[-1,1],[1,1]]){c.beginPath();c.moveTo(x+sx*s,y+sy*(s-6));c.lineTo(x+sx*s,y+sy*s);c.lineTo(x+sx*(s-6),y+sy*s);c.stroke();}tag.style.left=B.clamp(x+26,12,w-160)+'px';tag.style.top=B.clamp(y-25,55,h-150)+'px';text('tag-range',(sim.range/100).toFixed(2)+' KM · '+(sim.lock?'LOCKED':'TRACKING'));}
+    if(annotationsVisible&&!sim.freeFlight&&sim.contact&&projection.visible&&!sim.result){const x=projection.x*w,y=projection.y*h,s=17;c.strokeStyle=sim.lock?'#e59b80aa':'#d66c65aa';c.lineWidth=1;if(scene.mode!=='tactical')for(const [sx,sy] of [[-1,-1],[1,-1],[-1,1],[1,1]]){c.beginPath();c.moveTo(x+sx*s,y+sy*(s-6));c.lineTo(x+sx*s,y+sy*s);c.lineTo(x+sx*(s-6),y+sy*s);c.stroke();}tag.style.left=B.clamp(x+26,12,w-160)+'px';tag.style.top=B.clamp(y-25,55,h-150)+'px';text('tag-range',(sim.range/100).toFixed(2)+' KM · '+(sim.lock?'LOCKED':'TRACKING'));}
     if($('tag-range').hidden!==(scene.mode==='tactical'))$('tag-range').hidden=scene.mode==='tactical';
     const enterprise=$('enterprise-tag'),friendly=scene.project(sim.player);
     const friendlyHidden=scene.mode!=='tactical'||!friendly.visible||!!sim.result||sim.player.hull<=0;
     if(enterprise.hidden!==friendlyHidden)enterprise.hidden=friendlyHidden;
     if(!enterprise.hidden){enterprise.style.left=B.clamp(friendly.x*w-180,12,w-180)+'px';enterprise.style.top=B.clamp(friendly.y*h-25,12,h-100)+'px';}
-    if(!sim.freeFlight&&sim.contact&&!projection.visible&&!sim.result){const delta=B.delta(sim.player.heading,B.bearing(sim.player,sim.enemy)),side=delta>=0?1:-1,x=side>0?w-22:22;c.strokeStyle='#e59b80';c.beginPath();c.moveTo(x-side*6,h*.46-7);c.lineTo(x,h*.46);c.lineTo(x-side*6,h*.46+7);c.stroke();c.fillStyle='#e59b80';c.font='8px Consolas';c.textAlign=side>0?'right':'left';c.fillText('YORKTOWN '+Math.abs(Math.round(delta))+'°',x-side*13,h*.46+3);c.textAlign='left';}
+    if(annotationsVisible&&!sim.freeFlight&&sim.contact&&!projection.visible&&!sim.result){const delta=B.delta(sim.player.heading,B.bearing(sim.player,sim.enemy)),side=delta>=0?1:-1,x=side>0?w-22:22;c.strokeStyle='#e59b80';c.beginPath();c.moveTo(x-side*6,h*.46-7);c.lineTo(x,h*.46);c.lineTo(x-side*6,h*.46+7);c.stroke();c.fillStyle='#e59b80';c.font='8px Consolas';c.textAlign=side>0?'right':'left';c.fillText('YORKTOWN '+Math.abs(Math.round(delta))+'°',x-side*13,h*.46+3);c.textAlign='left';}
     if(scene.spatialEnabled&&!sim.freeFlight&&scene.mode!=='cinematic'&&!sim.result){
       c.font='10px Consolas, monospace';c.fillStyle='#a8dce2';
       c.fillStyle='#92bfd6';
@@ -524,8 +715,8 @@
   const bridgeWarnings=window.BattleBridgeWarnings?new window.BattleBridgeWarnings():null;
   let helmQueue=[],helmCurrent=null,helmRemaining=0,enterpriseVoiceLost=false;
   const announcedTorpedoes=new Set();
-  let difficultCommandReply=0,directHitReply=0;
-  function clearHelm({welcome=true}={}){lastSpokenPhrase='';stopHelmSpeech({welcome});bridgeWarnings?.reset();announcedTorpedoes.clear();difficultCommandReply=0;directHitReply=0;helmQueue=[];helmCurrent=null;helmRemaining=0;helmSpeaking=false;enterpriseVoiceLost=false;$('helm-dialogue').hidden=true;}
+  let difficultCommandReply=0,directHitReply=0,collisionVoiceAt=-Infinity;
+  function clearHelm({welcome=true}={}){cinemaQAVoice?.reset();lastSpokenPhrase='';stopHelmSpeech({welcome});bridgeWarnings?.reset();announcedTorpedoes.clear();difficultCommandReply=0;directHitReply=0;collisionVoiceAt=-Infinity;helmQueue=[];helmCurrent=null;helmRemaining=0;helmSpeaking=false;enterpriseVoiceLost=false;$('helm-dialogue').hidden=true;}
   function helmCommandIsDifficult(){
     const p=sim.player,t=sim.turn;
     if(sim.freeFlight||sim.result)return false;
@@ -577,7 +768,17 @@
       return;
     }
     const pass=sim.turn.number;
+    if(event.type==='scan'){
+      const at=sim.time;
+      queueHelm('sensor-scan','','Scanning',2,()=>!enterpriseVoiceLost&&!sim.result&&sim.turn.number===pass&&sim.time-at<=8,'allison');
+    }
+    const accidentalCollision=!event.intentional&&(event.type==='ship-collision'&&(event.ship===sim.player.name||event.other===sim.player.name)||event.type==='station-collision'&&event.ship===sim.player.name);
+    if(accidentalCollision&&sim.time-collisionVoiceAt>=3&&!helmQueue.some(line=>line.key==='collision')){
+      collisionVoiceAt=sim.time;
+      const at=sim.time;queueHelm('collision','','Collision!',3,()=>!sim.result&&sim.turn.number===pass&&sim.time-at<=8,'allison');
+    }
     const breakingAway=()=>sim.turn.number===pass&&['disengage','review'].includes(sim.turn.phase);
+    if(event.type==='come-about'&&event.ship===sim.player.name)queueHelm('come-about','Come about.','',2,()=>sim.turn.number===pass&&sim.turn.stageIndex===event.stage&&!!sim.turn.navigation?.flyPastComplete&&!sim.result);
     if(event.type==='action-aborted'){
       if(event.maneuver==='ram'&&!event.rammed)queueHelm('ram-aborted','','Breaking away.',2,()=>sim.turn.number===pass&&!sim.result,'helm');
       else if(event.reason==='captain-ended-pass')queueHelm('action-aborted','','Breaking away.',2,breakingAway);
@@ -585,21 +786,24 @@
     }
     if(event.type==='phase'&&event.phase==='disengage'&&sim.turn.navigation?.aborted)queueHelm('aborted-breakaway','','Breaking away.',2,breakingAway);
     if(event.type==='phase'&&['approach','withdraw'].includes(event.phase)){
-      const exchange=helmRoutes[sim.turn.maneuver];
+      const exchange=helmRoutes[sim.turn.maneuver==='flank'?sim.turn.navigation.flankTurn:sim.turn.maneuver];
       if(exchange){
+        const route=sim.turn.maneuver,stage=sim.turn.stageIndex;
+        const routeValid=()=>sim.turn.number===pass&&sim.turn.stageIndex===stage&&!sim.result&&(!['flank','port','starboard'].includes(route)||sim.turn.navigation?.stage==='position'&&!sim.turn.navigation.avoiding&&!sim.player.collisionAvoidance);
         if(helmCommandIsDifficult()){
-          const stage=sim.turn.stageIndex,reply=["I'll do what I can...","I'll try...",['That might be hard...',"I'll try..."]][difficultCommandReply++%3];
-          queueHelm('route-'+sim.turn.maneuver,exchange[0],reply,1,()=>sim.turn.number===pass&&sim.turn.stageIndex===stage&&!sim.result,'allison');
-        }else queueHelm('route-'+sim.turn.maneuver,...exchange);
+          const reply=["I'll do what I can...","I'll try...",['That might be hard...',"I'll try..."]][difficultCommandReply++%3];
+          queueHelm('route-'+sim.turn.maneuver,exchange[0],reply,1,routeValid,'allison');
+        }else queueHelm('route-'+sim.turn.maneuver,...exchange,1,routeValid);
       }
     }
     if(event.type==='phase'&&event.phase==='review'){
       queueHelm('review','Report.','Maneuvers complete. Awaiting orders.',2,()=>sim.turn.number===pass&&sim.turn.phase==='review');
     }
-    if(event.type==='message'&&event.station==='HELM'&&!/^M[1-3]:/.test(event.text)&&!['Relative position held for over five seconds. Advancing the flight plan.','Maneuver aborted. Breaking away.'].includes(event.text))queueHelm(event.text,'',helmBrief[event.text]||event.text,2,event.text==='Selected maneuvers complete. Automatic breakaway before damage review.'?breakingAway:()=>true);
+    // Warp has its own completion cue; its detailed log entry stays silent.
+    if(event.type==='message'&&event.station==='HELM'&&!event.text.startsWith('Emergency warp complete:')&&!/^M[1-3]:/.test(event.text)&&!['Relative position held for over three seconds. Advancing the flight plan.','Maneuver aborted. Breaking away.','K7 collision avoidance: deflecting at slow impulse. Steer clear of the station.'].includes(event.text))queueHelm(event.text,'',helmBrief[event.text]||event.text,2,event.text==='Selected maneuvers complete. Automatic breakaway before damage review.'?breakingAway:()=>true);
     if(event.type==='message'&&event.station==='CONN'&&sim.freeFlight)queueHelm('free-flight','Manual helm.','Manual control. Standing by.');
     if(event.type==='nacelle-detached'&&event.ship===sim.player.name&&['port','starboard'].includes(event.side)&&!sim.freeFlight){
-      engineLossQueue.push({key:'engine-lost-'+event.side,order:'',reply:event.side==='port'?"We've lost the port engine!":"We've lost the starboard engine!",speaker:'allison',notBefore:lastFrame+500,valid:()=>!enterpriseVoiceLost});
+      engineLossQueue.push({key:'engine-lost-'+event.side,order:'',reply:event.side==='port'?"We've lost the port engine!":"We've lost the starboard engine!",speaker:'allison',notBefore:lastFrame+900,valid:()=>!enterpriseVoiceLost});
     }
     if(event.type==='torpedo-missed'&&event.from===sim.player.name&&event.target===sim.enemy.name&&!event.practice&&!sim.freeFlight)queueHelm('torpedo-missed','','We missed!',2,()=>!enterpriseVoiceLost,'allison');
     if(event.type==='torpedo-missed'&&event.from===sim.enemy.name&&event.target===sim.player.name&&!event.practice&&!sim.freeFlight)queueHelm('enemy-torpedo-missed','','Yorktown missed!',2,()=>!enterpriseVoiceLost,'allison');
@@ -614,6 +818,7 @@
     }
   }
   function stopHelmSpeech({welcome=true,welcomeMusic=true}={}){
+    cinemaQAVoice?.stop();
     if(welcome)captainNarration?.stopWelcome({music:welcomeMusic});
     stopReplaySpeech();
     helmSpeaking=false;
@@ -655,7 +860,7 @@
   }
   function claimReplayPhrase(words){
     const phrase=String(words).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-    if(!phrase||phrase===replayLastSpokenPhrase&&!['torpedo incoming','yorktown missed'].includes(phrase))return false;replayLastSpokenPhrase=phrase;return true;
+    if(!phrase||phrase===replayLastSpokenPhrase&&!['scanning','torpedo incoming','we missed','yorktown missed','collision','let s grab this opportunity fire'].includes(phrase))return false;replayLastSpokenPhrase=phrase;return true;
   }
   function stopReplaySpeech(){
     replayVoiceGeneration++;replayReplyAt=0;replayFarewellAt=0;replayVoiceQueue=[];replayVoiceSpeaking=false;replayVoiceAudio?.stop();
@@ -668,7 +873,7 @@
     if(replayVoiceSpeaking||!replayVoiceQueue.length||replayVoiceQueue[0].reply&&lastFrame<replayReplyAt)return;
     if(isCaptainFarewell(replayVoiceQueue[0])&&lastFrame<replayFarewellAt)return;
     const line=replayVoiceQueue.shift(),generation=replayVoiceGeneration;replayVoiceSpeaking=true;
-    const done=()=>{if(generation===replayVoiceGeneration){replayVoiceSpeaking=false;replayReplyAt=line.order?lastFrame+500:0;if(line.reply==='Helm lost!')replayFarewellAt=lastFrame+1500;}};
+    const done=()=>{if(generation===replayVoiceGeneration){replayVoiceSpeaking=false;replayReplyAt=line.order?lastFrame+500:0;if(line.reply==='Helm lost!')replayFarewellAt=lastFrame+2000;}};
     if(window.BattleBridgeVoices&&window.Audio){
       replayVoiceAudio??=new window.BattleBridgeVoices({allowPhrase:claimReplayPhrase});
       if(replayVoiceAudio.play(line,null,done))return;
@@ -699,7 +904,7 @@
         else startHelmLine(line);
       }
     }
-    $('helm-dialogue').hidden=!helmCurrent;
+    $('helm-dialogue').hidden=sim.freeFlight||!helmCurrent;
   }
   function renderHelmLine(line){
     const role=line.speaker==='allison'?'allison':'helm';
@@ -709,11 +914,11 @@
     $('helm-speaker').setAttribute('data-voice',line.reply?voice.toLowerCase():'');
     $('captain-dialogue').hidden=!line.order;
     $('helm-response').hidden=!String(line.reply||'').trim();
-    text('helm-order',line.order||'');text('helm-reply',line.reply);$('helm-dialogue').hidden=false;
+    text('helm-order',line.order||'');text('helm-reply',line.reply);$('helm-dialogue').hidden=!!sim.freeFlight;
   }
   function startHelmLine(line){
     const generation=helmSpeechGeneration;helmSpeaking=true;
-    const done=()=>{if(generation===helmSpeechGeneration){helmSpeaking=false;if(line.key==='enterprise-lost')captainFarewellAt=lastFrame+1500;}};
+    const done=()=>{if(generation===helmSpeechGeneration){helmSpeaking=false;if(line.key==='enterprise-lost')captainFarewellAt=lastFrame+2000;}};
     if(line.play){if(audioOn&&helmSpeechEnabled)line.play(done);else done();}
     else speakHelm(line,done);
   }
@@ -759,6 +964,7 @@
     }
   }
   function frame(now){
+    cinemaQAVoice?.update({visible:scene?.mode==='cinematic'&&!replayView?.active,enabled:audioOn&&helmSpeechEnabled&&!document.hidden,playing:sim.running,sim});
     updateViewscreenAudio();updateWelcomeNarration();
     if(sim.result){firingVoice?.abandon();manualShots=[];}
     else if(!sim.running||document.hidden||replayView?.active)cancelFiringVoice();
@@ -770,10 +976,11 @@
     if(replayView?.active){replayView.tick(dt);updateReplaySpeech();updateEngineHum(replayView.player.state,!replayView.player.paused&&!replayView.player.ended);updateRedAlert();updateIntroAudio(dt);requestAnimationFrame(frame);return;}
     if(sim.running){sim.tick(dt,keys);if(held.has('phaser')&&!manualShots.length&&sim.status('phaser',sim.player,sim.enemy,false)==='READY')fire('phaser');}
     if(sim.running&&bestGuessEnabled&&sim.turn.phase==='review'&&canBestGuessTurn())bestGuessTurn();
+    else if(sim.running&&randomSelectionEnabled&&sim.turn.phase==='review'&&canBestGuessTurn())randomSelectionTurn();
     updateEngineHum();updateRedAlert();updateIntroAudio(dt);events();updateHelm(dt);if(!sim.running&&!sim.result)weaponAudio?.stopAll();
     let sceneDt=sim.running?dt:0;
     if(sim.result){if(!endingStarted){endingStarted=true;endingElapsed=0;}sceneDt=Math.min(dt,Math.max(0,B.DESTRUCTION_DURATION-endingElapsed));endingElapsed+=dt;}
-    scene?.update(sceneDt,!sim.running&&!sim.result);hud();radar();
+    scene?.update(sceneDt,!sim.running&&!sim.result);hud();radar();cinemaTactical();
     if(now-lastUI>100||sim.result&&endingElapsed>=B.DESTRUCTION_DURATION&&$('result').hidden){ui();lastUI=now;}requestAnimationFrame(frame);
   }
   ui();requestAnimationFrame(frame);

@@ -182,7 +182,7 @@ test('all four personalities can fight complete openings within normal salvo bud
   for(const personality of Object.keys(B.ENEMY_PERSONALITIES)){
     let shots=0;
     for(let i=1;i<=8;i++){
-      const s=new B.Simulation(Math.imul(i,2654435761)>>>0,{randomStart:true});
+      const s=new B.Simulation(Math.imul(i,2654435761)>>>0,{randomStart:true,openingApproach:false});
       s.enemyPersonality=personality;s.running=true;s.applyPlanPreset('strong');assert(s.commitOrders());
       for(let t=0;t<350&&!s.result&&s.turn.phase!=='review';t++)s.tick(.1);
       for(const side of ['player','enemy']){

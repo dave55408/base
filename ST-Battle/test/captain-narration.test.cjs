@@ -1,16 +1,36 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 function fixture({blocked=false,random=()=>0,now=()=>0}={}){
   let blockedPlays=blocked?2:0;
-  const players=[],introMusic=[];
+  const players=[],introMusic=[],loaded=[];
   class Audio{
-    constructor(url){this.url=url;this.plays=0;this.paused=true;(url==='assets/IntroMusic.mp3'?introMusic:players).push(this);}
-    play(){this.plays++;if(blockedPlays>0){blockedPlays--;return Promise.reject(Object.assign(new Error('Autoplay blocked'),{name:'NotAllowedError'}));}this.paused=false;return Promise.resolve();}
+    constructor(url){this.src=url;this.plays=0;this.paused=true;}
+    get url(){return this.src;}
+    load(){loaded.push(this);}
+    play(){if(!this.plays)(this.url==='assets/IntroMusic.mp3'?introMusic:players).push(this);this.plays++;if(blockedPlays>0){blockedPlays--;return Promise.reject(Object.assign(new Error('Autoplay blocked'),{name:'NotAllowedError'}));}this.paused=false;return Promise.resolve();}
     pause(){this.paused=true;}
   }
   const c={window:{Audio,BattleVoiceClips:{}}};vm.createContext(c);
   for(const file of ['captain-narration.js','assets/voices/voice-overrides.js'])vm.runInContext(fs.readFileSync(file,'utf8'),c);
-  return {narration:new c.window.BattleCaptainNarration({random,now}),players,introMusic,window:c.window};
+  return {narration:new c.window.BattleCaptainNarration({random,now}),players,introMusic,loaded,window:c.window};
 }
+
+test('welcome tracks load before playback and reuse the buffered players',()=>{
+  const {narration:n,loaded,players,introMusic}=fixture();
+  assert.deepEqual(loaded.map(a=>a.url),['assets/Welcome introduction_short_Declan.mp3','assets/IntroMusic.mp3','assets/ColdOpenHit.mp3']);
+  assert(loaded.every(a=>a.preload==='auto'&&a.plays===0));
+  n.updateWelcome({visible:true,enabled:true});
+  assert.equal(players[0],loaded[0]);assert.equal(introMusic[0],loaded[1]);
+  players[0].onended();assert.equal(players[1],loaded[2]);
+});
+
+test('small playback drift and active seeks do not trigger repeated music seeking',()=>{
+  const {narration:n,players,introMusic}=fixture();
+  n.updateWelcome({visible:true,enabled:true});
+  const voice=players[0],music=introMusic[0];voice.currentTime=3;music.currentTime=2.8;
+  for(let i=0;i<60;i++)n.syncIntroMusic();assert.equal(music.currentTime,2.8);
+  music.currentTime=1;music.seeking=true;n.syncIntroMusic();assert.equal(music.currentTime,1);
+  music.seeking=false;n.syncIntroMusic();assert.equal(music.currentTime,3);
+});
 test('welcome narration plays once, stops when dismissed, respects mute, and resets for a new welcome',async()=>{
   const {narration:n,players}=fixture();
   n.updateWelcome({visible:true,enabled:false});assert.equal(players.length,0);

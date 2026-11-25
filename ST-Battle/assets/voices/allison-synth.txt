@@ -6,6 +6,13 @@ allison-direct-hit-synth.mp3: Direct hit to Yorktown!
 allison-port-engine-lost-synth.mp3: We've lost the port engine!
 allison-starboard-engine-lost-synth.mp3: We've lost the starboard engine!
 allison-yorktown-missed-synth.mp3: Yorktown missed!
+allison-weapon-lock-lost.mp3: Weapon's lock lost.
+allison-scanning.mp3: Scanning
+Scanning fallback uses the lock-loss fallback settings below.
+Reproduce: powershell -File generate-allison-lock.ps1 -taskLine Scanning -taskStem allison-scanning
+Lock-loss fallback: Microsoft Zira Desktop, pitch matched using the same
+Allison reference ratio; tempo 1.1x, -16 LUFS, true peak limit -2 dBTP.
+Reproduce: powershell -File generate-allison-lock.ps1
 
 Yorktown missed tuning: pitch matched to the median of five Allison reference
 clip medians (~239 Hz); tempo 1.25x with vowel formants preserved; -16 LUFS,

@@ -32,7 +32,7 @@ test('captain cannot inspect hidden enemy condition or orders when sensors fail'
 });
 
 test('captain withdraws to repair critical damage, but does not flee a healthy ship at random',()=>{
-  const s=duel();s.player.hull=20;assert(s.randomizePlan());assert.deepEqual(s.turn.draftManeuvers,['flee',null,null]);assert.deepEqual(s.turn.draft,[null,null,null]);
+  const s=duel();s.player.hull=20;assert(s.randomizePlan());assert.deepEqual(s.turn.draftManeuvers,['flee',null]);assert.deepEqual(s.turn.draft,[null,null,null]);
   s.player.hull=100;s.player.integrity.weapons=5;commit(s);assert.equal(s.player.repair,'weapons');assert.equal(Object.values(s.player.power).reduce((a,b)=>a+b,0),100);
   const healthy=duel();healthy.random=()=>.999;assert(healthy.randomizePlan());assert.notEqual(healthy.turn.draftManeuver,'flee');
 });
@@ -71,9 +71,9 @@ test('captain finishes a weakened hull and does not retreat forever without repa
   s.player.integrity.weapons=5;assert(s.bestGuessPlan());assert.equal(s.turn.draftManeuver,'close');
 });
 
-test('Best Guess resolves varied seeded engagements within ten simulated minutes plus the final short maneuver',()=>{
+test('Best Guess resolves varied close-start engagements within ten simulated minutes plus the final short maneuver',()=>{
   for(const seed of [12,37,73,97,121,318,477,601]){
-    const s=new B.Simulation(seed,{randomStart:true});s.running=true;
+    const s=new B.Simulation(seed,{randomStart:true,openingApproach:false});s.running=true;
     for(let i=0;i<(600+B.TURN.approach)/.1&&!s.result;i++){
       if(['planning','review'].includes(s.turn.phase)){assert(s.bestGuessPlan());s.captainEnabled=true;assert(s.commitOrders());}
       s.tick(.1);s.events=[];

@@ -8,99 +8,63 @@
       for(const style of ['timid','disabling','strong','aggressive','berserk'])this.$('preset-'+style).onclick=()=>{
         if(!this.applyQuickSetting(style))return;
         this.selectedPreset=style;this.presetSignature=JSON.stringify([this.editor.turn.draftManeuvers,this.editor.turn.draft]);
-        this.maneuverIndex=this.openWasPlanning?0:this.sim.turn.stageIndex;this.editingManeuver=this.openWasPlanning?null:this.maneuverIndex;
-        this.view='maneuver';this.autoAdvancePending=false;this.error(this.openWasPlanning?'':'Quick setting staged within the remaining revision budget. Completed maneuvers and fired shots are preserved. Select Apply changes to use it.');this.render();this.onChange();
+        this.maneuverIndex=0;this.editingManeuver=null;
+        this.view='maneuver';this.autoAdvancePending=false;this.error('');this.render();this.onChange();
       };
       for(let i=0;i<Battle.ATTACK_COUNT;i++)this.$('plan-step-'+i).onclick=()=>this.selectStep(i);
-      for(let i=0;i<3;i++){
-        this.$('route-stage-'+i).onclick=()=>{if(!this.openWasPlanning&&!this.sim.canReviseManeuver(i))return;this.maneuverIndex=i;this.editingManeuver=i;this.view='maneuver';this.render();};
+      for(let i=0;i<Battle.MANEUVER_COUNT;i++){
+        this.$('route-stage-'+i).onclick=()=>{if(!this.openWasPlanning)return;this.maneuverIndex=i;this.editingManeuver=i;this.view='maneuver';this.render();};
         this.$('route-delete-'+i).onclick=()=>{if(this.openWasPlanning&&this.editor.deleteManeuver(i)){this.editingManeuver=null;this.maneuverIndex=i;this.view='maneuver';this.error(`M${i+1} deleted. Reassign attacks that used only this maneuver.`);this.render();this.onChange();}};
         this.$('attack-maneuver-'+i).onclick=()=>{
-          const button=this.$('attack-maneuver-'+i);if(button.disabled||button.hidden)return;
+          const button=this.$('attack-maneuver-'+i);if(!this.openWasPlanning||button.disabled||button.hidden)return;
           const assigned=this.selection.maneuvers||[];
           this.selection.maneuvers=assigned.includes(i)?assigned.filter(m=>m!==i):[...assigned,i].sort();
           this.error('');this.render();this.advanceCompletedAttack();
         };
       }
-      this.$('maneuver-step').onclick=()=>{this.editingManeuver=this.openWasPlanning?null:this.sim.turn.stageIndex;if(!this.openWasPlanning)this.maneuverIndex=this.sim.turn.stageIndex;this.view='maneuver';this.render();};
+      this.$('maneuver-step').onclick=()=>{if(!this.openWasPlanning)return;this.editingManeuver=null;this.view='maneuver';this.render();};
       for(const key of Object.keys(Battle.maneuvers))this.$('maneuver-'+key).onclick=()=>{
+        if(!this.openWasPlanning)return;
         const slot=this.editingManeuver??this.editor?.turn.draftManeuvers.findIndex(k=>!k);
         if(this.openWasPlanning&&slot>=0&&this.editor.selectManeuver(key,slot)){
           this.editingManeuver=null;this.maneuverIndex=this.editor.turn.draftManeuvers.findIndex(k=>!k);this.error('');this.render();this.onChange();
-        }else if(!this.openWasPlanning&&this.sim.canReviseManeuver(this.maneuverIndex)){
-          const routes=this.editor.turn.draftManeuvers,before=routes[this.maneuverIndex];routes[this.maneuverIndex]=key;
-          const cost=this.liveRevisionCost();if(cost>this.sim.turn.revisions){routes[this.maneuverIndex]=before;this.error('Not enough plan revisions remain for this change.');}
-          else{this.editor.turn.revisions=this.sim.turn.revisions-cost;this.error('Maneuver change staged. Apply changes to use it.');}
-          this.render();this.onChange();
         }
       };
       this.$('maneuver-next').onclick=()=>{
         const missing=this.editor.turn.draftManeuvers.findIndex(k=>!k);
         if(missing>=0){this.maneuverIndex=missing;this.render();}else this.selectStep(0);
       };
-      this.$('done-maneuvers').onclick=()=>{
-        const t=this.editor.turn;if(!t.draftManeuvers.some(Boolean))return;
-        const available=t.draftManeuvers.map((key,i)=>key&&key!=='flee'?i:-1).filter(i=>i>=0);
-        if(this.openWasPlanning&&available.length===1)t.draft=t.draft.map(shot=>shot?{...shot,maneuvers:[available[0]]}:null);
-        const next=this.openWasPlanning?0:this.sim.turn.orders.findIndex(order=>order.weapon&&order.status==='pending');
-        if(next>=0)this.selectStep(next);
-      };
       for(const weapon of ['phaser','torpedo'])this.$('choose-'+weapon).onclick=()=>{
-        if(this.$('choose-'+weapon).disabled)return;
+        if(!this.openWasPlanning||this.$('choose-'+weapon).disabled)return;
         this.selection.weapon=this.openWasPlanning&&this.selection.weapon===weapon?null:weapon;
         if(!this.selection.weapon){this.autoAdvancePending=true;this.rangeConfirmed=false;}
         this.selection.range=Math.min(this.selection.range,Battle.weaponSpecs[weapon].maxRange);this.error('');this.render();this.advanceCompletedAttack();
       };
-      for(const target of Object.keys(Battle.targets))this.$('target-'+target).onclick=()=>{this.selection.target=target;this.error('');this.render();this.advanceCompletedAttack();};
+      for(const target of Object.keys(Battle.targets))this.$('target-'+target).onclick=()=>{
+        if(this.$('target-'+target).disabled)return;
+        const previous=this.selection.target;this.selection.target=target;this.error('');
+        if(!this.openWasPlanning&&target!==previous){
+          if(this.stageSelection())this.pendingRevision=null;
+          else{this.selection.target=previous;this.error('This target change is no longer available or exceeds the remaining revisions.');}
+        }
+        this.render();this.advanceCompletedAttack();
+      };
       for(const layer of ['systems','shields'])this.$('map-'+layer).onclick=()=>this.layer(layer);
       this.diagram=new window.BattleTargetDiagram(this.$('target-map'),key=>{const button=this.$('target-'+key);if(!button.disabled)button.onclick();});
       this.$('reset-target-view').onclick=()=>this.diagram.reset();
-      this.$('attack-range').oninput=e=>{this.selection.range=+e.target.value;this.error('');this.render();};
-      this.$('attack-range').onchange=e=>{this.selection.range=+e.target.value;this.rangeConfirmed=true;this.error('');this.render();this.advanceCompletedAttack();};
+      this.$('attack-range').oninput=e=>{if(!this.openWasPlanning)return;this.selection.range=+e.target.value;this.error('');this.render();};
+      this.$('attack-range').onchange=e=>{if(!this.openWasPlanning)return;this.selection.range=+e.target.value;this.rangeConfirmed=true;this.error('');this.render();this.advanceCompletedAttack();};
       this.$('save-plan-step').onclick=()=>this.save();
       this.$('clear-plan-step').onclick=()=>{if(this.editor.clearStep(this.index)){this.selectStep(this.index);this.onChange();}};
-      this.$('wizard-commit').onclick=()=>this.commit();this.$('wizard-apply').onclick=()=>this.commit();
+      this.$('wizard-commit').onclick=()=>this.commit();this.$('wizard-apply').onclick=()=>this.commit(true);
       this.$('wizard-reset').onclick=()=>this.reset();
       this.$('wizard-cancel').onclick=()=>this.cancel();this.$('close-planner').onclick=()=>this.cancel();
       this.dialog.addEventListener('cancel',e=>{e.preventDefault();this.cancel();});
     }
     error(message){this.$('wizard-error').textContent=message;}
     applyQuickSetting(style){
-      if(!this.editor)return false;
-      if(this.openWasPlanning)return this.editor.applyPlanPreset(style);
-      this.sync();const actual=this.sim.turn;
-      if(actual.number!==this.openPass||!['approach','attack','withdraw'].includes(actual.phase)||actual.revisions<=0)return false;
-      const preset=Object.create(this.sim);preset.turn=copy(actual);preset.turn.phase='planning';
-      if(!preset.applyPlanPreset(style))return false;
-      let best=null,bestScore=-1;
-      // Find the closest legal preset within the live turn's revision budget.
-      // Favor the current maneuver plus the next pending attack over distant edits.
-      for(let routeMask=0;routeMask<8;routeMask++)for(let shotMask=0;shotMask<8;shotMask++){
-        const routes=[...actual.maneuvers],plan=copy(actual.draft);let valid=true;
-        for(let i=0;i<3;i++)if(routeMask&(1<<i)){
-          const route=preset.turn.draftManeuvers[i];
-          if(route!==routes[i]&&!this.sim.canReviseManeuver(i)){valid=false;break;}routes[i]=route;
-        }
-        if(!valid)continue;
-        for(let i=0;i<Battle.ATTACK_COUNT;i++)if(shotMask&(1<<i)){
-          if(actual.orders[i].status!=='pending'){valid=false;break;}
-          const shot=copy(preset.turn.draft[i]);
-          shot.maneuvers=shot.maneuvers.filter(m=>m>=actual.stageIndex&&routes[m]&&routes[m]!=='flee');
-          if(!shot.maneuvers.length)shot.maneuvers=routes.map((route,m)=>m>=actual.stageIndex&&route&&route!=='flee'?m:-1).filter(m=>m>=0);
-          plan[i]=shot;
-        }
-        if(!valid)continue;
-        const routeChanges=routes.map((route,i)=>route!==actual.maneuvers[i]?i:-1).filter(i=>i>=0);
-        const shotChanges=plan.map((shot,i)=>JSON.stringify(shot)!==JSON.stringify(actual.draft[i])?i:-1).filter(i=>i>=0);
-        const cost=routeChanges.length+shotChanges.length;
-        if(cost>actual.revisions||!this.editor.planReady(plan,routes)||shotChanges.some(i=>!plan[i].maneuvers.some(m=>m>=actual.stageIndex)))continue;
-        const next=actual.orders.findIndex(shot=>shot.status==='pending');
-        const score=routeChanges.reduce((sum,i)=>sum+(i===actual.stageIndex?8:4),0)+shotChanges.reduce((sum,i)=>sum+(i===next?6:3),0)+(routeChanges.length&&shotChanges.length?3:0);
-        if(score>bestScore){bestScore=score;best={plan,routes,cost};}
-      }
-      if(!best)return false;
-      Object.assign(this.editor.turn,{draft:best.plan,draftManeuvers:best.routes,draftManeuver:best.routes.find(Boolean)||null,revisions:actual.revisions-best.cost});
-      return true;
+      if(!this.editor||!this.openWasPlanning)return false;
+      return this.editor.applyPlanPreset(style);
     }
     open(){
       if(this.sim.result||this.dialog.open)return;
@@ -109,26 +73,31 @@
       this.pausedForPlanning=this.openWasPlanning&&this.sim.running;
       if(this.openWasPlanning)this.sim.running=false;
       this.editor=Object.create(this.sim);this.editor.turn=copy(this.sim.turn);if(!this.openWasPlanning)this.editor.running=true;
+      if(this.hasAppliedRevision){this.editor.turn.draft=copy(this.pendingRevision.plan);this.editor.turn.draftManeuvers=[...this.pendingRevision.routes];}
       this.maneuverIndex=this.openWasPlanning?0:this.sim.turn.stageIndex;this.editingManeuver=null;
-      this.view='maneuver';this.editingManeuver=this.openWasPlanning?null:this.maneuverIndex;this.render();
+      this.view='maneuver';this.editingManeuver=null;
+      const pending=this.sim.turn.orders?.findIndex(order=>order.weapon&&order.status==='pending');
+      if(!this.openWasPlanning&&pending>=0)this.selectStep(pending);else this.render();
       this.dialog.showModal();this.onChange();
     }
     reset(){
       if(!this.editor||!this.openWasPlanning||this.sim.result)return;
-      Object.assign(this.editor.turn,{draft:Array(Battle.ATTACK_COUNT).fill(null),draftManeuvers:[null,null,null],draftManeuver:null});
+      Object.assign(this.editor.turn,{draft:Array(Battle.ATTACK_COUNT).fill(null),draftManeuvers:Array(Battle.MANEUVER_COUNT).fill(null),draftManeuver:null});
       this.index=0;this.maneuverIndex=0;this.editingManeuver=null;this.view='maneuver';
       this.selection={weapon:null,target:null,range:1000,maneuvers:[]};
       this.selectedPreset=null;this.presetSignature=null;this.autoAdvancePending=false;this.rangeConfirmed=false;
       this.layer('systems');this.diagram.reset();this.error('');this.render();this.onChange();
     }
     cancel(){
-      this.dialog.close();this.editor=null;
+      this.dialog.close();this.editor=null;this.pendingRevision=null;
       if(this.pausedForPlanning&&!this.sim.result)this.sim.running=true;
       this.pausedForPlanning=false;this.onChange();
     }
     close(){this.cancel();}
     selectStep(index){
       if(!this.editor||!this.editor.turn.draftManeuvers.some(Boolean))return;
+      const t=this.editor.turn,available=t.draftManeuvers.map((key,i)=>key&&key!=='flee'?i:-1).filter(i=>i>=0);
+      if(this.openWasPlanning&&available.length===1)t.draft=t.draft.map(shot=>shot?{...shot,maneuvers:[available[0]]}:null);
       this.index=index;this.view='shots';this.selection=copy(this.editor.turn.draft[index]||{weapon:null,target:null,range:1000,maneuvers:this.editor.defaultAttackAssignments(index)});
       if(this.openWasPlanning&&!this.selection.weapon){
         const available=['phaser','torpedo'].filter(weapon=>weapon!=='torpedo'||this.sim.player.torpedoes>0);
@@ -171,24 +140,50 @@
     stageSelection(){
       const t=this.editor.turn;if(JSON.stringify(this.selection)===JSON.stringify(t.draft[this.index]))return true;
       if(this.openWasPlanning)return this.editor.updateStep(this.index,this.selection);
+      if(!this.targetsOnly(t.draft.map((shot,i)=>i===this.index?this.selection:shot),t.draftManeuvers))return false;
       const before=copy({draft:t.draft,orders:t.orders,revisions:t.revisions});t.revisions=this.sim.turn.revisions;
       if(!this.editor.updateStep(this.index,this.selection)){Object.assign(t,before);return false;}
       const changed=t.draft.filter((shot,i)=>JSON.stringify(shot)!==JSON.stringify(this.sim.turn.draft[i])).length;
       const cost=changed+t.draftManeuvers.filter((key,i)=>key!==this.sim.turn.maneuvers[i]).length;
       if(cost>this.sim.turn.revisions){Object.assign(t,before);return false;}t.revisions=this.sim.turn.revisions-cost;return true;
     }
-    commit(){
+    get hasAppliedRevision(){return !!this.pendingRevision&&this.pendingRevision.turn===this.sim.turn&&!this.sim.result&&['approach','attack','withdraw'].includes(this.sim.turn.phase);}
+    targetsOnly(plan,routes){
+      const actual=this.sim.turn;
+      return JSON.stringify(routes)===JSON.stringify(actual.maneuvers)&&plan.every((shot,i)=>{
+        const original=actual.draft[i];
+        return JSON.stringify(shot&&{...shot,target:original?.target})===JSON.stringify(original);
+      });
+    }
+    commitApplied(){
+      if(!this.hasAppliedRevision)return false;
+      const pending=this.pendingRevision;
+      if(!this.targetsOnly(pending.plan,pending.routes)||!this.sim.applyRevisions(pending.plan,pending.routes))return false;
+      this.pendingRevision=null;return true;
+    }
+    commit(applyOnly=false){
       if(!this.editor)return;this.sync();const edit=this.editor,t=edit.turn;
+      if(this.openWasPlanning&&applyOnly)return;
+      if(!this.openWasPlanning&&!applyOnly){
+        if(!this.hasAppliedRevision)return;
+        if(!this.onCommit()){this.error('These edits are no longer valid. Review the targets and Apply changes again.');return;}
+        this.dialog.close();this.editor=null;this.onChange();return;
+      }
+      if(!this.openWasPlanning&&!this.targetsOnly(t.draft,t.draftManeuvers)){this.error('During a turn, only pending attack targets can change.');return;}
       if(this.view==='shots'&&t.draftManeuvers.some(key=>key&&key!=='flee')&&this.selection.weapon&&this.selection.target&&JSON.stringify(this.selection)!==JSON.stringify(t.draft[this.index])){
         if(!this.stageSelection()){this.error('Save a valid action before applying this plan.');return;}
       }
-      if(!edit.planReady()){this.error('Choose one to three maneuvers and assign all three attacks to selected offensive maneuvers.');return;}
+      if(!edit.planReady()){this.error('Choose one or two maneuvers and assign all three attacks to selected offensive maneuvers.');return;}
       if(this.openWasPlanning){
         const real=this.sim.turn,previous={draft:real.draft,draftManeuvers:real.draftManeuvers,draftManeuver:real.draftManeuver};
         real.draft=copy(t.draft);real.draftManeuvers=[...t.draftManeuvers];real.draftManeuver=real.draftManeuvers.find(Boolean)||null;
-        if(!this.onCommit()){Object.assign(real,previous);return;}
+        if(!applyOnly&&!this.onCommit()){Object.assign(real,previous);return;}
       }else{
-        if(this.sim.turn.number!==this.openPass||!this.sim.applyRevisions(t.draft,t.draftManeuvers)){this.error('The turn advanced, an edited maneuver completed, or an attack fired. Cancel and reopen to edit the remaining plan.');return;}
+        if(this.sim.turn.number!==this.openPass||!this.sim.applyRevisions(t.draft,t.draftManeuvers,true)){this.error('The turn advanced, an edited maneuver completed, or an attack fired. Cancel and reopen to edit the remaining plan.');return;}
+        if(applyOnly){
+          this.pendingRevision={turn:this.sim.turn,plan:copy(t.draft),routes:[...t.draftManeuvers]};this.sim.running=false;
+          this.error('Changes applied. Select Commit to execute and resume the turn.');this.render();this.onChange();this.$('wizard-commit').focus?.();return;
+        }else if(!this.sim.applyRevisions(t.draft,t.draftManeuvers)){this.error('An edited maneuver completed or an attack fired. Cancel and reopen to edit the remaining plan.');return;}
       }
       this.dialog.close();this.editor=null;this.pausedForPlanning=false;this.onChange();
     }
@@ -208,17 +203,17 @@
       const locked=!!s.result||stale||!planning&&(this.sim.turn.orders?.[this.index]?.status!=='pending'||this.sim.turn.revisions<=0||t.revisions<=0&&!alreadyChanged);
       this.dialog.setAttribute('data-view',choosing?'maneuvers':'attacks');
       this.$('maneuver-choice').hidden=!choosing;this.$('shot-choice').hidden=choosing||flee;this.$('repair-choice').hidden=choosing||!flee;
-      this.$('maneuver-step').setAttribute('aria-current',choosing?'step':'false');
-      this.$('maneuver-step-label').textContent=`${count}/3 maneuvers selected`;
-      this.$('route-editing').textContent=!planning||this.editingManeuver!==null?`EDIT MANEUVER ${this.maneuverIndex+1} / CHOOSE A REPLACEMENT`:count<3?`CLICK TO ADD MANEUVER ${count+1} / THEN DONE`:'THREE MANEUVERS ADDED / SELECT DONE';
-      for(let i=0;i<3;i++){
+      this.$('maneuver-step').setAttribute('aria-current',choosing?'step':'false');this.$('maneuver-step').disabled=!planning;
+      this.$('maneuver-step-label').textContent=`${count}/2 maneuvers selected`;
+      this.$('route-editing').textContent=!planning?'MANEUVERS LOCKED DURING TURN':this.editingManeuver!==null?`EDIT MANEUVER ${this.maneuverIndex+1} / CHOOSE A REPLACEMENT`:count<Battle.MANEUVER_COUNT?`CLICK TO ADD MANEUVER ${count+1} / OR SELECT AN ATTACK TAB`:'TWO MANEUVERS ADDED / SELECT AN ATTACK TAB';
+      for(let i=0;i<Battle.MANEUVER_COUNT;i++){
         this.$('route-stage-'+i).setAttribute('aria-current',i===this.maneuverIndex?'step':'false');
-        this.$('route-stage-'+i).disabled=!planning&&!this.sim.canReviseManeuver(i);
+        this.$('route-stage-'+i).disabled=!planning;
         this.$('route-label-'+i).textContent=B.maneuvers[t.draftManeuvers[i]]?.name||'Choose maneuver';
         this.$('route-delete-'+i).hidden=!t.draftManeuvers[i];this.$('route-delete-'+i).disabled=!planning;
         this.$('attack-maneuver-'+i).setAttribute('aria-pressed',String(!!selected.maneuvers?.includes(i)));
         this.$('attack-maneuver-'+i).hidden=!t.draftManeuvers[i];
-        this.$('attack-maneuver-'+i).disabled=locked||!t.draftManeuvers[i]||t.draftManeuvers[i]==='flee'||count===1;
+        this.$('attack-maneuver-'+i).disabled=!planning||locked||!t.draftManeuvers[i]||t.draftManeuvers[i]==='flee'||count===1;
         this.$('attack-maneuver-label-'+i).textContent=`M${i+1} / ${B.maneuvers[t.draftManeuvers[i]]?.name||'not selected'}`;
       }
       for(let i=0;i<B.ATTACK_COUNT;i++){
@@ -228,19 +223,19 @@
         this.$('plan-step-'+i).setAttribute('data-budget-full',String(full));
         this.$('plan-step-'+i).title=shot?'Review or deselect this attack':'Configure an available attack';
       }
-      for(const key of Object.keys(B.maneuvers)){const button=this.$('maneuver-'+key);button.disabled=!!s.result||(planning?count>=3&&this.editingManeuver===null:!this.sim.canReviseManeuver(this.maneuverIndex));button.setAttribute('aria-pressed',String(this.editingManeuver!==null||!planning?t.draftManeuvers[this.maneuverIndex]===key:t.draftManeuvers.includes(key)));}
+      for(const key of Object.keys(B.maneuvers)){const button=this.$('maneuver-'+key);button.disabled=!planning||!!s.result||count>=Battle.MANEUVER_COUNT&&this.editingManeuver===null;button.setAttribute('aria-pressed',String(this.editingManeuver!==null||!planning?t.draftManeuvers[this.maneuverIndex]===key:t.draftManeuvers.includes(key)));}
       this.$('maneuver-next').hidden=true;
-      this.$('done-maneuvers').hidden=!choosing;this.$('done-maneuvers').disabled=count<1;
-      this.$('done-maneuvers').title=count?'Continue with '+count+' selected maneuver'+(count===1?'':'s'):'Select at least one maneuver';
-      this.$('wizard-title').textContent=choosing?!planning||this.editingManeuver!==null?'Edit selected maneuver':'Choose up to three maneuvers':flee?'Repair turn':`Attack ${this.index+1} / configure once`;
-      this.$('editing-step').textContent=`ATTACK ${this.index+1} / WEAPON AND MANEUVERS`;
+      this.$('wizard-title').textContent=!planning?'Adjust pending attack targets':choosing?this.editingManeuver!==null?'Edit selected maneuver':'Choose up to two maneuvers':flee?'Repair turn':`Attack ${this.index+1} / configure once`;
+      this.$('wizard-intro').textContent=planning?'Choose up to two maneuvers. Configure three attacks, then select Commit plan.':'Select pending attack targets, then Apply changes. Commit below resumes the turn.';
+      this.$('attack-maneuver-hint').textContent=planning?'Toggle the maneuvers for this attack. Lit means selected. Three scheduled shots, plus manual firing while energy and ammunition permit.':'Maneuver assignments, weapon and firing range are locked until the turn ends.';
+      this.$('editing-step').textContent=`ATTACK ${this.index+1} / ${planning?'WEAPON AND MANEUVERS':'TARGET ONLY'}`;
       for(const weapon of ['phaser','torpedo']){
         const button=this.$('choose-'+weapon);
-        button.setAttribute('aria-pressed',String(selected.weapon===weapon));button.disabled=locked||weapon==='torpedo'&&this.sim.player.torpedoes<=0;
+        button.setAttribute('aria-pressed',String(selected.weapon===weapon));button.disabled=!planning||locked||weapon==='torpedo'&&this.sim.player.torpedoes<=0;
         button.title=selected.weapon===weapon&&planning?'Click again to deselect this attack':button.disabled?'Weapon unavailable':`Choose ${B.weaponSpecs[weapon].name}`;
       }
       const spec=B.weaponSpecs[selected.weapon]||B.weaponSpecs.phaser,input=this.$('attack-range');
-      input.max=spec.maxRange;input.value=selected.range;input.disabled=locked||!selected.weapon;
+      input.max=spec.maxRange;input.value=selected.range;input.disabled=!planning||locked||!selected.weapon;
       input.setAttribute('aria-valuetext',(selected.range/100).toFixed(1)+' kilometers');
       this.$('range-value').textContent=(selected.range/100).toFixed(1)+' km';this.$('range-max').textContent=spec.maxRange/100+' km';
       this.$('optimal-band').style.left=((spec.optimal[0]-300)/(spec.maxRange-300)*100)+'%';this.$('optimal-band').style.width=((spec.optimal[1]-spec.optimal[0])/(spec.maxRange-300)*100)+'%';
@@ -249,8 +244,8 @@
       this.$('target-advice').textContent=selected.target?.startsWith('shield-')?'Automatic helm attempts to expose this shield before firing.':selected.target==='hull'?'Primary-hull focus increases penetrating hull damage.':'Internal targets are protected by the shield facing you.';
       for(const target of Object.keys(B.targets)){const button=this.$('target-'+target);button.disabled=locked||!selected.weapon;button.setAttribute('aria-pressed',String(selected.target===target));}
       this.$('weapon-budget').textContent=`No per-turn shot cap. Phasers: 28% capacitor per shot. Torpedoes: ${this.sim.player.torpedoes}/24 remaining. Three scheduled shots plus manual firing; recharge and heat still apply.`;
-      this.$('save-plan-step').hidden=choosing||flee;this.$('save-plan-step').disabled=locked||!s.validStep(selected)||!selected.maneuvers?.every(m=>t.draftManeuvers[m]&&t.draftManeuvers[m]!=='flee');
-      this.$('save-plan-step').textContent=planning?'SAVE ATTACK & NEXT':'STAGE EDIT & NEXT';
+      this.$('save-plan-step').hidden=!planning||choosing||flee;this.$('save-plan-step').disabled=locked||!s.validStep(selected)||!selected.maneuvers?.every(m=>t.draftManeuvers[m]&&t.draftManeuvers[m]!=='flee');
+      this.$('save-plan-step').textContent='SAVE ATTACK & NEXT';
       this.$('wizard-reset').disabled=!planning||!!s.result;
       this.$('wizard-reset').title=planning?'Clear all maneuvers and attack selections':'Reset is available when planning the next turn';
       this.$('clear-plan-step').hidden=!planning||choosing||flee;this.$('clear-plan-step').disabled=!t.draft[this.index];
@@ -258,15 +253,14 @@
       const ready=s.planReady(preview);
       const presetUnchanged=this.presetSignature===JSON.stringify([t.draftManeuvers,t.draft]);
       for(const style of ['timid','disabling','strong','aggressive','berserk']){
-        const button=this.$('preset-'+style);button.disabled=!!s.result||stale||!planning&&this.sim.turn.revisions<=0;
+        const button=this.$('preset-'+style);button.disabled=!planning||!!s.result||stale;
         button.setAttribute('aria-pressed',String(presetUnchanged&&this.selectedPreset===style));
-        button.title=planning?'Fill the draft with this plan; review or customize before Commit':'Stage this quick setting for the remaining plan within the available revisions; review before Apply';
+        button.title=planning?'Fill the draft with this plan; review or customize before Commit':'Quick settings are available before and between turns; only targets can change during a turn';
       }
       if(planning&&ready)this.$('save-plan-step').disabled=true;
-      this.$('wizard-commit').hidden=!planning;this.$('wizard-commit').disabled=!ready||!!s.result;
+      this.$('wizard-commit').hidden=false;this.$('wizard-commit').textContent=planning?'COMMIT PLAN':'COMMIT';this.$('wizard-commit').disabled=!!s.result||(planning?!ready:!this.hasAppliedRevision||stale);
       this.$('wizard-apply').hidden=planning;this.$('wizard-apply').disabled=stale||!!s.result||!s.planReady()||!planning&&this.liveRevisionCost()>this.sim.turn.revisions;
-      this.$('wizard-ready').textContent=stale?'This turn has advanced. Cancel and reopen the planner.':planning?(ready?`Ready: all attacks assigned across ${count} maneuver(s). Commit plan to begin.`:'Choose one to three maneuvers, then configure three weapon orders in any combination.'): `Edit current or upcoming maneuvers and pending attacks. ${this.sim.turn.revisions-this.liveRevisionCost()} revision(s) remaining after Apply. Cancel discards edits.`;
-      if(planning&&choosing&&count)this.$('wizard-ready').textContent=`${count} maneuver${count===1?'':'s'} selected. Select Done to configure attacks${count<3?', or add another maneuver':''}.`;
+      this.$('wizard-ready').textContent=stale?'This turn has advanced. Cancel and reopen the planner.':planning?(ready?`Ready: all attacks assigned across ${count} maneuver(s). Commit plan to begin.`:'Choose one or two maneuvers, then select attack tabs to configure three weapon orders.'): `Only pending attack targets can change during a turn. ${this.sim.turn.revisions-this.liveRevisionCost()} revision(s) remaining after Commit. Select Apply changes, then Commit. Cancel discards unsaved edits.`;
       this.diagram.setSelection(selected.target,this.mapLayer||'systems');this.list('wizard-review',t.draft,false,s);
     }
     list(id,orders,live,source=this.sim){
@@ -297,7 +291,7 @@
         }
         row.setAttribute('data-status',live&&source.maneuvering&&m===t.stageIndex?'next':t.maneuverStatus?.[m]||'draft');if(live&&source.maneuvering&&m===t.stageIndex){row.setAttribute('aria-current','step');activeRow=row;}return row;
       });
-      if(!rows.length){const row=document.createElement('li');row.textContent='Choose one to three maneuvers, then assign attacks.';rows.push(row);}
+      if(!rows.length){const row=document.createElement('li');row.textContent='Choose one or two maneuvers, then assign attacks.';rows.push(row);}
       this.$(id).replaceChildren(...rows);
       if(id==='live-plan'){
         const active=activeRow;
@@ -311,7 +305,7 @@
     }
     refresh(){
       const t=this.sim.turn;
-      const progress=`${t.draftManeuvers.filter(Boolean).length}/3 maneuvers / one turn`,action=this.sim.maneuvering?'REVIEW / EDIT PLAN':'BUILD ATTACK PLAN';
+      const progress=`${t.draftManeuvers.filter(Boolean).length}/2 maneuvers / one turn`,action=this.sim.maneuvering?'REVIEW / EDIT PLAN':'BUILD ATTACK PLAN';
       if(this.$('planner-progress').textContent!==progress)this.$('planner-progress').textContent=progress;
       if(this.$('open-planner').textContent!==action)this.$('open-planner').textContent=action;
       this.list('live-plan',t.orders||t.draft,!!t.orders);

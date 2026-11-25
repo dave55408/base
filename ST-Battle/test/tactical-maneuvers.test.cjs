@@ -41,6 +41,20 @@ test('Ram keeps closing after firing and aims ahead of a moving Yorktown',()=>{
   assert(aim.x>s.enemy.x);assert.equal(s.turn.navigation.stage,'attack');
   assert(s.desiredFlightSpeed(s.player,s.enemy,s.enemy,{mode:'ram'}).speed>100);
 });
+
+test('Collision course prioritizes lining up the turn, then commands maximum ramming speed',()=>{
+  const s=duel('ram'),p=s.player;
+  let alignedSpeed;
+  for(const heading of [0,45,90,180]){
+    p.heading=heading;
+    const command=s.desiredFlightSpeed(p,s.enemy,s.enemy,{mode:'ram'});
+    if(heading===0){assert.equal(command.speed,command.maximum);assert.equal(command.reason,'RAMMING SPEED');alignedSpeed=command.speed;}
+    else{assert(command.speed<alignedSpeed,'a turn must reduce thrust instead of widening the ram approach');assert.equal(command.reason,'TURNING FOR ATTACK');}
+  }
+  p.heading=0;p.speed=30;p.flightAcceleration=0;s.autoHelm(.05);
+  assert.equal(p.flightTargetSpeed,125*s.flightMobility(p)*1.5);assert(p.speed>30&&p.speed<31,'thrust builds smoothly toward maximum');
+  s.autoHelm(.05,{less:true});assert.equal(p.flightTargetSpeed,B.MIN_IMPULSE_SPEED,'manual slowdown still takes priority');
+});
 test('Close battle follows a changing Yorktown course and matches its speed alongside',()=>{
   const s=duel('close');s.enemy.heading=s.player.heading=90;s.enemy.speed=70;
   Object.assign(s.player,{x:s.enemy.x-200,y:0,z:s.enemy.z+220});
@@ -61,6 +75,25 @@ test('Chase pursues after its attacks are spent and finishes without a withdrawa
   s.turn.remaining=.01;s.advanceTurn(.05);assert.equal(s.turn.phase,'review');
   assert(!s.events.some(e=>e.type==='phase'&&e.phase==='disengage'));
 });
+test('Pursuit points at Yorktown on the first helm update regardless of her heading',()=>{
+  for(const heading of [0,90,180,270]){
+    const s=duel('chase'),p=s.player,e=s.enemy;
+    Object.assign(e,{x:6300,y:200,z:900,heading});
+    let aim;s.steerFlight=(ship,point)=>{if(ship===p)aim=point;};s.autoHelm(.05);
+    assert.equal(aim,e,'steer toward the ship rather than an offset following slot');
+    assert.equal(s.turn.navigation.stage,'attack');
+  }
+});
+
+test('Pursuit course corrections bypass the routine reversal delay without using emergency turn rates',()=>{
+  const s=duel('chase'),p=s.player,e=s.enemy;
+  Object.assign(p,{heading:0,turnRate:12,steeringHeading:20,steeringPitch:0});
+  Object.assign(e,{x:p.x-300,y:0,z:p.z-1000,heading:180});
+  s.autoHelm(.05);
+  assert(Math.abs(B.delta(p.steeringHeading,B.bearing(p,e)))<1,'the new pursuit bearing is accepted immediately');
+  assert(Math.abs(p.turnRate)<=42*s.flightMobility(p)*.6,'pursuit retains normal smooth turn limits');
+});
+
 test('Chase can hand over to a following maneuver and End pass remains available',()=>{
   const s=duel('chase');s.turn.maneuvers[1]='distance';s.turn.remaining=.01;
   for(const order of s.turn.orders)order.status='skipped';s.advanceTurn(.05);
@@ -68,21 +101,20 @@ test('Chase can hand over to a following maneuver and End pass remains available
   const c=duel('chase');assert(c.endPass());assert.equal(c.turn.phase,'review');
 });
 
-test('Chase holds a 12 km following distance after attacks and slows when too close',()=>{
+test('Chase commands maximum speed at every clear range even after its attacks are spent',()=>{
   const s=duel('chase'),p=s.player,e=s.enemy;
   for(const order of s.turn.orders)order.status='hit';
   Object.assign(e,{heading:0,speed:60,z:-1200});Object.assign(p,{heading:0,speed:60});
-  s.autoHelm(.05);assert.equal(s.player.flightTargetSpeed,60);
-  assert.equal(B.distance(s.turn.navigation.waypoint,e),1200);
-  const aim={x:e.x,y:e.y,z:e.z};
-  e.z=-800;assert(s.desiredFlightSpeed(p,e,aim,{mode:'pursuit'}).speed<60);
-  e.z=-1800;assert(s.desiredFlightSpeed(p,e,e,{mode:'pursuit'}).speed>60);
-  e.z=-1200;p.z=0;p.speed=60;p.flightAcceleration=0;
-  for(let i=0;i<200;i++){
-    e.z-=3;s.autoHelm(.05);const d=B.direction(p);p.x+=d.x*p.speed*.05;p.z+=d.z*p.speed*.05;
+  s.autoHelm(.05);const maximum=125*s.flightMobility(p)*1.5;assert.equal(s.player.flightTargetSpeed,maximum);
+  assert.deepEqual(s.turn.navigation.waypoint,{x:e.x,y:e.y,z:e.z});
+  for(const range of [400,800,1200,1800]){
+    e.z=-range;assert.equal(s.desiredFlightSpeed(p,e,e,{mode:'pursuit'}).speed,maximum);
   }
-  assert(B.distance(p,e)>1100&&B.distance(p,e)<1300);
-  assert.match(p.speedIntent,/PURSUING AT DISTANCE/);assert(!s.turn.navigation.retiring);
+  assert.match(p.speedIntent,/PURSUING AT MAXIMUM SPEED/);assert(!s.turn.navigation.retiring);
+  p.heading=90;s.autoHelm(.05);assert(p.flightTargetSpeed<maximum,'pursuit still gives turning priority');
+  assert.equal(p.speedIntent,'TURNING FOR ATTACK');
+  p.heading=0;p.turnRate=0;p.yawAcceleration=0;s.autoHelm(.05);
+  assert.equal(p.flightTargetSpeed,maximum,'full pursuit thrust resumes promptly after the turn');
 });
 
 test('Yorktown fires phasers and torpedoes aft while Enterprise retains forward arcs',()=>{
@@ -171,7 +203,7 @@ test('Failed shots preserve the allowance and live maneuver edits cannot repleni
   const s=duel('direct');s.enemy.z=-250;s.player.heading=180;s.player.capacitor=0;
   assert.equal(s.fire('phaser'),false);assert.equal(s.turn.offArcSpent.player,false);
   s.player.capacitor=100;assert(s.fire('phaser'));
-  assert(s.applyRevisions(s.turn.draft,['above',null,null]));assert.equal(s.turn.offArcSpent.player,true);
+  assert(s.applyRevisions(s.turn.draft,['above',null]));assert.equal(s.turn.offArcSpent.player,true);
   s.startStage(0);assert.equal(s.turn.offArcSpent.player,true);
   s.finishPass();assert(s.applyPlanPreset('strong'));assert(s.commitOrders());
   assert.deepEqual(s.turn.offArcSpent,{player:false,enemy:false});

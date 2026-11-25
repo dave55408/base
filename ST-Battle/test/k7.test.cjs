@@ -23,7 +23,11 @@ test('ships deflect before K7 at slow impulse even when a movement segment cross
   const s=new B.Simulation(97,{turnBased:false}),k=s.station;
   for(const ship of [s.player,s.enemy]){
     const from={x:k.x,y:k.y,z:k.z+500};Object.assign(ship,{x:k.x,y:k.y,z:k.z-500,speed:125,throttle:100});
+    const normal=s.stationTrace(from,ship,45).normal;
+    const incoming=B.direction(ship),entering=incoming.x*normal.x+incoming.y*normal.y+incoming.z*normal.z<0;
     s.moveAroundStation(ship,from);assert.equal(Math.abs(ship.speed),B.MIN_IMPULSE_SPEED);assert.equal(s.stationTrace(ship,ship,44),null);assert(ship.z>k.z);
+    const d=B.direction(ship),outward=d.x*normal.x+d.y*normal.y+d.z*normal.z;
+    if(entering)assert(outward>=0&&outward<.1,'K7 contacts slide along the hull with only a small outward deflection');
   }
   assert.equal(s.player.throttle,0);
 });
@@ -59,6 +63,29 @@ test('K7 procedural model has finite geometry, three pod towers and batched wind
   station.traverse(o=>{if(o.geometry){meshes++;assert(o.geometry.attributes.position.array.every(Number.isFinite));}if(o.isInstancedMesh){batches++;windows+=o.count;assert(o.instanceMatrix.array.every(Number.isFinite));}});
   assert.equal(batches,4);assert.equal(windows,375);assert(meshes<80);assert.equal(station.position.x,s.sim.station.x);
   const T=s.T,matrix=new T.Object3D().matrix;
+  assert.equal(station.userData.runningLights.length,3);
+  const innerEdge=(lens,radial)=>{
+    lens.updateWorldMatrix(true,false);const m=lens.matrixWorld.elements;
+    const projection=(a,b,c)=>a*radial.x+b*radial.y+c*radial.z;
+    const radius=lens.geometry.userData.recessedLightRadius;
+    const reach=radius?radius*Math.hypot(projection(m[0],m[1],m[2]),projection(m[4],m[5],m[6])):Math.hypot(projection(m[0],m[1],m[2]),projection(m[4],m[5],m[6]),projection(m[8],m[9],m[10]));
+    return projection(m[12],m[13],m[14])-reach;
+  };
+  station.userData.runningLights.forEach((lens,i)=>{
+    const {x,z}=s.sim.station.pods[i],radial=new T.Vector3(x,0,z).normalize(),radius=Math.hypot(x*.17,z*.17);
+    const original=new T.Group(),originalLens=new T.Mesh(new T.SphereGeometry(1,32,20),lens.material);originalLens.position.y=-1.05;originalLens.scale.set(2,1.4,2);original.add(originalLens);
+    original.position.set(x*1.17,-52*.08*(52-radius)/(52*.25),z*1.17);original.quaternion.copy(lens.parent.quaternion);station.add(original);
+    assert.equal(lens.parent.scale.x,.5);assert.equal(lens.material.color.getHex(),0xffedcd);
+    assert(Math.abs(innerEdge(lens,radial)-innerEdge(originalLens,radial))<1e-8,'halving each lamp keeps its inward lens edge fixed');
+    station.remove(original);
+    assert.equal(lens.parent.children.length,1,'only the recessed lens remains, with no housing');
+    assert(lens.position.y>0,'the light sits inward of the hull surface');
+    station.updateMatrixWorld(true);
+    const center=lens.getWorldPosition(new T.Vector3()),outward=new T.Vector3(0,-1,0).applyQuaternion(lens.parent.quaternion);
+    const target={updateMatrixWorld:()=>station.updateMatrixWorld(true),userData:{model:station}};
+    const hit=s.traceHull(target,center.clone().addScaledVector(outward,5),center.clone().addScaledVector(outward,-1));
+    assert.equal(hit?.mesh,lens,'the cut aperture exposes the inset light instead of covering it with hull plating');
+  });
   station.traverse(batch=>{
     if(!batch.isInstancedMesh)return;
     assert.equal(batch.geometry.type,'PlaneGeometry');assert.equal(batch.material.polygonOffset,true);
@@ -72,4 +99,15 @@ test('K7 procedural model has finite geometry, three pod towers and batched wind
       }
     }
   });
+  const body=station.children.find(part=>part.geometry instanceof T.LatheGeometry),originalMaterial=body.material;
+  const windowBatches=station.children.filter(part=>part.isInstancedMesh),seams=station.children.filter(part=>part.isLineSegments);
+  s.station=station;s.mode='tactical';s.updateStationDetail();
+  assert.notEqual(body.material,originalMaterial);assert.equal(body.material.map,null);assert.equal(body.material.roughness,.95);
+  assert(windowBatches.every(part=>!part.visible));assert(seams.every(part=>!part.visible));
+  assert(station.userData.runningLights.every(lens=>!lens.parent.visible));
+  s.setCamera('chase');assert.equal(body.material,originalMaterial);
+  assert(windowBatches.every(part=>part.visible));assert(seams.every(part=>part.visible));
+  assert(station.userData.runningLights.every(lens=>lens.parent.visible));
+  s.setCamera('tactical');s.sim.replayShot={};s.updateStationDetail();
+  assert.equal(body.material,originalMaterial,'cinematic replays retain the detailed station');
 });

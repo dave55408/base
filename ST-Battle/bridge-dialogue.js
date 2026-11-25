@@ -19,7 +19,7 @@
   "Updated flight maneuvers applied.": "Course updated.",
   "K7 cover established. Holding six seconds before the assault.": "In cover. Holding six seconds.",
   "Cover route timed out. Beginning the direct assault.": "No cover. Attacking.",
-  "Relative position held for over five seconds. Advancing the flight plan.": "No relative movement. Next maneuver.",
+  "Relative position held for over three seconds. Advancing the flight plan.": "No relative movement. Next maneuver.",
   "Selected maneuvers complete. Automatic breakaway before damage review.": "Maneuvers complete. Breaking away.",
   "K7 collision avoidance: deflecting at slow impulse. Steer clear of the station.": "Station collision. Deflecting.",
   "Warp destination obstructed by K7. Change heading before jumping.": "Warp blocked by K7. Change heading.",
@@ -27,7 +27,7 @@
   "Emergency warp complete: 30 km along current heading and pitch. Warp charge spent.": "Warp complete. Charge spent."
 };
  const voices=Object.freeze({captain:'cedar',helm:'marin'});
- const extras={"captain":["Report.","Manual helm."],"helm":["Maneuvers complete. Awaiting orders.","Manual control. Standing by.","Torpedo incoming!","Hull hit!","Warp complete.","Helm lost!","Yorktown disabled."]};
+ const extras={"captain":["Report.","Manual helm.","Let's grab this opportunity. Fire!","Come about."],"helm":["Maneuvers complete. Awaiting orders.","Manual control. Standing by.","Torpedo incoming!","Hull hit!","Warp complete.","Helm lost!","Yorktown disabled."]};
  function lines(){
    const entries=[];
    for(const [order,reply] of Object.values(routes))entries.push({role:'captain',text:order},{role:'helm',text:reply});

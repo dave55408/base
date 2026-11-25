@@ -8,9 +8,9 @@ test('Best Guess uses a full legal weapon budget and makes consistent choices fr
     assert.equal(sim.randomizePlan(),true);assert.equal(sim.planReady(),true);
     const t=sim.turn;seen.add(JSON.stringify(t.draft));
     if(t.draftManeuver==='flee'){
-      flee++;assert.deepEqual(t.draftManeuvers,['flee',null,null]);assert.deepEqual(t.draft,[null,null,null]);
+      flee++;assert.deepEqual(t.draftManeuvers,['flee',null]);assert.deepEqual(t.draft,[null,null,null]);
     }else{
-      attacks++;assert.equal(t.draftManeuvers.length,3);assert(t.draftManeuvers.filter(Boolean).every(key=>B.maneuvers[key]&&key!=='flee'));
+      attacks++;assert.equal(t.draftManeuvers.length,2);assert(t.draftManeuvers.filter(Boolean).every(key=>B.maneuvers[key]&&key!=='flee'));
       assert.equal(t.draft.filter(shot=>shot.weapon==='phaser').length,2);assert.equal(t.draft.filter(shot=>shot.weapon==='torpedo').length,1);
       t.draft.forEach(shot=>{assert(sim.validStep(shot));assert(shot.maneuvers.every(index=>!!t.draftManeuvers[index]));assert.equal(shot.range%50,0);});
     }

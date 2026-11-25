@@ -1,9 +1,9 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const B=require('../engine.js');
-function harness(){
+function harness(clips={}){
   const players=[];
   class Audio{constructor(url){this.url=url;players.push(this);}play(){return Promise.resolve();}pause(){this.paused=true;}}
-  const context={window:{Audio}};vm.createContext(context);
+  const context={window:{Audio,BattleVoiceClips:clips}};vm.createContext(context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../firing-voices.js'),'utf8'),context);
   return {voice:new context.window.BattleFiringVoices(),players};
 }
@@ -53,4 +53,17 @@ test('suppressing a repeated firing phrase still executes the shot and releases 
   const {voice,players}=harness();let shots=0,done=0;
   voice.prepare({type:'phaser',context:{},urgent:true,execute:()=>{shots++;return true;},beforeStart:()=>false,enqueue:start=>start(()=>done++)});
   assert.equal(shots,1);assert.equal(done,1);assert.equal(voice.pending,null);assert.equal(voice.active,null);assert.equal(players[0].onended,null,'suppressed audio never waits for an ended event');
+});
+
+test('an opportunity attack uses Declans exact opportunity command and its registered recording',()=>{
+  const words="Let's grab this opportunity. Fire!",clip='opportunity-declan.mp3';
+  const {voice,players}=harness({['captain\n'+words]:clip});let shots=0,announced,queued;
+  voice.prepare({type:'torpedo',order:{},context:{},urgent:true,opportunity:true,execute:()=>{shots++;return true;},beforeStart:(text,file)=>{announced={text,file};},enqueue:(start,text)=>{queued=text;start(()=>{});}});
+  assert.equal(shots,1);assert.equal(players[0].url,clip);assert.equal(queued,words);assert.deepEqual(announced,{text:words,file:clip});
+});
+
+test('until the opportunity recording is supplied, it uses the existing Declan Fire clip',()=>{
+  const {voice,players}=harness();let words;
+  voice.prepare({type:'phaser',opportunity:true,beforeStart:text=>{words=text;}});
+  assert.equal(words,"Let's grab this opportunity. Fire!");assert.equal(players[0].url,'assets/Fire_Declan.mp3');
 });

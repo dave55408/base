@@ -2,6 +2,35 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const B=require('../engine.js');
 
+test('brief opposite helm requests do not reverse a course, but sustained requests and avoidance do',()=>{
+  for(const side of ['player','enemy']){
+    const s=new B.Simulation(97),ship=s[side];Object.assign(ship,{x:6000,y:0,z:0,heading:0,pitch:0});
+    const aim=degrees=>({x:ship.x+Math.sin(degrees*Math.PI/180)*1000,y:0,z:ship.z-Math.cos(degrees*Math.PI/180)*1000});
+    for(let i=0;i<240;i++){
+      s.steerFlight(ship,aim(i%2?-12:12),.05);
+      assert(ship.turnRate>-.3,'alternating small requests keep the original turn');
+    }
+    for(let i=0;i<240;i++)s.steerFlight(ship,aim(-20),.05);
+    assert(Math.abs(B.delta(ship.heading,-20))<.1,'a sustained course change is followed');
+    s.steerFlight(ship,aim(15),.05,42,30,true);
+    assert(Math.abs(B.delta(ship.steeringHeading,15))<.001,'avoidance bypasses the commitment delay');
+  }
+});
+
+test('small speed demand changes hold a steady order and emergency braking bypasses it',()=>{
+  const s=new B.Simulation(97),p=s.player,e=s.enemy;
+  Object.assign(p,{x:6000,y:0,z:0,heading:0,pitch:0,speed:60});
+  Object.assign(e,{x:6000,y:0,z:-1000,heading:0,speed:60});
+  const options={mode:'close'};s.turn.navigation={waypoint:{x:p.x,y:p.y,z:p.z}};
+  s.adjustFlightSpeed(p,e,e,options,.05);assert.equal(p.flightTargetSpeed,60);
+  for(let i=0;i<120;i++){
+    e.speed=i%2?64:56;s.adjustFlightSpeed(p,e,e,options,.05);
+    assert.equal(p.flightTargetSpeed,60);assert.equal(p.speed,60);
+  }
+  p.collisionAvoidance={};s.adjustFlightSpeed(p,e,e,options,.05);
+  assert(p.flightTargetSpeed<=55,'collision braking is immediate');
+});
+
 test('both heavy hulls build speed slowly and carry speed into a braking order',()=>{
   const s=new B.Simulation();
   for(const ship of [s.player,s.enemy]){

@@ -1,0 +1,51 @@
+{
+  "difficulty": "captain",
+  "seeds": 16,
+  "limitSeconds": 300,
+  "manualShots": false,
+  "rendererHitResolver": false,
+  "results": [
+    {
+      "style": "timid",
+      "wins": 0,
+      "losses": 0,
+      "unfinished": 16,
+      "meanHull": 87.19746155545133
+    },
+    {
+      "style": "disabling",
+      "wins": 3,
+      "losses": 12,
+      "unfinished": 1,
+      "meanHull": 12.770443314305028
+    },
+    {
+      "style": "strong",
+      "wins": 6,
+      "losses": 9,
+      "unfinished": 1,
+      "meanHull": 25.348074240286085
+    },
+    {
+      "style": "aggressive",
+      "wins": 10,
+      "losses": 6,
+      "unfinished": 0,
+      "meanHull": 45.38340946157996
+    },
+    {
+      "style": "berserk",
+      "wins": 7,
+      "losses": 8,
+      "unfinished": 1,
+      "meanHull": 12.844385653745576
+    },
+    {
+      "style": "bestGuess",
+      "wins": 15,
+      "losses": 0,
+      "unfinished": 1,
+      "meanHull": 57.47289526495002
+    }
+  ]
+}

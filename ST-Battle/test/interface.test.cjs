@@ -24,6 +24,8 @@ function interfaceHarness(options={}){
     replaceChildren(...children){this.children=children;}
     addEventListener(name,fn){this.handlers[name]=fn;}
     setAttribute(name,value){this.attrs[name]=value;}
+    getAttribute(name){return this.attrs[name]??null;}
+    removeAttribute(name){delete this.attrs[name];}
     getContext(){return drawing;}
     setPointerCapture(){}
     focus(){document.activeElement=this;}
@@ -32,14 +34,14 @@ function interfaceHarness(options={}){
   }
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
   for(const m of html.matchAll(/<(\w+)[^>]*\bid="([^"]+)"[^>]*>/g))elements[m[2]]=new Element(m[1]);
-  elements.environment.value='nebula';elements['repair-system'].value='sensors';
+  elements.environment.value='nebula';elements['repair-system'].value='sensors';elements['camera-shuttle-speed'].max='100';
   const document={getElementById:id=>elements[id]||null,createElement:tag=>new Element(tag),querySelectorAll:()=>[],addEventListener:(event,fn)=>handlers['document:'+event]=fn,activeElement:null};
   class Scene{constructor(host,sim){this.sim=sim;this.mode='chase';this.recordedEvents=[];}event(event){this.recordedEvents.push(event);}update(dt){this.lastDt=dt;}reset(){}setCamera(mode){this.mode=mode;}project(){return{x:.7,y:.3,visible:true};}}
   const TestBattle={...B,Simulation:class extends B.Simulation{constructor(seed,settings){super(97,{...settings,randomStart:options.randomStart??false});}}};
-  const context={Battle:TestBattle,BattleReplay:Replay,BattleScene:Scene,window:{},document,console,performance:{now:()=>0},devicePixelRatio:1,setTimeout:fn=>{timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id),addEventListener:(name,fn)=>handlers[name]=fn,requestAnimationFrame:fn=>frame=fn};
+  const context={Battle:TestBattle,BattleReplay:Replay,BattleScene:Scene,window:{},document,console,ResizeObserver:class{constructor(callback){this.callback=callback;}observe(element){this.callback([{contentRect:{width:element.clientWidth,height:element.clientHeight}}]);}},performance:{now:()=>0},devicePixelRatio:1,setTimeout:fn=>{timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id),addEventListener:(name,fn)=>handlers[name]=fn,requestAnimationFrame:fn=>frame=fn};
   context.window.addEventListener=context.addEventListener;
   Object.assign(context.window,options.window||{});
-  vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(root,'target-diagram.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(root,'planner.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(root,'replay-view.js'),'utf8'),context);for(const file of ['bridge-dialogue.js','assets/voices/voice-clips.js','bridge-voices.js','bridge-warnings.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context);if(options.narration)vm.runInContext(fs.readFileSync(path.join(root,'captain-narration.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(root,'app.js'),'utf8'),context);
+  vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(root,'target-diagram.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(root,'planner.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(root,'replay-view.js'),'utf8'),context);for(const file of ['bridge-dialogue.js','assets/voices/voice-clips.js','bridge-voices.js','bridge-warnings.js'])vm.runInContext(fs.readFileSync(path.join(root,file),'utf8'),context);if(options.cinemaQA)vm.runInContext(fs.readFileSync(path.join(root,'cinema-qa-voice.js'),'utf8'),context);if(options.narration)vm.runInContext(fs.readFileSync(path.join(root,'captain-narration.js'),'utf8'),context);vm.runInContext(fs.readFileSync(path.join(root,'app.js'),'utf8'),context);
   context.window.battle.turnBased=options.turnBased??false;
   if(options.voiceClips)context.window.BattleVoiceClips=options.voiceClips;
   const key=(key,code='')=>({key,code,preventDefault(){},target:{tagName:'BODY'},repeat:false});
@@ -50,7 +52,7 @@ function interfaceHarness(options={}){
 function renderedHarness(players,options={}){
   const manifest={window:{BattleVoiceClips:{}}};
   vm.runInNewContext(fs.readFileSync(path.join(root,'assets/voices/voice-overrides.js'),'utf8'),manifest);
-  class Audio{constructor(url){this.url=url;if(url==='assets/IntroMusic.mp3')options.introMusicPlayers?.push(this);else players.push(this);}play(){return Promise.resolve();}pause(){this.paused=true;}}
+  class Audio{constructor(url){this.url=url;}load(){}play(){this.url??=this.src;if(!this.started){this.started=true;if(this.url==='assets/IntroMusic.mp3')options.introMusicPlayers?.push(this);else players.push(this);}return Promise.resolve();}pause(){this.paused=true;}}
   return interfaceHarness({...options,voiceClips:manifest.window.BattleVoiceClips,window:{...options.window,Audio,speechSynthesis:{speak(){assert.fail('must not synthesize');}}}});
 }
 
@@ -110,6 +112,33 @@ test('welcome narration survives idle UI refreshes and can be replayed explicitl
   h.elements['quick-battle'].onclick();assert.equal(players[1].paused,true,'leaving welcome still stops narration');
 });
 
+test('both Briefing entry points stop the introduction and leave it off until explicitly replayed',async()=>{
+  for(const id of ['help','welcome-briefing']){
+    const players=[],introMusicPlayers=[],h=renderedHarness(players,{turnBased:true,narration:true,introMusicPlayers});
+    await new Promise(setImmediate);const voice=players[0],music=introMusicPlayers[0];
+    h.handlers['document:pointerdown']({target:{id}});
+    assert.equal(voice.paused,true);assert.equal(music.paused,true);
+    h.elements[id].onclick();assert.equal(h.elements.briefing.open,true);
+    h.step(120);h.elements['close-help'].onclick();h.step(240);
+    assert.equal(players.length,1);assert.equal(voice.paused,true);
+    h.elements['play-welcome-intro'].onclick();await new Promise(setImmediate);
+    assert.equal(players.length,2);assert.notEqual(players[1].paused,true);
+  }
+});
+
+test('Briefing clicks do not retry a welcome introduction blocked by autoplay',async()=>{
+  const attempts=[];
+  class Audio{
+    constructor(src){this.src=src;}load(){}pause(){}
+    play(){attempts.push(this.src);return Promise.reject(new Error('Autoplay blocked'));}
+  }
+  const h=interfaceHarness({turnBased:true,narration:true,window:{Audio}});
+  await new Promise(setImmediate);const before=attempts.length;
+  h.handlers['document:pointerdown']({target:{closest:()=>true}});
+  h.elements['welcome-briefing'].onclick();h.step(120);h.elements['close-help'].onclick();h.step(240);
+  await new Promise(setImmediate);assert.equal(attempts.length,before);
+});
+
 test('closing welcome and opening the planner preserve Declan narration and Free Flight fades it out',async()=>{
   const players=[],introMusicPlayers=[],h=renderedHarness(players,{turnBased:true,narration:true,introMusicPlayers});h.sim.tick=()=>{};
   const intro=players[0],music=introMusicPlayers[0];await new Promise(setImmediate);
@@ -146,24 +175,24 @@ test('Declan farewell follows Helm lost without overlap and suppresses other pos
   h.sim.damage(h.sim.player,h.sim.enemy,999,'torpedo','hull');h.step(120);
   assert.equal(opening.paused,true);const lost=players.at(-1);assert.equal(lost.url,'assets/Helm lost!_Erica.mp3');
   const count=players.length;h.step(180);assert.equal(players.length,count);
-  lost.onended();h.step(240);assert.equal(players.length,count);h.step(1679);assert.equal(players.length,count,'farewell waits 1.5 seconds after Helm lost ends');
-  h.step(1680);const farewell=players.at(-1);
+  lost.onended();h.step(240);assert.equal(players.length,count);h.step(2179);assert.equal(players.length,count,'farewell waits 2 seconds after Helm lost ends');
+  h.step(2180);const farewell=players.at(-1);
   assert(['assets/I gave my best_Declan.mp3','assets/We gave it our all_Declan.mp3'].includes(farewell.url));
   assert.match(h.elements['helm-order'].textContent,/^(I gave my best|We gave it our all)/);
   assert.equal(h.elements['helm-reply'].textContent,'');
   assert(h.sim.lastReplay.events.some(({event})=>event.type==='bridge-dialogue'&&/^(I gave my best|We gave it our all)/.test(event.order)));
-  farewell.onended();h.sim.events.push({type:'warp'},{type:'destroyed',ship:'Yorktown'});h.step(1740);
+  farewell.onended();h.sim.events.push({type:'warp'},{type:'destroyed',ship:'Yorktown'});h.step(2240);
   assert.equal(players.at(-1),farewell,'other queued or later reports stay silent after the farewell');
 });
 
-test('replay also pauses 1.5 seconds between Helm lost and Declan final statement',()=>{
+test('replay also pauses 2 seconds between Helm lost and Declan final statement',()=>{
   const players=[],h=renderedHarness(players,{turnBased:true,narration:true});
   h.replay.active=true;h.replay.player={paused:false,ended:false,state:h.sim};h.replay.tick=()=>{};
   h.replay.options.dialogue({order:'',reply:'Helm lost!'});
   h.replay.options.dialogue({order:'I gave my best...',reply:''});
   h.step(100);const lost=players.at(-1);assert.equal(lost.url,'assets/Helm lost!_Erica.mp3');
-  const count=players.length;lost.onended();h.step(1599);assert.equal(players.length,count);
-  h.step(1600);assert.equal(players.at(-1).url,'assets/I gave my best_Declan.mp3');
+  const count=players.length;lost.onended();h.step(2099);assert.equal(players.length,count);
+  h.step(2100);assert.equal(players.at(-1).url,'assets/I gave my best_Declan.mp3');
 });
 
 test('muting voices suppresses welcome and fight narration without queuing an opening for later turns',()=>{
@@ -194,7 +223,7 @@ test('difficult commands use Allison recordings while ordinary orders keep their
       if(['engines','weapons','sensors'].includes(problem))s.player.integrity[problem]=0;
       if(problem==='empty-magazine'){
         s.player.torpedoes=0;
-        for(let i=0;i<3;i++)s.updateStep(i,{weapon:'torpedo',target:'engines',range:650,maneuvers:[0,1,2]});
+        for(let i=0;i<3;i++)s.updateStep(i,{weapon:'torpedo',target:'engines',range:650,maneuvers:[0,1]});
       }
     }
     assert(s.commitOrders());h.step(60);
@@ -209,7 +238,7 @@ test('difficult commands use Allison recordings while ordinary orders keep their
       assert.equal(h.elements['helm-speaker'].textContent,'HELM (Allison)');
       players.at(-1).onended();h.runTimers();assert.equal(players.at(-1).url,"assets/I'll try_Allision.mp3");
       assert(s.turn.orders.every(order=>order.status==='pending'),'a cautious reply does not cancel or execute the orders');
-      players.at(-1).onended();s.startStage(2);h.step(240);
+      players.at(-1).onended();s.turn.maneuvers[1]='chase';s.startStage(1);h.step(240);
       assert.equal(h.elements['helm-reply'].textContent,"That might be hard... I'll try...");
       players.at(-1).onended();h.runTimers();assert.equal(players.at(-1).url,'assets/That might be hard_Allision.mp3');
       players.at(-1).onended();h.runTimers();assert.equal(players.at(-1).url,"assets/I'll try_Allision.mp3");
@@ -237,7 +266,7 @@ test('Helm labels identify Allison and Erica as recorded responses change',()=>{
 test('Quick Battle offers difficulty, starts a complete plan, and Quick Rematch preserves difficulty',()=>{
   const {sim,elements:e}=interfaceHarness({turnBased:true});assert.equal(e['launch-card'].hidden,false);
   e['difficulty-admiral'].onclick();assert.equal(sim.difficulty,'admiral');assert.equal(e['difficulty-admiral'].attrs['aria-pressed'],'true');
-  e['quick-battle'].onclick();assert(sim.running);assert(sim.maneuvering);assert.equal(e['plan-wizard'].open,false);assert.equal(e['launch-card'].hidden,true);assert.deepEqual(Array.from(sim.turn.maneuvers),['port','distance','chase']);
+  e['quick-battle'].onclick();assert(sim.running);assert(sim.maneuvering);assert.equal(e['plan-wizard'].open,false);assert.equal(e['launch-card'].hidden,true);assert.deepEqual(Array.from(sim.turn.maneuvers),['flank','distance']);
   e['quick-rematch'].onclick();assert.equal(sim.difficulty,'admiral');assert(sim.maneuvering);assert.equal(sim.battleStats.score,0);
 });
 
@@ -266,7 +295,7 @@ test('blocked local storage does not prevent quick play or debrief',()=>{
 });
 
 test('Quick settings fill complete editable drafts at the top of the planner',()=>{
-  const routes={timid:['distance','hide','flee'],disabling:['port','close','behind'],strong:['port','distance','chase'],aggressive:['direct','close','chase'],berserk:['direct','close','ram']};
+  const routes={timid:['distance','flee'],disabling:['flank','behind'],strong:['flank','distance'],aggressive:['direct','flank'],berserk:['direct','ram']};
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8');assert(html.indexOf('id="preset-timid"')<html.indexOf('id="preset-disabling"'));assert(html.indexOf('id="preset-disabling"')<html.indexOf('id="preset-strong"'));assert(html.indexOf('id="preset-strong"')<html.indexOf('<nav class="wizard-steps"'));
   for(const style of Object.keys(routes)){
     const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();
@@ -276,7 +305,7 @@ test('Quick settings fill complete editable drafts at the top of the planner',()
     e['wizard-commit'].onclick();assert.equal(e['plan-wizard'].open,false);assert.deepEqual(Array.from(sim.turn.maneuvers),routes[style]);
     assert.equal(sim.turn.orders.filter(order=>order.weapon==='phaser').length,2);assert.equal(sim.turn.orders.filter(order=>order.weapon==='torpedo').length,1);
     assert(sim.turn.orders.every(order=>order.maneuvers.every(i=>sim.turn.maneuvers[i]!=='flee')));
-    e['open-planner'].onclick();for(const key of Object.keys(routes))assert.equal(e['preset-'+key].disabled,false,'quick settings stay available during live plan editing');
+    e['open-planner'].onclick();for(const key of Object.keys(routes))assert.equal(e['preset-'+key].disabled,true,'quick settings are locked during live plan editing');
   }
 });
 
@@ -288,28 +317,23 @@ test('preset plans can be customized or cancelled without changing live orders',
   assert.equal(e['wizard-commit'].disabled,false);e['wizard-commit'].onclick();assert.equal(sim.turn.orders[0].target,'bridge');
 });
 
-test('live quick settings remain transactional and respect the revision budget',()=>{
-  for(const style of ['timid','disabling','strong','aggressive','berserk']){
-    const {sim,elements:e}=interfaceHarness({turnBased:true});e['quick-battle'].onclick();e['open-planner'].onclick();
-    const before=JSON.stringify(sim.turn),budget=sim.turn.revisions;
-    e['preset-'+style].onclick();assert.equal(JSON.stringify(sim.turn),before);
-    assert.match(e['wizard-error'].textContent,/staged within.*revision budget/);assert.equal(e['wizard-apply'].disabled,false);
-    e['wizard-cancel'].onclick();assert.equal(JSON.stringify(sim.turn),before);
-    e['open-planner'].onclick();e['preset-'+style].onclick();e['wizard-apply'].onclick();
-    assert.equal(e['plan-wizard'].open,false);assert(sim.turn.revisions>=0);assert(sim.turn.revisions<=budget);
-    if(style!=='strong')assert.equal(sim.turn.revisions,0,'a different preset uses the two available edits');
-    if(!sim.turn.revisions){e['open-planner'].onclick();for(const key of ['timid','disabling','strong','aggressive','berserk'])assert.equal(e['preset-'+key].disabled,true);}
-  }
+test('live Quick Settings cannot change the committed plan',()=>{
+  const {sim,elements:e}=interfaceHarness({turnBased:true});e['quick-battle'].onclick();e['open-planner'].onclick();
+  const before=JSON.stringify(sim.turn);
+  for(const style of ['timid','disabling','strong','aggressive','berserk']){assert.equal(e['preset-'+style].disabled,true);e['preset-'+style].onclick();}
+  assert.equal(JSON.stringify(sim.turn),before);e['wizard-cancel'].onclick();assert.equal(JSON.stringify(sim.turn),before);
 });
 
-test('live quick settings preserve completed maneuvers and fired attacks',()=>{
+
+test('live target editing preserves completed maneuvers and fired attacks',()=>{
   const {sim,elements:e}=interfaceHarness({turnBased:true});e['quick-battle'].onclick();
   sim.turn.orders[0].status='hit';sim.turn.orders[0].firedAt=sim.time;sim.turn.maneuverStatus[0]='complete';sim.startStage(1);
-  const fired=JSON.stringify(sim.turn.orders[0]),first=sim.turn.maneuvers[0];
-  e['open-planner'].onclick();e['preset-berserk'].onclick();e['wizard-apply'].onclick();
-  assert.equal(e['plan-wizard'].open,false);assert.equal(sim.turn.maneuvers[0],first);assert.equal(JSON.stringify(sim.turn.orders[0]),fired);
-  assert.equal(sim.turn.maneuvers[1],'close');assert.equal(sim.turn.revisions,0);
+  const fired=JSON.stringify(sim.turn.orders[0]),routes=JSON.stringify(sim.turn.maneuvers);
+  e['open-planner'].onclick();e['plan-step-0'].onclick();assert.equal(e['target-reactor'].disabled,true);e['target-reactor'].onclick();
+  e['plan-step-1'].onclick();e['target-reactor'].onclick();e['wizard-apply'].onclick();e['wizard-commit'].onclick();
+  assert.equal(JSON.stringify(sim.turn.maneuvers),routes);assert.equal(JSON.stringify(sim.turn.orders[0]),fired);assert.equal(sim.turn.orders[1].target,'reactor');assert.equal(sim.turn.revisions,1);
 });
+
 
 test('double-click toggles playfield fullscreen, ignores controls, and Escape exits without pausing',async()=>{
   const h=interfaceHarness(),field=h.elements['battle-screen'];let requests=0,exits=0;
@@ -322,9 +346,77 @@ test('double-click toggles playfield fullscreen, ignores controls, and Escape ex
   await field.handlers.dblclick(event);assert.equal(exits,1);assert.equal(h.document.fullscreenElement,null);
   field.requestFullscreen=async()=>{throw new Error('denied');};await field.handlers.dblclick(event);assert.match(h.elements.toast.textContent,/Fullscreen could not start/);
 });
-test('Best Guess toggles on beside Commit and stays available during execution',()=>{
+test('N skips one maneuver per press and ignores typing, modifiers, dialogs and Free Flight',()=>{
+  const h=interfaceHarness({turnBased:true}),{sim,elements:e}=h;e['quick-battle'].onclick();
+  for(const extra of [{repeat:true},{ctrlKey:true},{metaKey:true},{altKey:true},{target:{tagName:'INPUT'}},{target:{tagName:'DIV',isContentEditable:true}}])h.handlers.keydown({...h.key('n'),...extra});
+  assert.equal(sim.turn.stageIndex,0);
+  e.briefing.open=true;h.handlers.keydown(h.key('n'));e.briefing.open=false;assert.equal(sim.turn.stageIndex,0);
+  e.pause.onclick();assert.equal(sim.running,false);h.handlers.keydown(h.key('n'));
+  assert.equal(sim.turn.stageIndex,1);assert.equal(sim.running,false);
+  h.handlers.keydown(h.key('N'));assert.equal(sim.turn.phase,'review');
+  e['launch-practice'].onclick();const before=JSON.stringify(sim.turn);h.handlers.keydown(h.key('n'));assert.equal(JSON.stringify(sim.turn),before);
+});
+
+test('Declan chooses the port or starboard recording from the current flanking geometry',()=>{
+  for(const side of [-1,1]){
+    const players=[],h=renderedHarness(players,{turnBased:true}),s=h.sim;s.running=true;s.tick=()=>{};
+    Object.assign(s.enemy,{x:6000,y:0,z:0,heading:0});Object.assign(s.player,{x:6000+side*1200,y:0,z:900,heading:0,pitch:0});
+    s.selectManeuver('flank',0);for(let i=0;i<3;i++)s.updateStep(i,{weapon:'phaser',target:'hull',range:1000,maneuvers:[0]});
+    assert(s.commitOrders());h.step(60);
+    const turn=side<0?'starboard':'port';assert.equal(h.elements['helm-order'].textContent,`Come to ${turn}.`);
+    assert.equal(players.at(-1).url,`assets/Come to ${turn}_Declan.mp3`);
+    players.at(-1).onended();h.runTimers();assert.equal(players.at(-1).url,`assets/Coming to ${turn}_Allison.mp3`);
+  }
+});
+
+test('live Cinema announces maneuver changes with the QA computer and stops when leaving the view',()=>{
+  const spoken=[];let cancelled=0;
+  const h=interfaceHarness({turnBased:true,cinemaQA:true,window:{AudioContext:class{constructor(){this.state='running';}resume(){return Promise.resolve();}},BattleWeaponAudio:class{setEnabled(){}stopAll(){}},speechSynthesis:{speak:line=>spoken.push(line.text),cancel:()=>cancelled++,getVoices:()=>[]},SpeechSynthesisUtterance:class{constructor(text){this.text=text;}}}});
+  h.sim.tick=()=>{};h.elements['quick-battle'].onclick();h.step(60);assert.equal(spoken.length,0);
+  h.scene.setCamera('cinematic');h.step(120);assert.match(spoken.at(-1),/Flanking attack/);h.step(180);assert.equal(spoken.length,1);
+  h.handlers.keydown(h.key('n'));assert.equal(h.sim.turn.stageIndex,1);assert.equal(h.sim.running,true);assert.equal(h.scene.mode,'cinematic');h.step(240);assert.match(spoken.at(-1),/Keep your distance/);assert.equal(spoken.length,2);
+  h.scene.setCamera('chase');h.step(300);assert.equal(cancelled,2);assert.equal(spoken.length,2);
+});
+
+test('Cinema computer speech ducks current and newly starting crew recordings and restores their volume',()=>{
+  const spoken=[],players=[];
+  class Audio{constructor(url){this.url=url;players.push(this);}play(){return Promise.resolve();}pause(){}}
+  const h=interfaceHarness({turnBased:true,cinemaQA:true,voiceClips:{'captain\nCome to port.':'captain.mp3','helm\nComing to port.':'helm.mp3'},window:{Audio,speechSynthesis:{speak:line=>spoken.push(line),cancel(){},getVoices:()=>[]},SpeechSynthesisUtterance:class{constructor(text){this.text=text;}}}});
+  h.sim.tick=()=>{};h.elements['quick-battle'].onclick();h.step(3060);assert.equal(players[0].volume,.85);
+  h.scene.setCamera('cinematic');h.step(3120);assert.equal(spoken[0].volume,1);assert.equal(players[0].volume,.17,'the current captain command becomes quieter');
+  players[0].onended();h.runTimers();assert.equal(players.at(-1).url,'helm.mp3');assert.equal(players.at(-1).volume,.17,'crew replies starting under the computer also stay quiet');
+  spoken[0].onend();assert.equal(players.at(-1).volume,.85,'normal crew volume returns when the computer finishes');
+  h.sim.startStage(1);h.step(3180);assert.equal(players.at(-1).volume,.17);
+  h.scene.setCamera('chase');h.step(3240);assert.equal(players.at(-1).volume,.85,'leaving Cinema restores the crew volume');
+});
+
+test('the fly-past turn-back queues Declans Come about cue and discards it after the maneuver advances',()=>{
+  const players=[];class Audio{constructor(url){this.url=url;players.push(this);}play(){return Promise.resolve();}pause(){}}
+  const h=interfaceHarness({turnBased:true,voiceClips:{'captain\nCome about.':'come-about.mp3'},window:{Audio}});
+  h.sim.tick=()=>{};h.elements['quick-battle'].onclick();h.step(3060);
+  h.sim.turn.navigation.flyPastComplete=true;h.sim.events.push({type:'come-about',ship:'Enterprise',stage:0});h.step(3120);
+  assert.equal(h.elements['helm-order'].textContent,'Come about.');assert.equal(players.at(-1).url,'come-about.mp3');players.at(-1).onended();
+  h.sim.startStage(1);h.sim.events.push({type:'come-about',ship:'Enterprise',stage:0});h.step(3180);
+  assert.equal(players.length,1,'an old come-about command cannot play over the next maneuver');
+});
+
+test('Commit Next Turn reuses the current plan only between turns',()=>{
+  const h=interfaceHarness({turnBased:true}),{sim,elements:e}=h;
+  assert.equal(e['commit-next-turn'].disabled,true);e['commit-next-turn'].onclick();assert.equal(sim.turn.phase,'planning');
+  e['quick-battle'].onclick();assert.equal(e['commit-next-turn'].disabled,true);
+  const plan=JSON.stringify(sim.turn.draft),routes=JSON.stringify(sim.turn.maneuvers);
+  e['commit-next-turn'].onclick();assert.equal(sim.turn.number,1);
+  sim.finishPass();h.step(120);assert.equal(e['commit-next-turn'].disabled,false);
+  assert.equal(h.document.activeElement,e['commit-next-turn']);assert.equal(e['commit-next-turn'].attrs['data-next-action'],'true');
+  e['open-planner'].focus();h.step(240);assert.equal(h.document.activeElement,e['open-planner'],'refreshes do not steal focus back');
+  e['open-planner'].onclick();assert.equal(e['commit-next-turn'].disabled,true);e['wizard-cancel'].onclick();
+  e['commit-next-turn'].onclick();assert.equal(sim.turn.number,2);assert(sim.maneuvering);assert.equal(JSON.stringify(sim.turn.draft),plan);assert.equal(JSON.stringify(sim.turn.maneuvers),routes);assert.equal(e['plan-wizard'].open,false);
+  assert.equal(e['commit-next-turn'].disabled,true);assert.equal(e['commit-next-turn'].attrs['data-next-action'],'false');sim.result='defeat';h.step(360);assert.equal(e['commit-next-turn'].disabled,true);
+});
+
+test('Best Guess toggles on beside the planner and stays available during execution',()=>{
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-  assert(html.indexOf('id="commit-orders"')<html.indexOf('id="random-turn"'));
+  assert(!html.includes('id="commit-orders"'));assert(html.indexOf('id="open-planner"')<html.indexOf('id="random-turn"'));
   assert(!html.includes('id="random-continue"'));
   assert.match(html, /id="random-turn"[^>]*role="switch"[^>]*aria-checked="false"/);
   assert.match(html,/>Best Guess<\/span>/);assert(!html.includes('Best Guess Continue'));
@@ -337,6 +429,23 @@ test('Best Guess toggles on beside Commit and stays available during execution',
   }
 });
 
+test('Random Selection sits after Best Guess, continues QA turns, and switches exclusively with Best Guess',()=>{
+  const h=interfaceHarness({turnBased:true}),{sim,elements:e,step}=h;
+  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+  assert(html.indexOf('id="random-selection"')>html.indexOf('id="random-turn"'));
+  sim.tick=()=>{};sim.random=()=>.5;e['random-selection'].onclick();
+  assert.equal(e['random-selection-state'].textContent,'ON');assert.equal(e['random-selection'].attrs['aria-checked'],'true');
+  assert.equal(sim.turn.maneuvers.filter(Boolean).length,1);assert.equal(sim.captainEnabled,false);
+  sim.finishPass();step(60);assert.equal(sim.turn.number,2);assert(sim.maneuvering);
+  e['random-selection'].onclick();assert.equal(e['random-selection-state'].textContent,'OFF');
+  sim.finishPass();step(120);assert.equal(sim.turn.phase,'review');assert.equal(sim.turn.number,2);
+  e['random-turn'].onclick();assert.equal(e['best-guess-state'].textContent,'ON');
+  const before=JSON.stringify(sim.turn);e['random-selection'].onclick();
+  assert.equal(e['best-guess-state'].textContent,'OFF');assert.equal(e['random-selection-state'].textContent,'ON');
+  assert.equal(JSON.stringify(sim.turn),before,'switching modes during a turn preserves current orders');
+  e['random-turn'].onclick();assert.equal(e['random-selection-state'].textContent,'OFF');
+});
+
 test('Best Guess continues across turns and toggling off finishes only the current turn',()=>{
   const {sim,elements:e,step}=interfaceHarness({turnBased:true});
   e['random-turn'].onclick();assert.equal(e['random-turn'].attrs['aria-checked'],'true');assert.equal(sim.maneuvering,true);
@@ -344,7 +453,7 @@ test('Best Guess continues across turns and toggling off finishes only the curre
   assert.equal(sim.turn.number,2);assert.equal(sim.maneuvering,true);assert(sim.planReady());assert.equal(sim.captainEnabled,true);
   e['random-turn'].onclick();assert.equal(e['random-turn'].attrs['aria-checked'],'false');assert.equal(sim.maneuvering,true,'toggling off does not cancel the current turn');
   sim.finishPass();step(120);assert.equal(sim.turn.phase,'review');assert.equal(sim.turn.number,2);
-  assert.equal(e['commit-orders'].textContent,'COMMIT NEXT TURN');assert.equal(e['random-turn'].disabled,false);
+  assert.equal(e['open-planner'].textContent,'BUILD ATTACK PLAN');assert.equal(e['random-turn'].disabled,false);
 });
 
 test('random continuation honors pause, dialogs, the end of combat, and reset',()=>{
@@ -406,7 +515,7 @@ test('R fires practice phasers only in Free Flight and release stops held fire',
 
 test('planner accepts three phasers or three torpedoes and shows resource costs',()=>{
  for(const weapon of ['phaser','torpedo']){
- const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();e['maneuver-direct'].onclick();e['done-maneuvers'].onclick();
+ const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();e['maneuver-direct'].onclick();e['plan-step-0'].onclick();
  for(let i=0;i<3;i++){e['plan-step-'+i].onclick();pickWeapon(e,weapon);e['target-hull'].onclick();}
  assert.equal(e['wizard-commit'].disabled,false);assert.match(e['weapon-budget'].textContent,/28% capacitor/);assert.match(e['weapon-budget'].textContent,/24\/24 remaining/);
  assert.equal(e['choose-phaser'].disabled,false);assert.equal(e['choose-torpedo'].disabled,false);
@@ -418,12 +527,12 @@ test('intro plays after the first successful commit, stays silent on later turns
   const intros=[];
   class IntroAudio{constructor(){this.plays=0;intros.push(this);}setEnabled(value){this.enabled=value;}playOnce(){this.plays++;}update(state){this.active=state.active;}reset(){this.resets=(this.resets||0)+1;}}
   const h=interfaceHarness({turnBased:true,window:{Audio:class{},BattleIntroAudio:IntroAudio}}),e=h.elements;
-  e['commit-orders'].onclick();assert.equal(intros.length,0,'invalid plans do not consume the intro');
+  e['wizard-commit'].onclick();assert.equal(intros.length,0,'invalid plans do not consume the intro');
   e['quick-battle'].onclick();assert.equal(intros.length,1);assert.equal(intros[0].plays,1);
   h.sim.finishPass();e['quick-battle'].onclick();assert.equal(intros[0].plays,1,'later turns do not replay it');
   e['quick-rematch'].onclick();assert.equal(intros.length,1);assert.equal(intros[0].plays,2);
   e['launch-practice'].onclick();assert.equal(intros[0].plays,2,'Free Flight does not start the music');assert.equal(intros[0].active,false);
-  e['commit-orders'].onclick();assert.equal(intros[0].plays,2);
+  e['wizard-commit'].onclick();assert.equal(intros[0].plays,2);
   e.pause.onclick();assert.equal(intros[0].active,false);e.pause.onclick();assert.equal(intros[0].active,false);h.step(60);assert.equal(intros[0].plays,2);
 });
 
@@ -482,9 +591,9 @@ test('destruction shows the end screen as soon as wreckage stops moving',()=>{
 
 function pickWeapon(elements,weapon){if(elements['choose-'+weapon].attrs['aria-pressed']!=='true')elements['choose-'+weapon].onclick();}
 
-function buildWizardPlan(elements,routes=['direct','direct','direct']){
+function buildWizardPlan(elements,routes=['direct','direct']){
   routes.forEach(key=>elements['maneuver-'+key].onclick());
-  elements['done-maneuvers'].onclick();
+  elements['plan-step-0'].onclick();
   ['phaser','phaser','torpedo'].forEach((weapon,i)=>{
     if(routes.every(key=>key==='flee'))return;
     elements['plan-step-'+i].onclick();if(elements['choose-'+weapon].attrs['aria-pressed']!=='true')elements['choose-'+weapon].onclick();elements['target-'+['shield-fore','bridge','mainEngines'][i]].onclick();
@@ -503,10 +612,83 @@ test('Free Flight enables manual controls without a planner and Engage returns t
   e.start.onclick();assert.equal(sim.freeFlight,false);assert.equal(sim.turnBased,true);assert.equal(e['plan-wizard'].open,true);
 });
 
+test('Free Flight control keys resume a pause and still perform their control action',()=>{
+  for(const control of ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','w','s',' ','r','t','c']){
+    const h=interfaceHarness({turnBased:true});h.elements['launch-practice'].onclick();h.elements.pause.onclick();
+    assert.equal(h.sim.running,false);h.handlers.keydown(h.key(control));
+    assert.equal(h.sim.running,true,control);assert.equal(h.sim.freeFlight,true);
+    if(control==='r'||control==='t')assert.equal(h.sim.shots,1,'the waking key also fires');
+    if(control===' ')assert.equal(h.sim.player.speed,0,'Space wakes the simulation and orders all stop');
+    if(control==='ArrowRight'){h.step(60);assert(h.sim.player.heading>0,'the waking key also steers');}
+  }
+});
+
+test('Free Flight stays paused for modified keys, text entry, dialogs and unrelated shortcuts',()=>{
+  const h=interfaceHarness({turnBased:true});h.elements['launch-practice'].onclick();h.elements.pause.onclick();
+  for(const modifier of ['ctrlKey','metaKey','altKey']){h.handlers.keydown({...h.key('w'),[modifier]:true});assert.equal(h.sim.running,false);}
+  h.handlers.keydown({...h.key('w'),target:{tagName:'INPUT',type:'text'}});assert.equal(h.sim.running,false);
+  h.handlers.keydown({...h.key('w'),target:{tagName:'DIV',isContentEditable:true}});assert.equal(h.sim.running,false);
+  h.elements.briefing.showModal();h.handlers.keydown(h.key('w'));assert.equal(h.sim.running,false);h.elements.briefing.close();
+  h.handlers.keydown(h.key('q'));assert.equal(h.sim.running,false);
+  h.handlers.keydown(h.key('d'));assert.equal(h.sim.running,false);assert.equal(h.sim.result,null);
+  h.sim.freeFlight=false;h.sim.time=1;h.handlers.keydown(h.key('w'));assert.equal(h.sim.running,false,'combat still needs an explicit resume');
+});
+
 test('the game randomizes both starting locations again for a new engagement',()=>{
   const {sim,elements:e}=interfaceHarness({turnBased:true,randomStart:true}),before=[sim.player.x,sim.player.z,sim.enemy.x,sim.enemy.z];
   e.rematch.onclick();assert.notDeepEqual([sim.player.x,sim.player.z,sim.enemy.x,sim.enemy.z],before);
-  assert.equal(e['plan-wizard'].open,true);assert(sim.contact);
+  assert.equal(e['plan-wizard'].open,true);assert(sim.range>3900);
+});
+
+test('Cinema camera controls select flight modes and speed limits and show actual shuttle speed',()=>{
+  const h=interfaceHarness({turnBased:true}),e=h.elements; e['quick-battle'].onclick();h.scene.setCamera('cinematic');h.step(120);
+  assert.equal(e['cinema-camera-controls'].hidden,false);assert.equal(e['camera-cautious'].attrs['aria-pressed'],'true');
+  assert.equal(e['camera-shuttle-speed'].value,'100');
+  e['camera-reckless'].onclick();assert.equal(h.scene.cinemaFlightMode,'reckless');assert.equal(e['camera-reckless'].attrs['aria-pressed'],'true');
+  e['camera-shuttle-speed'].handlers.input({target:{value:'40'}});assert.equal(h.scene.cinemaSpeedPercent,40);assert.equal(e['camera-shuttle-speed-limit'].textContent,'40% / LIMIT 750 M/S');
+  h.scene.cinemaTracking={velocity:{length:()=>73.4}};h.step(240);assert.equal(e['camera-shuttle-speed-current'].textContent,'734 M/S');
+  h.scene.cinemaTracking.reversing=true;h.step(300);assert.equal(e['camera-shuttle-speed-current'].textContent,'734 M/S ASTERN');
+  e['camera-cautious'].onclick();assert.equal(h.scene.cinemaFlightMode,'cautious');
+  h.sim.running=false;h.sim.player.speed=73;h.sim.enemy.speed=-21;h.step(360);assert.equal(e['camera-shuttle-speed-current'].textContent,'0 M/S');
+  assert.equal(e['camera-enterprise-speed'].textContent,'730 M/S');assert.equal(e['camera-yorktown-speed'].textContent,'210 M/S ASTERN');
+  assert.equal(Number(e['camera-shuttle-speed'].max),100);
+  e['camera-shuttle-speed'].handlers.input({target:{value:'100'}});assert.equal(h.scene.cinemaSpeedPercent,100,'the slider top tracks Enterprise automatically');
+  h.sim.player.detachedNacelles.port=true;h.step(420);
+  assert.equal(Number(e['camera-shuttle-speed'].max),100,'the percentage scale stays fixed');
+  assert.equal(e['camera-shuttle-speed-limit'].textContent,'100% / LIMIT '+Math.round(125*h.sim.flightMobility(h.sim.player)*1.5*10)+' M/S','engine loss updates the selected speed capacity');
+  h.scene.setCamera('tactical');h.step(480);assert.equal(e['cinema-camera-controls'].hidden,true);
+});
+
+test('Cinema tactical inset appears after Quick Battle without closing the welcome panel first',()=>{
+  const h=interfaceHarness({turnBased:true}),e=h.elements;
+  e['quick-battle'].onclick();h.scene.setCamera('cinematic');h.step(120);h.step(240);
+  assert.equal(e['launch-card'].hidden,true);assert.equal(e['cinema-tactical'].hidden,false);
+  h.scene.setCamera('chase');h.step(360);assert.equal(e['cinema-tactical'].hidden,true);
+});
+
+test('Cinema panel headers collapse independently and suppress fullscreen double-clicks',()=>{
+  const {elements:e}=interfaceHarness();
+  for(const [titleId,bodyId] of [['cinema-tactical-title','cinema-tactical-body'],['cinema-camera-title','cinema-camera-body']]){
+    let prevented=0,stopped=0;const event={preventDefault(){prevented++;},stopPropagation(){stopped++;}};
+    e[titleId].handlers.dblclick(event);assert(e[bodyId].hidden);assert.equal(e[titleId].attrs['aria-expanded'],'false');assert.equal(prevented,1);assert.equal(stopped,1);
+    e[titleId].handlers.dblclick(event);assert.equal(e[bodyId].hidden,false);assert.equal(e[titleId].attrs['aria-expanded'],'true');
+  }
+});
+
+test('Cinema tactical inset appears when Plan Attack hides the welcome panel',()=>{
+  const h=interfaceHarness({turnBased:true}),e=h.elements;
+  e['plan-attack'].onclick();h.scene.setCamera('cinematic');h.step(120);h.step(240);
+  assert.equal(e['launch-card'].hidden,true);assert.equal(e['cinema-tactical'].hidden,false);
+});
+
+test('the opening approach displays its countdown and blocks ending the turn and warp',()=>{
+  const h=interfaceHarness({turnBased:true,randomStart:true}),s=h.sim;
+  s.running=true;s.applyPlanPreset('strong');assert(s.commitOrders());h.step(120);
+  assert.equal(h.elements['pass-phase'].textContent,'INITIAL APPROACH');
+  assert.match(h.elements['pass-instruction'].textContent,/5 seconds/);
+  assert.match(h.elements['live-maneuver'].textContent,/Approaching Yorktown/);
+  assert.equal(h.elements['end-pass'].disabled,true);assert.equal(h.elements.warp.disabled,true);
+  assert.match(h.elements['orders-summary'].textContent,/WAITING FOR APPROACH/);
 });
 
 test('Yorktown engineering, shield matrix and weapons track telemetry and clear when sensors fail',()=>{
@@ -542,52 +724,51 @@ test('large maneuver toggles default to separate maneuvers and retain multiple e
   const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();buildWizardPlan(e);
   for(let i=0;i<3;i++){
     e['plan-step-'+i].onclick();
-    assert.deepEqual([0,1,2].map(m=>e['attack-maneuver-'+m].attrs['aria-pressed']==='true'),[0,1,2].map(m=>m===i));
+    assert.deepEqual([0,1].map(m=>e['attack-maneuver-'+m].attrs['aria-pressed']==='true'),[0,1].map(m=>m===Math.min(i,1)));
   }
   e['plan-step-0'].onclick();e['attack-maneuver-1'].onclick();e['save-plan-step'].onclick();
   e['wizard-commit'].onclick();assert.deepEqual(sim.turn.orders[0].maneuvers,[0,1]);
 });
 
-test('Done accepts a single maneuver with all three attacks assigned to it',()=>{
+test('attack tabs configure a single maneuver without a Done button',()=>{
   const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();
-  assert.equal(e['done-maneuvers'].disabled,true);e['maneuver-direct'].onclick();
-  assert.equal(e['done-maneuvers'].disabled,false);assert.equal(e['done-maneuvers'].hidden,false);
-  e['done-maneuvers'].onclick();
+  assert(!fs.readFileSync(path.join(root,'index.html'),'utf8').includes('id="done-maneuvers"'));e['maneuver-direct'].onclick();
+  e['plan-step-0'].onclick();
   assert.equal(e['shot-choice'].hidden,false);
   ['phaser','phaser','torpedo'].forEach((weapon,i)=>{
     e['plan-step-'+i].onclick();assert.equal(e['attack-maneuver-0'].attrs['aria-pressed'],'true');assert.equal(e['attack-maneuver-1'].disabled,true);
     pickWeapon(e,weapon);e['target-hull'].onclick();e['save-plan-step'].onclick();
   });
   assert.equal(e['wizard-commit'].disabled,false);e['wizard-commit'].onclick();
-  assert.deepEqual(sim.turn.maneuvers,['direct',null,null]);assert.deepEqual(Array.from(sim.turn.orders,s=>s.maneuvers),[[0],[0],[0]]);
+  assert.deepEqual(sim.turn.maneuvers,['direct',null]);assert.deepEqual(Array.from(sim.turn.orders,s=>s.maneuvers),[[0],[0],[0]]);
   assert.equal(e['live-plan'].children.length,1);
 });
 
-test('maneuver clicks append in order, including repeated routes, until Done',()=>{
+test('maneuver clicks append in order, including repeated routes, before selecting attacks',()=>{
   const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();
-  for(const key of ['port','port','above'])e['maneuver-'+key].onclick();
+  for(const key of ['flank','flank','above'])e['maneuver-'+key].onclick();
   assert.equal(e['maneuver-choice'].hidden,false);assert.equal(e['maneuver-direct'].disabled,true);
   e['maneuver-direct'].onclick(); // Even an extra programmatic click cannot overwrite a full plan.
-  assert.match(e['route-label-0'].textContent,/port/i);assert.match(e['route-label-1'].textContent,/port/i);assert.match(e['route-label-2'].textContent,/above/i);
-  e['route-delete-1'].onclick();e['maneuver-below'].onclick();e['done-maneuvers'].onclick();
-  assert.equal(e['shot-choice'].hidden,false);assert.deepEqual(sim.turn.draftManeuvers,[null,null,null]);
+  assert.match(e['route-label-0'].textContent,/flanking/i);assert.match(e['route-label-1'].textContent,/flanking/i);
+  e['route-delete-1'].onclick();e['maneuver-below'].onclick();e['plan-step-0'].onclick();
+  assert.equal(e['shot-choice'].hidden,false);assert.deepEqual(sim.turn.draftManeuvers,[null,null]);
   ['phaser','phaser','torpedo'].forEach((weapon,i)=>{
     e['plan-step-'+i].onclick();pickWeapon(e,weapon);e['target-hull'].onclick();e['save-plan-step'].onclick();
   });
-  e['wizard-commit'].onclick();assert.deepEqual(sim.turn.maneuvers,['port','below','above']);
+  e['wizard-commit'].onclick();assert.deepEqual(sim.turn.maneuvers,['flank','below']);
 });
 
 test('Commit enables with all three attacks on one maneuver, including an unsaved final attack',()=>{
-  const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();e['maneuver-direct'].onclick();e['done-maneuvers'].onclick();
+  const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();e['maneuver-direct'].onclick();e['plan-step-0'].onclick();
   for(let i=0;i<2;i++){pickWeapon(e,'phaser');e['target-hull'].onclick();e['save-plan-step'].onclick();}
   assert.equal(e['wizard-commit'].disabled,true);pickWeapon(e,'torpedo');assert.equal(e['wizard-commit'].disabled,true);
   e['target-hull'].onclick();assert.equal(e['wizard-commit'].disabled,false);
-  assert.equal(e['attack-maneuver-0'].attrs['aria-pressed'],'true');assert.equal(e['attack-maneuver-1'].hidden,true);assert.equal(e['attack-maneuver-2'].hidden,true);
+  assert.equal(e['attack-maneuver-0'].attrs['aria-pressed'],'true');assert.equal(e['attack-maneuver-1'].hidden,true);assert.equal(e['attack-maneuver-2'],undefined);
   e['wizard-commit'].onclick();assert.equal(sim.turn.phase,'approach');assert.deepEqual(Array.from(sim.turn.orders,o=>o.maneuvers),[[0],[0],[0]]);
 });
 
 test('completing weapon, target, maneuvers and range advances automatically and enables final Commit',()=>{
-  const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();e['maneuver-direct'].onclick();e['done-maneuvers'].onclick();
+  const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();e['maneuver-direct'].onclick();e['plan-step-0'].onclick();
   pickWeapon(e,'phaser');e['attack-range'].onchange({target:{value:'900'}});
   assert.equal(e['plan-step-0'].attrs['aria-current'],'step');e['target-hull'].onclick();assert.equal(e['plan-step-1'].attrs['aria-current'],'step');
   pickWeapon(e,'phaser');e['target-bridge'].onclick();
@@ -602,7 +783,7 @@ test('completing weapon, target, maneuvers and range advances automatically and 
 });
 
 test('selecting a torpedo leaves both weapons available for remaining attacks',()=>{
-  const {elements:e}=interfaceHarness({turnBased:true});e.start.onclick();e['maneuver-direct'].onclick();e['done-maneuvers'].onclick();
+  const {elements:e}=interfaceHarness({turnBased:true});e.start.onclick();e['maneuver-direct'].onclick();e['plan-step-0'].onclick();
   assert.equal(e['choose-phaser'].attrs['aria-pressed'],'false');assert.equal(e['choose-torpedo'].attrs['aria-pressed'],'false');
   e['choose-torpedo'].onclick();e['target-hull'].onclick();e['attack-range'].onchange({target:{value:'700'}});
   for(const target of ['bridge','engines']){
@@ -613,7 +794,7 @@ test('selecting a torpedo leaves both weapons available for remaining attacks',(
 });
 
 test('three configured orders enable Commit and deselection reopens a stage',()=>{
-  const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();e['maneuver-direct'].onclick();e['done-maneuvers'].onclick();
+  const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();e['maneuver-direct'].onclick();e['plan-step-0'].onclick();
   ['phaser','phaser','torpedo'].forEach((weapon,i)=>{
     e['plan-step-'+i].onclick();pickWeapon(e,weapon);e['target-hull'].onclick();
   });
@@ -631,26 +812,26 @@ test('three configured orders enable Commit and deselection reopens a stage',()=
 test('deleting a maneuver requires reassignment and remains transactional',()=>{
   const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();buildWizardPlan(e);
   e['route-delete-1'].onclick();assert.equal(e['route-delete-1'].hidden,true);assert.equal(e['wizard-commit'].disabled,true);
-  assert.deepEqual(sim.turn.draftManeuvers,[null,null,null]);
-  e['done-maneuvers'].onclick();e['plan-step-1'].onclick();assert.equal(e['attack-maneuver-1'].attrs['aria-pressed'],'false');
+  assert.deepEqual(sim.turn.draftManeuvers,[null,null]);
+  e['plan-step-0'].onclick();e['plan-step-1'].onclick();assert.equal(e['attack-maneuver-1'].attrs['aria-pressed'],'false');
   e['attack-maneuver-0'].onclick();e['save-plan-step'].onclick();
   assert.equal(e['wizard-commit'].disabled,false);e['wizard-commit'].onclick();
-  assert.deepEqual(sim.turn.maneuvers,['direct',null,'direct']);assert.deepEqual(sim.turn.orders[1].maneuvers,[0]);
+  assert.deepEqual(sim.turn.maneuvers,['direct',null]);assert.deepEqual(sim.turn.orders[1].maneuvers,[0]);
   e['open-planner'].onclick();assert.equal(e['route-delete-0'].disabled,true);e['wizard-cancel'].onclick();
 });
 
-test('wizard commits three maneuvers in one pass and applies pending edits explicitly',()=>{
+test('wizard commits two maneuvers in one pass and applies pending edits explicitly',()=>{
   const h=interfaceHarness({turnBased:true}),{sim,elements}=h;
   elements.start.onclick();assert.equal(elements['plan-wizard'].open,true);assert.equal(sim.running,false);
   assert.equal(elements['wizard-commit'].disabled,true);
-  buildWizardPlan(elements,['direct','above','starboard']);
+  buildWizardPlan(elements,['direct','above']);
   assert.equal(sim.planReady(),false);assert.equal(elements['wizard-commit'].disabled,false);
   elements['wizard-commit'].onclick();assert.equal(sim.turn.phase,'approach');assert.equal(sim.running,true);assert.equal(elements['plan-wizard'].open,false);
-  assert.deepEqual(sim.turn.maneuvers,['direct','above','starboard']);assert.equal(elements['live-plan'].children.length,3);
+  assert.deepEqual(sim.turn.maneuvers,['direct','above']);assert.equal(elements['live-plan'].children.length,2);
   assert.match(elements['live-plan'].children[1].children[0].textContent,/^M2\. Attack from above.*Bridge/);assert.equal(sim.turn.orders[1].target,'bridge');
   elements['open-planner'].onclick();elements['plan-step-1'].onclick();elements['target-reactor'].onclick();elements['save-plan-step'].onclick();
   assert.equal(sim.turn.orders[1].target,'bridge');assert.equal(sim.turn.revisions,2);
-  elements['wizard-apply'].onclick();assert.equal(sim.turn.orders[1].target,'reactor');assert.equal(sim.turn.revisions,1);assert.equal(elements['plan-wizard'].open,false);
+  elements['wizard-apply'].onclick();assert.equal(elements['wizard-commit'].disabled,false);elements['wizard-commit'].onclick();assert.equal(sim.turn.orders[1].target,'reactor');assert.equal(sim.turn.revisions,1);assert.equal(elements['plan-wizard'].open,false);
 });
 
 test('Cancel, Escape and the close button discard staged edits without spending revisions',()=>{
@@ -663,42 +844,66 @@ test('Cancel, Escape and the close button discard staged edits without spending 
 });
 
 test('Cancel during initial planning discards route and shot edits and restores the decision clock',()=>{
-  const {sim,elements}=interfaceHarness({turnBased:true});elements.start.onclick();buildWizardPlan(elements,['port','above','direct']);
-  elements['wizard-cancel'].onclick();assert.deepEqual(sim.turn.draftManeuvers,[null,null,null]);assert.deepEqual(sim.turn.draft,[null,null,null]);assert.equal(sim.running,true);
+  const {sim,elements}=interfaceHarness({turnBased:true});elements.start.onclick();buildWizardPlan(elements,['flank','above']);
+  elements['wizard-cancel'].onclick();assert.deepEqual(sim.turn.draftManeuvers,[null,null]);assert.deepEqual(sim.turn.draft,[null,null,null]);assert.equal(sim.running,true);
 });
 
-test('three flee stages need no shots and Commit starts the first stage only',()=>{
+test('two flee stages need no shots and Commit starts the first stage only',()=>{
   const {sim,elements}=interfaceHarness({turnBased:true});elements.start.onclick();
-  for(let i=0;i<3;i++){elements['route-stage-'+i].onclick();elements['maneuver-flee'].onclick();}
+  for(let i=0;i<2;i++){elements['route-stage-'+i].onclick();elements['maneuver-flee'].onclick();}
   assert.equal(elements['wizard-commit'].disabled,false);assert.equal(sim.planReady(),false);
   elements['wizard-commit'].onclick();assert.equal(sim.turn.phase,'withdraw');assert.equal(sim.turn.stageIndex,0);assert.equal(sim.shots,0);
-  assert.equal(elements['live-plan'].children.length,3);assert.equal(elements['helm-turn-state'].textContent,'AUTO HELM');
+  assert.equal(elements['live-plan'].children.length,2);assert.equal(elements['helm-turn-state'].textContent,'AUTO HELM');
 });
 
-test('editing a paused pass supports Apply without resuming it',()=>{
+test('editing a paused pass saves on Apply and resumes only on Commit',()=>{
   const {sim,elements}=interfaceHarness({turnBased:true});elements.start.onclick();buildWizardPlan(elements);elements['wizard-commit'].onclick();
   sim.running=false;elements['open-planner'].onclick();elements['plan-step-1'].onclick();elements['target-reactor'].onclick();elements['save-plan-step'].onclick();
-  elements['wizard-apply'].onclick();assert.equal(sim.turn.orders[1].target,'reactor');assert.equal(sim.running,false);assert.equal(sim.turn.revisions,1);
+  elements['wizard-apply'].onclick();assert.equal(sim.running,false);assert.notEqual(sim.turn.orders[1].target,'reactor');assert.equal(elements['wizard-commit'].disabled,false);elements['wizard-commit'].onclick();assert.equal(sim.turn.orders[1].target,'reactor');assert.equal(sim.running,true);assert.equal(sim.turn.revisions,1);
 });
 
-test('live maneuver and attack edits apply together without resetting the turn or resuming a paused game',()=>{
+test('live editing permits targets only and Apply then Commit preserves turn progress',()=>{
   const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();buildWizardPlan(e);e['wizard-commit'].onclick();sim.running=false;
-  const remaining=sim.turn.remaining,enemy=JSON.stringify(sim.turn.enemyOrders),position={x:sim.player.x,y:sim.player.y,z:sim.player.z};
-  e['open-planner'].onclick();assert.equal(e['maneuver-choice'].hidden,false);assert.equal(e['shot-choice'].hidden,true);
-  e['route-stage-0'].onclick();assert.equal(e['maneuver-behind'].disabled,false);e['maneuver-behind'].onclick();
-  assert.equal(sim.turn.maneuver,'direct');assert.match(e['route-label-0'].textContent,/behind/);
-  e['plan-step-1'].onclick();e['target-reactor'].onclick();e['save-plan-step'].onclick();e['wizard-apply'].onclick();
-  assert.equal(e['plan-wizard'].open,false);assert.equal(sim.turn.maneuver,'behind');assert.equal(sim.turn.orders[1].target,'reactor');assert.equal(sim.turn.revisions,0);
-  assert.equal(sim.turn.remaining,remaining);assert.equal(sim.running,false);assert.equal(JSON.stringify(sim.turn.enemyOrders),enemy);
-  assert.deepEqual({x:sim.player.x,y:sim.player.y,z:sim.player.z},position);assert.equal(sim.player.torpedoes,24);
+  const remaining=sim.turn.remaining,enemy=JSON.stringify(sim.turn.enemyOrders),position={x:sim.player.x,y:sim.player.y,z:sim.player.z},plan=JSON.stringify(sim.turn.draft),routes=JSON.stringify(sim.turn.maneuvers);
+  e['open-planner'].onclick();assert.equal(e['shot-choice'].hidden,false);assert.equal(e['wizard-commit'].hidden,false);assert.equal(e['wizard-commit'].disabled,true);assert.equal(e['save-plan-step'].hidden,true);assert.equal(e['wizard-apply'].hidden,false);
+  for(const id of ['maneuver-step','route-stage-0','route-stage-1','maneuver-behind','choose-phaser','choose-torpedo','attack-range','attack-maneuver-0','attack-maneuver-1'])assert.equal(e[id].disabled,true,id);
+  e['maneuver-step'].onclick();e['route-stage-0'].onclick();e['maneuver-behind'].onclick();e['choose-torpedo'].onclick();e['attack-range'].oninput({target:{value:300}});e['attack-maneuver-1'].onclick();
+  e['plan-step-1'].onclick();e['target-reactor'].onclick();e['wizard-apply'].onclick();assert.equal(JSON.stringify(sim.turn.draft),plan);assert.equal(e['wizard-commit'].disabled,false);
+  e['wizard-commit'].onclick();assert.equal(sim.turn.orders[1].target,'reactor');assert.equal(JSON.stringify(sim.turn.maneuvers),routes);assert.equal(sim.turn.revisions,1);
+  assert.equal(sim.turn.remaining,remaining);assert.equal(sim.running,true);assert.equal(JSON.stringify(sim.turn.enemyOrders),enemy);assert.deepEqual({x:sim.player.x,y:sim.player.y,z:sim.player.z},position);
 });
 
-test('future maneuver edits cancel cleanly and selected maneuvers can be replaced before Commit',()=>{
+
+test('between turns the full planner remains editable and uses Commit plan',()=>{
+  const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();buildWizardPlan(e);e['wizard-commit'].onclick();sim.finishPass();
+  e['open-planner'].onclick();assert.equal(e['wizard-apply'].hidden,true);assert.equal(e['wizard-commit'].hidden,false);assert.equal(e['preset-berserk'].disabled,false);
+  e['preset-strong'].onclick();e['route-stage-1'].onclick();e['maneuver-below'].onclick();e['plan-step-1'].onclick();
+  assert.equal(e['choose-torpedo'].disabled,false);assert.equal(e['attack-range'].disabled,false);e['choose-torpedo'].onclick();e['target-reactor'].onclick();e['attack-range'].oninput({target:{value:750}});
+  e['wizard-commit'].onclick();assert.equal(sim.turn.maneuvers[1],'below');assert.equal(sim.turn.orders[1].weapon,'torpedo');assert.equal(sim.turn.orders[1].range,750);assert.equal(sim.turn.number,2);
+});
+
+
+test('initial plans offer Commit plan directly and hide Apply changes',()=>{
   const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();buildWizardPlan(e);
-  e['route-stage-1'].onclick();e['maneuver-below'].onclick();e['wizard-commit'].onclick();assert.equal(sim.turn.maneuvers[1],'below');sim.running=false;
-  e['open-planner'].onclick();e['route-stage-2'].onclick();e['maneuver-port'].onclick();e['wizard-cancel'].onclick();assert.equal(sim.turn.maneuvers[2],'direct');assert.equal(sim.turn.revisions,2);
-  e['open-planner'].onclick();e['route-stage-2'].onclick();e['maneuver-starboard'].onclick();e['wizard-apply'].onclick();
-  assert.equal(sim.turn.maneuvers[2],'starboard');assert.equal(sim.turn.maneuver,'direct');assert.equal(sim.turn.revisions,1);
+  assert.equal(e['wizard-apply'].hidden,true);assert.equal(e['wizard-commit'].hidden,false);assert.equal(e['wizard-commit'].disabled,false);
+  e['wizard-apply'].onclick();assert.equal(e['plan-wizard'].open,true);assert.equal(sim.turn.phase,'planning');
+  e['wizard-commit'].onclick();assert.equal(e['plan-wizard'].open,false);assert.equal(sim.running,true);assert(sim.maneuvering);
+});
+
+
+test('Apply keeps the editor open, later target changes require Apply again, and Cancel discards applied edits',()=>{
+  const {sim,elements:e}=interfaceHarness({turnBased:true});e.start.onclick();buildWizardPlan(e);e['wizard-commit'].onclick();sim.running=false;
+  const original=JSON.stringify(sim.turn.draft);
+  e['open-planner'].onclick();assert.equal(e['wizard-commit'].disabled,true);assert.equal(e['save-plan-step'].hidden,true);
+  e['plan-step-1'].onclick();e['target-reactor'].onclick();e['wizard-apply'].onclick();
+  assert.equal(e['plan-wizard'].open,true);assert.equal(e['wizard-commit'].disabled,false);assert.equal(JSON.stringify(sim.turn.draft),original);
+  e['target-sensors'].onclick();assert.equal(e['wizard-commit'].disabled,true);e['wizard-commit'].onclick();assert.equal(JSON.stringify(sim.turn.draft),original);
+  e['wizard-apply'].onclick();assert.equal(e['wizard-commit'].disabled,false);e['wizard-cancel'].onclick();
+  assert.equal(JSON.stringify(sim.turn.draft),original);assert.equal(sim.turn.revisions,2);
+  e['open-planner'].onclick();assert.equal(e['wizard-commit'].disabled,true);
+  e['plan-step-1'].onclick();e['target-reactor'].onclick();e['plan-step-2'].onclick();e['target-sensors'].onclick();
+  e['wizard-apply'].onclick();e['wizard-commit'].onclick();
+  assert.equal(sim.turn.orders[1].target,'reactor');assert.equal(sim.turn.orders[2].target,'sensors');assert.equal(sim.turn.revisions,0);assert.equal(e['plan-wizard'].open,false);assert.equal(sim.running,true);
 });
 
 test('Apply rejects a staged action that fired while the plan editor remained open',()=>{
@@ -805,8 +1010,30 @@ test('attack HUD guides shortest turns and nose direction, and hides lost contac
   sim.player.integrity.sensors=0;h.step(600);assert.equal(elements['attack-turn'].textContent,'CONTACT LOST');assert.equal(elements['attack-pitch'].textContent,'');
 });
 
+test('Forward Grid Off hides ship labels, targeting brackets and offscreen annotations',()=>{
+  const h=interfaceHarness(),{sim,scene,elements:e}=h;
+  Object.assign(sim.player,{x:2000,y:0,z:0});Object.assign(sim.enemy,{x:2000,y:0,z:-900});
+  const labels=[],strokes=[];
+  const context=new Proxy({fillText:text=>labels.push(text),stroke:()=>strokes.push(true)},{get:(object,key)=>object[key]??(()=>{})});
+  e.hud.getContext=()=>context;scene.mode='forward';scene.spatialEnabled=true;h.step(120);
+  assert.equal(e['target-tag'].hidden,false);assert(strokes.length>0);
+  e['spatial-guides'].handlers.click();labels.length=strokes.length=0;h.step(240);
+  assert.equal(e['target-tag'].hidden,true);assert.equal(strokes.length,0);
+  scene.project=()=>({x:.7,y:.3,visible:false});h.step(360);
+  assert(!labels.some(label=>label.startsWith('YORKTOWN')));
+  e['spatial-guides'].handlers.click();h.step(480);assert(labels.some(label=>label.startsWith('YORKTOWN')));
+  scene.project=()=>({x:.7,y:.3,visible:true});h.step(600);assert.equal(e['target-tag'].hidden,false);
+});
+
 test('fixed shield diagram shows live strength and warnings for all six sectors',()=>{
   const h=interfaceHarness();
+  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+  for(const prefix of ['','yorktown-']){
+    assert(html.includes('id="'+prefix+'svg-port" x="33"'),'port readout sits on the port side of the ship');
+    assert(html.includes('id="'+prefix+'svg-starboard" x="272"'),'starboard readout sits on the starboard side');
+    assert(html.includes('id="'+prefix+'arc-port" d="M104.3,98.2'),'port warning colors use the port arc');
+    assert(html.includes('id="'+prefix+'arc-starboard" d="M195.7,201.8'),'starboard warning colors use the starboard arc');
+  }
   Object.assign(h.sim.player.shields,{fore:100,aft:75,port:50,starboard:24,dorsal:0,ventral:42});
   h.step(120);
   for(const arc of B.arcs)assert.equal(h.elements['svg-'+arc].textContent,Math.round(h.sim.player.shields[arc])+'%');
@@ -1101,12 +1328,12 @@ test('Reset clears the complete planner draft and permits a fresh plan without c
   e['target-bridge'].onclick();e['attack-range'].oninput({target:{value:'700'}});
   e['wizard-reset'].onclick();
   assert.equal(e['plan-wizard'].open,true);assert.equal(e['wizard-commit'].disabled,true);
-  assert.equal(e['done-maneuvers'].disabled,true);assert.equal(e['attack-range'].value,1000);
+  assert.equal(e['wizard-commit'].disabled,true);assert.equal(e['attack-range'].value,1000);
   for(const style of ['timid','disabling','strong','aggressive','berserk'])assert.equal(e['preset-'+style].attrs['aria-pressed'],'false');
   for(const key of Object.keys(B.maneuvers))assert.equal(e['maneuver-'+key].attrs['aria-pressed'],'false');
   for(const target of Object.keys(B.targets))assert.equal(e['target-'+target].attrs['aria-pressed'],'false');
   for(const weapon of ['phaser','torpedo'])assert.equal(e['choose-'+weapon].attrs['aria-pressed'],'false');
-  for(let i=0;i<3;i++){assert.equal(e['route-label-'+i].textContent,'Choose maneuver');assert.equal(e['plan-step-'+i].disabled,true);}
+  for(let i=0;i<2;i++){assert.equal(e['route-label-'+i].textContent,'Choose maneuver');assert.equal(e['plan-step-'+i].disabled,true);}
   assert.equal(JSON.stringify(sim.turn),original);
   e['wizard-reset'].onclick();e['preset-strong'].onclick();e['wizard-commit'].onclick();
   assert(sim.maneuvering);e['open-planner'].onclick();assert.equal(e['wizard-reset'].disabled,true);
@@ -1115,8 +1342,8 @@ test('Reset clears the complete planner draft and permits a fresh plan without c
 
 test('Reset clears partial maneuver choices and Cancel preserves the original plan',()=>{
   const {sim,elements:e}=interfaceHarness({turnBased:true});e['plan-attack'].onclick();
-  const original=JSON.stringify(sim.turn);e['maneuver-port'].onclick();e['wizard-reset'].onclick();
-  assert.equal(e['done-maneuvers'].disabled,true);assert.equal(e['wizard-error'].textContent,'');
+  const original=JSON.stringify(sim.turn);e['maneuver-flank'].onclick();e['wizard-reset'].onclick();
+  assert.equal(e['wizard-commit'].disabled,true);assert.equal(e['wizard-error'].textContent,'');
   e['wizard-cancel'].onclick();assert.equal(JSON.stringify(sim.turn),original);
 });
 
@@ -1329,8 +1556,10 @@ test('Hull hit ignores shield-only, enemy and practice impacts and expires behin
 test('free flight helm acknowledges manual control and repeated warnings are spaced out',()=>{
   const h=interfaceHarness(),e=h.elements;
   e['launch-practice'].onclick();h.step(60);assert.match(e['helm-reply'].textContent,/Manual control/);
+  assert.equal(e['helm-dialogue'].hidden,true,'Free Flight keeps the dialogue window hidden');
   h.sim.message('HELM','Cloud-top clearance reached.');h.step(120);
   assert.match(e['helm-reply'].textContent,/Cloud-top/);
+  assert.equal(e['helm-dialogue'].hidden,true,'warnings do not reopen the Free Flight dialogue window');
   h.sim.message('HELM','Cloud-top clearance reached.');h.step(180);
   for(let i=4;i<115;i++)h.step(i*60);
   assert.equal(e['helm-dialogue'].hidden,true,'the same warning is not queued repeatedly');
@@ -1372,6 +1601,17 @@ test('dialogue mute stops voices while keeping weapons and ambience enabled, and
   h.sim.events.push({type:'warp'});h.step(180);assert.equal(players.at(-1).url,'assets/Warp complete_Erica.mp3');
 });
 
+test('an actual warp announces completion once while retaining its detailed log message',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true});
+  h.sim.startFreeFlight();h.sim.tick=()=>{};h.sim.events.length=0;
+  Object.assign(h.sim.player,{x:6000,y:0,z:0,heading:0,pitch:0});
+  assert(h.sim.warp());
+  assert(h.sim.events.some(event=>event.type==='message'&&event.text.startsWith('Emergency warp complete:')));
+  h.step(60);assert.equal(players.length,1);assert.equal(players[0].url,'assets/Warp complete_Erica.mp3');
+  players[0].onended();h.runTimers();h.step(120);h.step(1000);
+  assert.equal(players.length,1,'the warp log message must not queue a second completion recording');
+});
+
 test('voice mute stops recorded speech and releases a pending firing command without losing the manual shot',async()=>{
   const players=[];
   class Audio{constructor(url){this.url=url;players.push(this);}play(){return Promise.resolve();}pause(){this.paused=true;}}
@@ -1403,6 +1643,23 @@ test('skipping maneuvers announces continuation and finishes without an automati
   }
 });
 
+test('Allison reports accidental Enterprise collisions once per impact cooldown and ignores deliberate rams',()=>{
+  const players=[];
+  class Audio{constructor(url){this.url=url;players.push(this);}play(){return Promise.resolve();}pause(){}}
+  const h=interfaceHarness({voiceClips:{'allison\nCollision!':'assets/voices/allison-collision.wav'},window:{Audio}});
+  h.sim.running=true;h.sim.tick=()=>{};h.sim.events=[];
+  const collide=(event,ms)=>{h.sim.events.push(event);h.step(ms);};
+  collide({type:'ship-collision',ship:'Enterprise',other:'Yorktown'},60);
+  assert.equal(players.length,1);assert.equal(players[0].url,'assets/voices/allison-collision.wav');
+  assert.equal(h.elements['helm-reply'].textContent,'Collision!');assert.equal(h.elements['helm-speaker'].textContent,'HELM (Allison)');
+  players[0].onended();
+  h.sim.time+=.1;collide({type:'station-collision',ship:'Enterprise'},120);assert.equal(players.length,1);
+  h.sim.time+=3;collide({type:'ship-collision',ship:'Enterprise',other:'Yorktown',intentional:true},180);assert.equal(players.length,1);
+  collide({type:'station-collision',ship:'Yorktown'},240);assert.equal(players.length,1);
+  collide({type:'station-collision',ship:'Enterprise'},300);assert.equal(players.length,2,'a later accident can repeat the same callout');
+  assert.equal(players[1].url,'assets/voices/allison-collision.wav');
+});
+
 test('Erica announces Breaking away when a planned ram times out, stalls or is ended by the captain',()=>{
   for(const reason of ['timeout','stall','captain']){
     const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
@@ -1423,7 +1680,7 @@ test('queued breakaway audio is discarded after the next turn begins',()=>{
   const h=interfaceHarness({turnBased:true,voiceClips:manifest.window.BattleVoiceClips,window:{Audio}});h.sim.tick=()=>{};
   h.elements['quick-battle'].onclick();h.step(3060);h.sim.endPass();h.step(3120);
   h.elements['quick-battle'].onclick();h.step(3180);
-  players[0].onended();h.runTimers();players[1].onended();h.step(3240);
+  players[0].onended();h.runTimers();assert.equal(players.length,1,'the old directional reply expires with its maneuver');h.step(3240);
   assert(!players.some(audio=>/Breaking away/.test(audio.url)),'an old breakaway order cannot play over a new maneuver');
 });
 
@@ -1512,8 +1769,11 @@ test('expired firing opportunities cannot produce spoken torpedo orders or block
       h.sim.turn.navigation.stage='attack';h.sim.turn.orders[0].weapon=h.sim.turn.draft[0].weapon='torpedo';
       assert.equal(h.sim.fire('torpedo',h.sim.player,h.sim.enemy,true),false);assert.equal(h.sim.endPass(),true);
     }
-    h.step(3120);players[0].onended();h.runTimers();players.find(audio=>audio.url==='helm.mp3').onended();h.step(3180);
-    assert.deepEqual(started,['captain.mp3','helm.mp3']);assert.equal(h.sim.shots,0);assert.equal(h.sim.player.torpedoes,24);
+    h.step(3120);players[0].onended();h.runTimers();
+    if(mode==='manual-range')players.find(audio=>audio.url==='helm.mp3').onended();
+    else assert(!players.some(audio=>audio.url==='helm.mp3'),'the ended sweep cannot announce Coming to port');
+    h.step(3180);
+    assert.deepEqual(started,mode==='manual-range'?['captain.mp3','helm.mp3']:['captain.mp3']);assert.equal(h.sim.shots,0);assert.equal(h.sim.player.torpedoes,24);
     if(mode==='manual-range'){
       h.sim.enemy.z=-600;h.elements.torpedo.onclick();h.step(3240);
       assert.equal(h.sim.shots,1);assert.equal(started.at(-1),'assets/Fire torpedo.mp3');assert.equal(h.sim.projectiles.length,1);
@@ -1521,21 +1781,21 @@ test('expired firing opportunities cannot produce spoken torpedo orders or block
   }
 });
 
-test('engine-loss reports wait half a second then play over a captain command and outrank queued chatter',()=>{
+test('engine-loss reports wait nine tenths of a second then play over a captain command and outrank queued chatter',()=>{
   const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
   h.elements['quick-battle'].onclick();h.step(3060);const captain=players.at(-1);
   assert.match(captain.url,/_Declan\.mp3$/);
   h.sim.events.push({type:'warp'},{type:'impact',ship:'Enterprise',hullDamage:1},{type:'nacelle-detached',ship:'Enterprise',side:'port'});
   h.step(3120);assert.equal(players.at(-1),captain);
-  h.step(3619);assert.equal(players.at(-1),captain,'alert waits the full half second');
-  h.step(3620);const alert=players.at(-1);
+  h.step(4019);assert.equal(players.at(-1),captain,'alert waits the full nine tenths of a second');
+  h.step(4020);const alert=players.at(-1);
   assert.equal(alert.url,"assets/We've lost the port engine!_Allision.mp3");
   assert.notEqual(captain.paused,true,'the urgent report can speak over the command');
   assert.equal(h.elements['helm-reply'].textContent,"We've lost the port engine!");
   assert.equal(h.elements['helm-speaker'].textContent,'HELM (Allison)');
-  h.sim.events.push({type:'nacelle-detached',ship:'Enterprise',side:'starboard'});h.step(3680);h.step(4180);
+  h.sim.events.push({type:'nacelle-detached',ship:'Enterprise',side:'starboard'});h.step(4080);h.step(4980);
   assert.equal(players.at(-1),alert,'the second engine alert waits for the first');
-  alert.onended();h.step(4240);
+  alert.onended();h.step(5040);
   assert.equal(players.at(-1).url,"assets/We've lost the starboard engine!_Allision.mp3");
   assert.equal(h.elements['helm-reply'].textContent,"We've lost the starboard engine!");
   const record=h.sim.replayRecording.record.events.filter(e=>e.event.type==='bridge-dialogue'&&/lost the .* engine/.test(e.event.reply));
@@ -1545,15 +1805,15 @@ test('engine-loss reports wait half a second then play over a captain command an
 test('engine-loss alerts bypass opening silence and stop with voice mute or Enterprise destruction',()=>{
   const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
   h.elements['quick-battle'].onclick();h.step(60);assert.equal(players.length,0);
-  h.sim.events.push({type:'nacelle-detached',ship:'Enterprise',side:'port'});h.step(120);assert.equal(players.length,0);h.step(619);assert.equal(players.length,0);h.step(620);
+  h.sim.events.push({type:'nacelle-detached',ship:'Enterprise',side:'port'});h.step(120);assert.equal(players.length,0);h.step(1019);assert.equal(players.length,0);h.step(1020);
   const port=players.at(-1);assert.equal(port.url,"assets/We've lost the port engine!_Allision.mp3");
   h.elements['voices-mute'].onclick();assert.equal(port.paused,true);
-  const count=players.length;h.sim.events.push({type:'nacelle-detached',ship:'Enterprise',side:'starboard'});h.step(680);
-  assert.equal(players.length,count);h.elements['voices-mute'].onclick();h.step(740);
+  const count=players.length;h.sim.events.push({type:'nacelle-detached',ship:'Enterprise',side:'starboard'});h.step(1080);
+  assert.equal(players.length,count);h.elements['voices-mute'].onclick();h.step(1140);
   assert.equal(players.length,count,'muted alerts are not spoken late');
-  h.sim.events.push({type:'nacelle-detached',ship:'Enterprise',side:'starboard'});h.step(800);h.step(1300);
+  h.sim.events.push({type:'nacelle-detached',ship:'Enterprise',side:'starboard'});h.step(1200);h.step(2100);
   const starboard=players.at(-1);assert.equal(starboard.url,"assets/We've lost the starboard engine!_Allision.mp3");
-  h.sim.events.push({type:'destroyed',ship:'Enterprise'});h.sim.result='defeat';h.step(1360);
+  h.sim.events.push({type:'destroyed',ship:'Enterprise'});h.sim.result='defeat';h.step(2160);
   assert.equal(starboard.paused,true);assert.equal(players.at(-1).url,'assets/Helm lost!_Erica.mp3');
 });
 
@@ -1651,6 +1911,32 @@ test('consecutive recorded bridge phrases are skipped and can return after anoth
 });
 
 
+test('Allison plays the lock-loss report after a sustained loss of an acquired weapon lock',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
+  Object.assign(h.sim.player,{x:6000,y:0,z:0,heading:0,pitch:0});Object.assign(h.sim.enemy,{x:6000,y:0,z:-900});
+  h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();
+  h.sim.player.heading=180;h.sim.time=1;h.step(3200);
+  h.sim.time=1.4;h.step(3260);
+  assert.equal(players.at(-1).url,'assets/voices/allison-weapon-lock-lost.mp3');assert.equal(players.at(-1).volume,.85);
+  assert.equal(h.elements['helm-speaker'].textContent,'HELM (Allison)');assert.equal(h.elements['helm-reply'].textContent,"Weapon's lock lost.");
+  assert(fs.statSync(path.join(root,'assets/voices/allison-weapon-lock-lost.mp3')).size>1000);
+});
+
+test('Allison says Scanning once for each successful sensor scan and respects voice mute',()=>{
+  const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
+  h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();
+  const before=players.length;
+  h.elements.scan.onclick();h.step(3200);
+  assert.equal(players.length,before+1);assert.equal(players.at(-1).url,'assets/voices/allison-scanning.mp3');
+  assert.equal(h.elements['helm-speaker'].textContent,'HELM (Allison)');assert.equal(h.elements['helm-reply'].textContent,'Scanning');players.at(-1).onended();
+  h.step(3260);h.elements.scan.onclick();h.step(3320);assert.equal(players.length,before+1,'cooldown rejection does not announce a scan');
+  h.sim.player.cooldown.scan=0;h.sim.player.capacitor=100;
+  assert.equal(h.sim.scan(),true);h.step(3380);assert.equal(players.length,before+2,'engine-triggered scans also speak, including consecutive identical callouts');players.at(-1).onended();
+  h.elements['voices-mute'].onclick();h.sim.player.cooldown.scan=0;h.sim.player.capacitor=100;
+  assert.equal(h.sim.scan(),true);h.step(3440);assert.equal(players.length,before+2,'voice mute suppresses the recording');
+  assert(fs.statSync(path.join(root,'assets/voices/allison-scanning.mp3')).size>1000);
+});
+
 test('Allison reports confirmed phaser and torpedo hits on Yorktown, alternating both recordings',()=>{
   const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
   h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();const before=players.length;
@@ -1684,12 +1970,12 @@ test('Yorktown leaving and returning to range plays the new Allison recordings',
 });
 
 
-test('Allison says We missed only for Enterprise torpedo misses, with no consecutive repeat',()=>{
+test('Allison says We missed for each confirmed Enterprise torpedo miss',()=>{
   const players=[],h=renderedHarness(players,{turnBased:true});h.sim.tick=()=>{};
   h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();const before=players.length;
   h.sim.events.push({type:'torpedo-missed',from:'Yorktown',target:'Yorktown'},{type:'torpedo-missed',from:'Enterprise',target:'Yorktown',practice:true});h.step(3200);assert.equal(players.length,before);
   h.sim.events.push({type:'torpedo-missed',from:'Enterprise',target:'Yorktown'});h.step(3260);assert.equal(players.at(-1).url,'assets/We missed!_Allision.mp3');players.at(-1).onended();
-  h.sim.events.push({type:'torpedo-missed',from:'Enterprise',target:'Yorktown'});h.step(3320);assert.equal(players.length,before+1);
+  h.sim.events.push({type:'torpedo-missed',from:'Enterprise',target:'Yorktown'});h.step(3320);assert.equal(players.length,before+2);
 });
 
 
@@ -1734,7 +2020,7 @@ test('Allison uses rendered updates for direct hits and each Enterprise engine-l
   const h=interfaceHarness({turnBased:true,voiceClips:manifest.window.BattleVoiceClips,window:{Audio}});h.sim.tick=()=>{};
   h.elements['quick-battle'].onclick();h.step(3060);players.at(-1).onended();h.runTimers();players.at(-1).onended();let now=3200;
   for(const [event,file] of [[{type:'impact',ship:'Yorktown',weapon:'torpedo',amount:10,hullDamage:0},'Direct Hit!_Allision.mp3'],[{type:'nacelle-detached',ship:'Enterprise',side:'port'},"We've lost the port engine!_Allision.mp3"],[{type:'nacelle-detached',ship:'Enterprise',side:'starboard'},"We've lost the starboard engine!_Allision.mp3"]]){
-    h.sim.events.push(event);h.step(now);if(event.type==='nacelle-detached'){now+=500;h.step(now);}now+=60;const audio=players.at(-1);assert.equal(audio.url,'assets/'+file);assert.equal(audio.volume,.85);assert(fs.statSync(path.join(root,audio.url)).size>1000);audio.onended();
+    h.sim.events.push(event);h.step(now);if(event.type==='nacelle-detached'){now+=900;h.step(now);}now+=60;const audio=players.at(-1);assert.equal(audio.url,'assets/'+file);assert.equal(audio.volume,.85);assert(fs.statSync(path.join(root,audio.url)).size>1000);audio.onended();
   }
   const count=players.length;h.sim.events.push({type:'nacelle-detached',ship:'Yorktown',side:'port'});h.step(now);assert.equal(players.length,count,'enemy engine loss does not announce our engine loss');
 });
@@ -1746,7 +2032,7 @@ test('Turn panel highlights and centers each newly active maneuver without takin
   Object.defineProperties(prototype,{offsetTop:{get(){return this.attrs['aria-current']==='step'?600:0;}},offsetHeight:{get(){return 80;}}});panel.clientHeight=200;
   h.sim.turn.stageIndex=1;h.step(180);assert.equal(h.elements['live-plan'].children[1].attrs['aria-current'],'step');assert.equal(panel.scrollTop,540,'active row is centered inside the panel');
   panel.scrollTop=17;h.step(360);assert.equal(panel.scrollTop,17,'ordinary refreshes preserve manual scrolling');
-  h.sim.turn.stageIndex=2;h.step(540);assert.equal(h.elements['live-plan'].children[2].attrs['aria-current'],'step');assert.equal(panel.scrollTop,540,'next maneuver comes into view');
+  h.sim.turn.stageIndex=0;h.step(540);assert.equal(h.elements['live-plan'].children[0].attrs['aria-current'],'step');assert.equal(panel.scrollTop,540,'next maneuver comes into view');
 });
 
 
@@ -1787,3 +2073,16 @@ test('Show Yorktown Strategy reveals all Yorktown stats despite damaged Enterpri
   assert.equal(e['sensor-note'].textContent,'Strategy view / full Yorktown stats');assert.equal(e['sensor-state'].textContent,'SENSORS DAMAGED');assert.equal(sim.player.integrity.sensors,0);assert.equal(sim.contact,false);assert.equal(sim.lock,false);
   e['toggle-yorktown-strategy'].onclick();assert.equal(e['yorktown-damage-hull'].textContent,'UNKNOWN');assert.equal(e['yt-torpedoes'].textContent,'UNKNOWN');
 });
+test('system integrity bullets show damage independently of power and hide unknown Yorktown integrity',()=>{
+  const h=interfaceHarness(),s=h.sim,e=h.elements;
+  for(const key of B.systems){s.player.integrity[key]=37;s.enemy.integrity[key]=62;s.player.power[key]=25;}
+  s.player.integrity.sensors=100;h.step(120);
+  assert.equal(e['enterprise-intact-fill-engines'].style.width,'37%');
+  assert.equal(e['yorktown-intact-fill-weapons'].style.width,'62%');
+  assert.equal(e['yorktown-intact-weapons'].attrs['aria-valuenow'],'62');
+  s.player.integrity.sensors=50;h.step(240);
+  assert.equal(e['yorktown-intact-fill-weapons'].style.width,'0%');
+  assert.equal(e['yorktown-intact-weapons'].attrs['aria-valuenow'],undefined);
+  assert.equal(e['yorktown-intact-weapons'].attrs['aria-valuetext'],'Integrity unknown');
+});
+

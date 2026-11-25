@@ -43,9 +43,29 @@ test('camera switches retain history, Cinema hides paths, and reset discards old
   s.mode='tactical';s.updateTacticalPaths();assert(s.tacticalPaths.Enterprise.past.visible);assert.equal(s.tacticalPaths.Enterprise.history.length,2);
   s.sim.reset();s.updateTacticalPaths();assert.equal(s.tacticalPaths.Enterprise.history.length,1);
 });
-test('warp jumps and sensor gaps are not drawn as traveled lines',()=>{
+test('unannounced position jumps and sensor gaps are not drawn as traveled lines',()=>{
   const s=setup();s.updateTacticalPaths();s.sim.time=.1;s.sim.player.x=3000;s.updateTacticalPaths();
   assert.equal(s.tacticalPaths.Enterprise.past.geometry.drawRange.count,0);
   Object.assign(s.sim.enemy,{x:400,y:0,z:-500});s.sim.time=.2;s.updateTacticalPaths();
   s.sim.player.integrity.sensors=0;s.sim.time=.3;s.updateTacticalPaths();assert.equal(s.tacticalPaths.Yorktown.future.visible,false);
+});
+
+test('warp draws its entire jump in Tactical and retains it across pauses and camera switches',()=>{
+  const s=setup();s.ships={Enterprise:new s.T.Group()};s.effects=[];s.update=()=>s.updateTacticalPaths();
+  Object.assign(s.sim.player,{x:6000,y:0,z:0});s.sim.running=true;s.sim.turnBased=false;s.updateTacticalPaths();
+  assert(s.sim.warp());const warp=s.sim.events.find(event=>event.type==='warp');assert(warp);s.event(warp);
+  const path=s.tacticalPaths.Enterprise,expected=[warp.from.x,warp.from.y,warp.from.z,warp.to.x,warp.to.y,warp.to.z];
+  assert.deepEqual(vertices(path.past),expected);assert.equal(path.past.visible,true);
+  for(let i=0;i<100;i++)s.updateTacticalPaths();assert.deepEqual(vertices(path.past),expected,'paused updates keep one complete jump line');
+  s.mode='chase';s.updateTacticalPaths();assert.equal(path.past.visible,false);
+  s.mode='tactical';s.updateTacticalPaths();assert.deepEqual(vertices(path.past),expected);
+  s.sim.time=31;s.updateTacticalPaths();assert.equal(path.warps.length,0,'warp lines expire with the thirty-second history');
+  assert.equal(path.past.geometry.drawRange.count,0);
+});
+
+test('reset removes warp lines from the previous flight',()=>{
+  const s=setup();s.ships={Enterprise:new s.T.Group()};s.effects=[];s.update=()=>s.updateTacticalPaths();
+  s.event({type:'warp',from:{x:0,y:0,z:0},to:{x:0,y:0,z:-3000}});
+  assert.equal(s.tacticalPaths.Enterprise.warps.length,1);
+  s.sim.reset();s.updateTacticalPaths();assert.equal(s.tacticalPaths.Enterprise.warps.length,0);
 });

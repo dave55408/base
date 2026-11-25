@@ -35,7 +35,7 @@ window.BattleBridgeVoices=class{
       if(!clipFor(role,text)){failed();return;}
       try{
         audio=new window.Audio(clipFor(role,text));this.current=audio;
-        audio.volume=.85;audio.onended=advance;
+        audio.volume=.85*(window.BattleCrewVoiceGain??1);audio.onended=advance;
         audio.onerror=failed;window.BattleReplayCapture?.trackMedia(audio);Promise.resolve(audio.play()).catch(failed);
       }catch{failed();}
     };

@@ -62,9 +62,9 @@ test('optimal weapon bands give the advertised damage bonus',()=>{
 test('missed stages advance within one pass; projectiles resolve before final review',()=>{
   const s=duel(plan('hull',300));s.enemy.integrity.weapons=0;
   s.turn.orders.forEach(v=>v.range=300);s.player.heading=180;
-  for(let stage=0;stage<3;stage++){
+  for(let stage=0;stage<2;stage++){
     assert.equal(s.turn.stageIndex,stage);s.turn.remaining=0;
-    if(stage<2)advance(s,1.6);else{ s.projectiles.push({id:'pending',from:s.player.name,target:s.enemy.name,pos:{x:5000,y:5000,z:5000},life:0,maxLife:8,strength:1,targetSystem:'hull',heading:0,pitch:0});advance(s,2.2);}
+    if(stage<1)advance(s,1.6);else{ s.projectiles.push({id:'pending',from:s.player.name,target:s.enemy.name,pos:{x:5000,y:5000,z:5000},life:0,maxLife:8,strength:1,targetSystem:'hull',heading:0,pitch:0});advance(s,2.2);}
   }
   assert(s.turn.orders.every(v=>v.status==='skipped'));assert.equal(s.turn.number,1);assert.notEqual(s.turn.phase,'review');
   assert(!s.events.some(event=>event.type==='phase'&&event.phase==='disengage'));

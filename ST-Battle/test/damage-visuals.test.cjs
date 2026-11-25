@@ -47,7 +47,7 @@ test('both ship models have invisible shields, hull contact flashes and scars on
     s.event({type:'impact',ship:name,weapon:'phaser',hullDamage:0,shieldDepleted:false,hit});
     assert.equal(ship.userData.scars.length,0,'an absorbed hit leaves no hull damage');
     assert(contact.distanceTo(ship.userData.model.localToWorld(new T.Vector3(0,.265,-1.65)))<1e-8,'shield-absorbed impacts still reach the hull contact point');
-    assert.equal(ship.userData.windows.length,14);assert(ship.userData.windows.slice(0,6).every(window=>window.position.z<-1.7));
+    assert.equal(ship.userData.windows.length,8);assert(ship.userData.windows.every(window=>ship.userData.lowerHullWindows.includes(window)),'only the lower engineering windows remain');
     assert.equal(ship.userData.lowerHullWindows.length,8);
     assert.equal(ship.userData.lowerHullWindows.filter(window=>window.position.x<0).length,4);
     assert.equal(ship.userData.lowerHullWindows.filter(window=>window.position.x>0).length,4);

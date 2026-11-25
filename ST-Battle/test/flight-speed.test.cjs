@@ -9,24 +9,30 @@ function duel(range=1800,firingRange=1000){
   const plan=['phaser','phaser','torpedo'].map(weapon=>({weapon,target:'hull',range:firingRange}));
   plan.forEach((step,i)=>s.updateStep(i,step));s.commitOrders();s.turn.enemyOrders=plan.map(v=>({...v,status:'pending'}));return s;
 }
-test('both ships accelerate on a clear long approach and brake near their firing range',()=>{
-  const far=duel(1800),near=duel(900);far.tick(.05);near.tick(.05);
-  for(const side of ['player','enemy']){
-    assert(far[side].flightTargetSpeed>near[side].flightTargetSpeed+30,side);
-    assert.equal(far[side].speedIntent,'CLOSING TO FIRING RANGE');
-    assert(far[side].speed>B.MIN_IMPULSE_SPEED);assert(far[side].speed<far[side].flightTargetSpeed);
+test('both ships command all available speed throughout a clear attack run',()=>{
+  for(const range of [1800,900,500]){
+    const s=duel(range);s.tick(.05);
+    for(const side of ['player','enemy']){
+      const ship=s[side];assert.equal(ship.flightTargetSpeed,125*s.flightMobility(ship)*1.5,side);
+      assert.equal(ship.speedIntent,'ACCELERATING FOR ATTACK RUN');
+      assert(ship.speed>B.MIN_IMPULSE_SPEED);assert(ship.speed<ship.flightTargetSpeed,'acceleration remains gradual');
+    }
   }
 });
-test('each ship chooses speed using its selected shot range rather than a fixed distance threshold',()=>{
-  const closeShot=duel(900,400),longShot=duel(900,1400);closeShot.tick(.05);longShot.tick(.05);
-  for(const side of ['player','enemy'])assert(closeShot[side].flightTargetSpeed>longShot[side].flightTargetSpeed+30,side);
+
+test('selected firing range does not make an attack run loiter or slow down',()=>{
+  for(const firingRange of [400,1000,1400]){
+    const s=duel(900,firingRange);s.tick(.05);
+    for(const side of ['player','enemy'])assert.equal(s[side].flightTargetSpeed,125*s.flightMobility(s[side])*1.5,side);
+  }
 });
 
-test('both ships give recharging weapons time to become ready before reaching the firing window',()=>{
-  const ready=duel(),charging=duel();charging.player.cooldown.phaser=30;charging.enemy.cooldown.phaser=30;
-  ready.tick(.05);charging.tick(.05);
-  for(const side of ['player','enemy'])assert(charging[side].flightTargetSpeed<ready[side].flightTargetSpeed*.5,side);
+test('weapon recharge and heat do not hold back acceleration on an attack run',()=>{
+  const s=duel();for(const ship of [s.player,s.enemy]){ship.cooldown.phaser=30;ship.capacitor=0;ship.heat=95;}
+  s.tick(.05);
+  for(const side of ['player','enemy'])assert.equal(s[side].flightTargetSpeed,125*s.flightMobility(s[side])*1.5,side);
 });
+
 test('both ships slow for a sharp heading change rather than flying large circles past the target',()=>{
   const aligned=duel(),turning=duel();turning.player.heading=180;turning.enemy.heading=0;
   aligned.tick(.05);turning.tick(.05);
@@ -38,8 +44,20 @@ test('damage reduces speed targets while actual ships brake gradually and retain
   const s=duel();for(const side of ['player','enemy']){s[side].speed=180;s[side].integrity.engines=0;s[side].repairBudget=0;}
   s.tick(.1);for(const side of ['player','enemy']){assert(s[side].speed<180);assert(s[side].speed>s[side].flightTargetSpeed);}
   // Eased acceleration deliberately takes longer to settle than constant braking.
-  for(let i=0;i<90;i++)s.tick(.1);
+  for(let i=0;i<110;i++)s.tick(.1);
   for(const side of ['player','enemy']){assert(s[side].speed<=22.5+.001);assert(s[side].speed>=B.MIN_IMPULSE_SPEED);}
+});
+
+test('attack runs and collision courses reduce thrust immediately when a new turn needs it',()=>{
+  for(const mode of ['attack','ram']){
+    const s=duel(1800),p=s.player,options={mode,order:s.nextOrder()};p.speed=160;
+    s.adjustFlightSpeed(p,s.enemy,s.enemy,options,.05);const straight=p.flightTargetSpeed;
+    p.heading=45;s.adjustFlightSpeed(p,s.enemy,s.enemy,options,.05);
+    assert(p.flightTargetSpeed<straight);assert(p.flightTargetSpeed<160,'turning bypasses the routine speed-decision hold');
+    assert.equal(p.speedIntent,'TURNING FOR ATTACK');
+    p.heading=0;s.adjustFlightSpeed(p,s.enemy,s.enemy,options,.05);
+    assert.equal(p.flightTargetSpeed,straight,'full attack thrust resumes once lined up');
+  }
 });
 test('the shared controller selects slow cover speed and full available speed for aligned withdrawal',()=>{
   const s=duel();
@@ -60,7 +78,7 @@ test('held W and S override only player speed and releasing returns to the autom
   const s=duel(900,1400),p=s.player,orders=JSON.stringify(s.turn.orders);p.speed=80;
   s.enemy.x+=400;
   s.autoHelm(.1,{more:true});assert.equal(p.speedOverride,1);assert(p.flightTargetSpeed>150);assert.match(p.speedIntent,/MANUAL SPEED UP/);assert(p.speed>80&&p.speed<90);
-  s.autoHelm(.1,{});assert.equal(p.speedOverride,0);assert.doesNotMatch(p.speedIntent,/MANUAL/);assert.equal(p.flightTargetSpeed,B.MIN_IMPULSE_SPEED);
+  s.autoHelm(.1,{});assert.equal(p.speedOverride,0);assert.match(p.speedIntent,/ATTACK|STRAFING/);assert(p.flightTargetSpeed>B.MIN_IMPULSE_SPEED,'the strafing run keeps moving while making its small alignment correction');
   s.autoHelm(.1,{less:true});assert.equal(p.speedOverride,-1);assert.equal(p.flightTargetSpeed,B.MIN_IMPULSE_SPEED);assert.match(p.speedIntent,/MANUAL SLOW DOWN/);
   s.autoHelm(.1,{});assert.equal(p.speedOverride,0);assert.equal(JSON.stringify(s.turn.orders),orders);assert.equal(s.turn.maneuver,'direct');assert.equal(p.torpedoes,24);
 });

@@ -14,6 +14,33 @@ function view(s,kind,screenAt,key=kind){
   const position=new s.T.Vector3(),target=new s.T.Vector3(),cut=s.replayCamera(position,target);
   s.camera.position.copy(position);return {position,target,cut};
 }
+
+test('turn replay uses continuous Cinema coverage around preserved close-up inserts',()=>{
+  const s=cameraScene(),T=s.T;s.orbit={x:0,y:0};s.zoom=1;s.mode='cinematic';
+  const position=new T.Vector3(),target=new T.Vector3();
+  const take=(kind,time,extra={})=>{
+    s.sim.replayShot={kind,focus:'Yorktown',key:kind,screenAt:time,at:time,frameDt:.05,...extra};
+    s.replayCinemaCamera(position,target,.05);
+    if(s.sim.replayShot.cinema)s.camera.position.copy(position);else s.trackReplayCamera(position,target,.05,true);
+    s.camera.lookAt(target);s.camera.updateMatrixWorld();s.frameEnterpriseLow(.05);
+  };
+  take('establishing',0);
+  for(let i=1;i<=120;i++)take('duel',i*.05);
+  assert(s.sim.replayShot.cinema);assert.equal(s.cinemaTracking.focus,'pair');
+  const state=s.cinemaTracking,shuttlePosition=state.position.clone();
+  take('component',7,{damageInsert:true,event:{system:'engines'}});
+  assert.equal(s.sim.replayShot.cinema,false);assert.equal(s.replayComposition.framing,'close');
+  assert.equal(s.sim.replayShot.cameraKind,'component');
+  assert(state.position.distanceTo(shuttlePosition)<=state.maxSpeed*.05+1e-7,'the shuttle continues behind the inserted close-up within its current speed limit');
+  take('duel',10);
+  assert(s.sim.replayShot.cinema);assert.equal(s.cinemaTracking,state,'returning from detail resumes the same camera flight');
+  assert(position.distanceTo(state.position)<1e-7);assert.equal(s.camera.zoom,state.lensZoom);
+  assert.equal(s.sim.replayShot.cameraFocus,'Enterprise & Yorktown');
+  const paused=state.position.clone(),lens=state.lensZoom;
+  take('duel',10,{frameDt:0});assert(state.position.distanceTo(paused)<1e-7);assert.equal(state.lensZoom,lens);
+  take('destruction',12,{focus:'Yorktown'});
+  assert.equal(s.sim.replayShot.cinema,false);assert.equal(s.sim.replayShot.cameraKind,'destruction');
+});
 test('quiet travel is omitted instead of adding empty tracking beats',()=>{
   const sim=new B.Simulation(),frame={player:sim.player,enemy:sim.enemy,projectiles:[],stageIndex:0,maneuver:'direct',phase:'attack'};
   const record={pass:1,startTime:0,station:sim.station,planet:sim.planet,environment:'space',duration:120,events:[],frames:[{...frame,at:0},{...frame,at:120}]};

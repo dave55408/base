@@ -1,5 +1,8 @@
 /* Selected local recordings; loaded after the generated voice manifest. */
 Object.assign(window.BattleVoiceClips, {
+  "allison\nScanning": "assets/voices/allison-scanning.mp3",
+  "allison\nWeapon's lock lost.": "assets/voices/allison-weapon-lock-lost.mp3",
+  "allison\nCollision!": "assets/voices/allison-collision.wav",
   "captain\nCaptain Declan, commanding Enterprise. Yorktown's captain has gone rogue and is hunting us near K7. We must disable her. All hands—battle stations!": "assets/Welcome introduction_short_Declan.mp3",
   "captain\nYorktown's closing. Shields up. Helm, take us in...": "assets/Yorktown's closing. Shields up. Helm, take us in_Declan.mp3",
   "captain\nI gave my best...": "assets/I gave my best_Declan.mp3",

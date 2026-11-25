@@ -1,0 +1,110 @@
+[
+  {
+    "route": "direct",
+    "seed": 7,
+    "player": 2,
+    "enemy": 4
+  },
+  {
+    "route": "direct",
+    "seed": 42,
+    "player": 0,
+    "enemy": 0
+  },
+  {
+    "route": "direct",
+    "seed": 97,
+    "player": 0,
+    "enemy": 0
+  },
+  {
+    "route": "port",
+    "seed": 7,
+    "player": 3,
+    "enemy": 1
+  },
+  {
+    "route": "port",
+    "seed": 42,
+    "player": 0,
+    "enemy": 0
+  },
+  {
+    "route": "port",
+    "seed": 97,
+    "player": 0,
+    "enemy": 0
+  },
+  {
+    "route": "behind",
+    "seed": 7,
+    "player": 2,
+    "enemy": 4
+  },
+  {
+    "route": "behind",
+    "seed": 42,
+    "player": 0,
+    "enemy": 0
+  },
+  {
+    "route": "behind",
+    "seed": 97,
+    "player": 0,
+    "enemy": 0
+  },
+  {
+    "route": "close",
+    "seed": 7,
+    "player": 4,
+    "enemy": 2
+  },
+  {
+    "route": "close",
+    "seed": 42,
+    "player": 2,
+    "enemy": 0
+  },
+  {
+    "route": "close",
+    "seed": 97,
+    "player": 2,
+    "enemy": 0
+  },
+  {
+    "route": "chase",
+    "seed": 7,
+    "player": 2,
+    "enemy": 4
+  },
+  {
+    "route": "chase",
+    "seed": 42,
+    "player": 0,
+    "enemy": 0
+  },
+  {
+    "route": "chase",
+    "seed": 97,
+    "player": 0,
+    "enemy": 0
+  },
+  {
+    "route": "distance",
+    "seed": 7,
+    "player": 2,
+    "enemy": 3
+  },
+  {
+    "route": "distance",
+    "seed": 42,
+    "player": 4,
+    "enemy": 2
+  },
+  {
+    "route": "distance",
+    "seed": 97,
+    "player": 4,
+    "enemy": 1
+  }
+]

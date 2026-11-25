@@ -7,7 +7,7 @@ window.BattleFiringVoices=class{
     this.active=null;
   }
   abandon(){this.pending=null;}
-  prepare({type,order,context,urgent=false,torpedoes=1,beforeStart=()=>{},enqueue,waitForVoice=true,execute}={}){
+  prepare({type,order,context,urgent=false,opportunity=false,torpedoes=1,beforeStart=()=>{},enqueue,waitForVoice=true,execute}={}){
     if(this.context!==context){this.stop();this.context=context;this.counts={phaser:0,torpedo:0};}
     let pending=waitForVoice?this.pending:null;
     if(pending&&(pending.type!==type||pending.order!==order||pending.context!==context)){
@@ -18,12 +18,14 @@ window.BattleFiringVoices=class{
       if(!pending.ready)return false;
       this.counts[type]++;this.pending=null;return true;
     }
-    const title=urgent?'Fire_urgent':type==='torpedo'&&torpedoes>1?'Fire torpedoes':
+    const ordinary=urgent?'Fire_urgent':type==='torpedo'&&torpedoes>1?'Fire torpedoes':
       this.counts[type]%2?'Fire':type==='phaser'?'Fire phasers':'Fire torpedo';
-    const audio=new window.Audio('assets/'+title+'.mp3');
+    const title=opportunity?"Let's grab this opportunity. Fire!":ordinary;
+    const clip=opportunity?(window.BattleVoiceClips?.['captain\n'+title]||'assets/Fire_Declan.mp3'):'assets/'+ordinary+'.mp3';
+    const audio=new window.Audio(clip);
     pending={type,order,context,audio,ready:false};
     if(waitForVoice)this.pending=pending;else this.counts[type]++;
-    audio.volume=.85;
+    audio.volume=.85*(window.BattleCrewVoiceGain??1);
     const start=done=>{
       if(waitForVoice&&this.pending!==pending){done();return;}
       if(execute){
@@ -34,10 +36,11 @@ window.BattleFiringVoices=class{
         this.counts[type]++;
       }
       this.active=audio;
+      audio.volume=.85*(window.BattleCrewVoiceGain??1);
       let finished=false;
       const complete=()=>{if(finished)return;finished=true;pending.ready=true;if(this.active===audio)this.active=null;audio.onended=audio.onerror=null;done();};
       audio.onended=audio.onerror=complete;
-      if(beforeStart(title)===false){complete();return;}
+      if(beforeStart(title,clip)===false){complete();return;}
       window.BattleReplayCapture?.trackMedia(audio);
       try{Promise.resolve(audio.play()).catch(complete);}catch{complete();}
     };

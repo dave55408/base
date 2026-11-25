@@ -144,7 +144,7 @@ dialog{max-height:calc(100vh - 24px);overflow:auto}
 
 .auto-helm-summary{display:none}#game-shell.auto-helm .auto-helm-summary{display:block;margin:3px 12px 10px;padding:12px;border:1px solid #35515d;background:#10232f;border-radius:4px}#game-shell .auto-helm-summary strong{font-size:12px;color:#e9bb84;font-weight:500}#game-shell .auto-helm-summary p{margin:6px 0;font:9px Consolas;color:#9ed3dc}#game-shell .auto-helm-summary span{font-size:9px;line-height:1.5;color:#8ca6b6}#game-shell.auto-helm .helm-sliders,#game-shell.auto-helm [data-hold],#game-shell.auto-helm #level,#game-shell.auto-helm #stop{display:none}
 
-.route-stages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0 16px}.route-stages button{display:flex;align-items:center;gap:10px;text-align:left;min-height:55px;background:#112331}.route-stages b{font:22px Consolas;color:#809eac}.route-stages span{font-size:12px}.route-stages [aria-current="step"]{border-color:#edba7c;background:#30291f}.route-stages [aria-current="step"] b{color:#edba7c}.repair-choice{padding:35px 26px;min-height:250px;background:#102430}.repair-choice h3{font-size:22px;margin:12px 0}.repair-choice p{max-width:620px;color:#a9c4d0;line-height:1.8}#wizard-error{padding:0 26px;color:#f0b28b;font-size:12px;min-height:18px}.wizard-footer>div{flex-wrap:wrap;justify-content:flex-end}#wizard-apply{background:#edba7c;color:#191f20;border-color:#edba7c;font-weight:bold}#wizard-cancel{border-color:#67818f;color:#d3e0e5}@media(max-width:600px){.route-stages{gap:5px}.route-stages button{padding:8px;gap:6px}.route-stages span{font-size:10px}}
+.route-stages{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0 16px}.route-stages button{display:flex;align-items:center;gap:10px;text-align:left;min-height:55px;background:#112331}.route-stages b{font:22px Consolas;color:#809eac}.route-stages span{font-size:12px}.route-stages [aria-current="step"]{border-color:#edba7c;background:#30291f}.route-stages [aria-current="step"] b{color:#edba7c}.repair-choice{padding:35px 26px;min-height:250px;background:#102430}.repair-choice h3{font-size:22px;margin:12px 0}.repair-choice p{max-width:620px;color:#a9c4d0;line-height:1.8}#wizard-error{padding:0 26px;color:#f0b28b;font-size:12px;min-height:18px}.wizard-footer>div{flex-wrap:wrap;justify-content:flex-end}#wizard-apply{background:#edba7c;color:#191f20;border-color:#edba7c;font-weight:bold}#wizard-cancel{border-color:#67818f;color:#d3e0e5}@media(max-width:600px){.route-stages{gap:5px}.route-stages button{padding:8px;gap:6px}.route-stages span{font-size:10px}}
 
 /* Yorktown stays in the right column; all Enterprise stations sit below the screen. */
 #game-shell main{grid-template-columns:1fr 1.1fr 1fr 1fr 1.05fr}
@@ -384,10 +384,37 @@ dialog{max-height:calc(100vh - 24px);overflow:auto}
 
 #game-shell .yorktown-plan-progress{margin:0 0 6px;font:10px var(--mono);color:var(--cyan)}
 
-#game-shell.cinema-view #battle-screen > :not(#viewport):not(.view-bottom):not(#launch-card):not(#result){display:none!important}
+#game-shell.cinema-view #battle-screen > :not(#viewport):not(.view-bottom):not(#launch-card):not(#result):not(#cinema-overlays):not(#cinema-camera-controls){display:none!important}
 #game-shell.cinema-view #battle-screen .view-tip{display:none!important}
+.cinema-overlays{display:none;position:absolute;z-index:4;top:16px;left:18px;width:clamp(200px,23%,250px);max-width:calc(100% - 36px);pointer-events:none}
+#game-shell.cinema-view .cinema-overlays{display:flex;flex-direction:column;align-items:stretch;gap:20px}
+.cinema-turn{display:none;padding:0;border:0;background:transparent;box-shadow:none;pointer-events:none;text-align:left;color:#a9b5bf;font:10px/1.5 var(--mono);text-shadow:0 1px 3px #000}
+#game-shell.cinema-view .cinema-turn:not([hidden]){display:block}
+.cinema-turn strong{color:inherit;opacity:.65;font-size:10px;font-weight:500;letter-spacing:.3px}.cinema-turn p{margin:3px 0 0;white-space:pre-line}.cinema-turn p span{display:block;opacity:.65}.cinema-turn p .current-action{color:#fff;opacity:1}
+.cinema-tactical{display:none;width:100%;border:1px solid #52758888;border-radius:4px;background:#071019b8;box-shadow:0 3px 16px #0007;pointer-events:auto;overflow:hidden;color:#9bb1bf;font:8px/1.4 var(--mono)}
+#game-shell.cinema-view .cinema-tactical:not([hidden]){display:block}
+.cinema-tactical header,.cinema-tactical footer{display:flex;justify-content:space-between;gap:6px;padding:6px 8px;letter-spacing:.5px}
+.cinema-tactical header{padding-top:9px;border-bottom:1px solid #36505f66}.cinema-tactical header span:last-child{color:#6e8999;font-size:7px}
+.cinema-tactical canvas{display:block;width:100%;aspect-ratio:1.65}
+.cinema-tactical footer{border-top:1px solid #36505f66;font-size:7px;letter-spacing:0}
+.cinema-tactical .inset-enterprise{color:#7eb4ff}.cinema-tactical .inset-yorktown{color:#ed9889}.cinema-tactical .inset-shuttle{color:#eab273}
 
-#game-shell #battle-screen:fullscreen > :not(#viewport){display:none!important}
+.cinema-camera-controls{display:none;position:absolute;top:16px;right:18px;z-index:4;width:210px;padding:12px;border:1px solid #52758877;border-radius:4px;background:#071019b8;color:#a9b5bf;font:9px/1.5 var(--mono)}
+#game-shell.cinema-view .cinema-camera-controls:not([hidden]){display:block}
+.camera-controls-title{display:block;letter-spacing:1px;margin-bottom:7px}
+.cinema-tactical header,.camera-controls-title{cursor:pointer;user-select:none}
+.cinema-camera-controls .camera-controls-title{display:flex;justify-content:space-between;align-items:center;width:100%;padding:0;border:0;border-radius:0;background:transparent;color:inherit;text-align:left;font:inherit;letter-spacing:1px}
+.cinema-tactical header::after,.camera-controls-title::after{content:'▾';opacity:.7}
+.cinema-tactical header[aria-expanded="false"]::after,.camera-controls-title[aria-expanded="false"]::after{content:'▸'}
+.cinema-camera-controls.is-collapsed .camera-controls-title{margin-bottom:0}
+.cinema-tactical.is-collapsed header{border-bottom:0}
+#cinema-camera-body[hidden],#cinema-tactical-body[hidden]{display:none}
+.camera-mode-buttons{display:flex;gap:6px;margin-bottom:12px}.camera-mode-buttons button{flex:1;padding:6px;font:10px var(--mono);background:#101d28;color:#a9b5bf}
+.camera-mode-buttons button[aria-pressed="true"]{border-color:#eab273;color:#ffe0ab;background:#382b1de6}
+.cinema-camera-controls label{display:flex;justify-content:space-between;gap:8px;margin-bottom:8px}.cinema-camera-controls output{color:#eab273}
+.cinema-camera-controls input{display:block;margin:0 0 8px}.camera-speed-limit{display:block;text-align:right;color:#7c95a6;font-size:8px}
+.camera-ship-speeds{display:grid;gap:4px;margin:0 0 12px;padding:0 0 9px;border-bottom:1px solid #52758844}.camera-ship-speeds>div{display:flex;justify-content:space-between;gap:8px}.camera-ship-speeds>div:first-child output{color:#7eb4ff}.camera-ship-speeds>div:last-child output{color:#ed9889}
+#game-shell #battle-screen:fullscreen > :not(#viewport):not(#cinema-overlays):not(#cinema-camera-controls){display:none!important}
 #replay-dialog:fullscreen{width:100vw;height:100dvh;max-width:none;max-height:none;padding:0;border:0}
 #replay-dialog:fullscreen > :not(.replay-screen),#replay-dialog:fullscreen .replay-screen > :not(#replay-viewport){display:none!important}
 #replay-dialog:fullscreen .replay-screen{height:100%;aspect-ratio:auto}
@@ -542,7 +569,7 @@ dialog{max-height:calc(100vh - 24px);overflow:auto}
 
 #game-shell .yorktown-personality{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px;padding:4px 0;font:9px var(--mono);color:var(--muted)}
 
-#game-shell .welcome-intro-button{margin:12px 0 2px;padding:6px 10px;font:11px var(--sans);color:#b6d8e9;background:#101b24;border-color:#3b5363}
+#game-shell .welcome-links{display:flex;align-items:center;gap:10px;margin:4px 0 10px;font:11px var(--sans);color:#798e99}#game-shell .welcome-links a{color:var(--amber);text-decoration:none}#game-shell .welcome-links a:hover{color:#ffe0a4}#game-shell .welcome-links a:focus-visible{outline:2px solid var(--amber);outline-offset:4px}#game-shell .welcome-links a[aria-disabled="true"]{opacity:.4;cursor:default}
 
 #game-shell .result>button{margin:0}#game-shell .result>button+button{margin-top:16px}
 
@@ -555,3 +582,6 @@ dialog{max-height:calc(100vh - 24px);overflow:auto}
 #game-shell .enterprise-tag{border-left-color:#398cff;opacity:.85}
 #game-shell .enterprise-tag span{color:#7eb4ff}
 #game-shell .enterprise-tag strong{color:#d9eaff}
+.quick-settings-help{margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:5px;background:#101b23}.quick-settings-help h3{color:var(--amber);margin-bottom:12px}.quick-settings-help p,.quick-settings-help dd{color:#a9c4d0;line-height:1.7}.quick-settings-help p+p{margin-top:12px}.quick-settings-help dl{display:grid;grid-template-columns:130px minmax(0,1fr);gap:14px 18px;margin:18px 0}.quick-settings-help dt{font-weight:600;color:var(--text)}.quick-settings-help dd{margin:0}.quick-settings-help dd strong{display:block;color:var(--text);font-weight:500}@media(max-width:600px){.quick-settings-help{padding:14px}.quick-settings-help dl{grid-template-columns:1fr;gap:6px}.quick-settings-help dd{margin-bottom:12px}}
+#briefing .briefing-disclosure{margin:16px 0;padding:16px 20px;border:1px solid var(--line);border-radius:5px;background:#101b23}#briefing .briefing-disclosure>summary{cursor:pointer;color:var(--amber);font-size:14px;font-weight:500}#briefing .briefing-disclosure[open]>summary{margin-bottom:12px}#briefing .briefing-disclosure>summary:focus-visible{outline:2px solid var(--amber);outline-offset:4px}#briefing .briefing-disclosure>p{color:#a9c4d0;line-height:1.7}@media(max-width:600px){#briefing .briefing-disclosure{padding:14px}}
+#game-shell .toast{white-space:pre-line;line-height:1.6}

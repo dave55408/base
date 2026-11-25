@@ -41,7 +41,8 @@ test('actual pylon intersections identify the side and its engine becomes indepe
     const debris=scene.effects.filter(e=>e.kind==='nacelle-debris');assert.equal(debris.length,1);assert.equal(ship.userData.nacelles[side].visible,false);assert.equal(ship.userData.nacelles[side==='port'?'starboard':'port'].visible,true);
     const support=debris[0].object.children.find(part=>part.userData.pylonSide===side);assert(support,'engine debris carries its pylon');assert(support.visible);assert.equal(pylon.visible,false,'pylon is gone from the surviving ship');
     scene.scene.updateMatrixWorld(true);const expected=pylon.getWorldPosition(new T.Vector3()),actual=support.getWorldPosition(new T.Vector3());assert(actual.distanceTo(expected)<1e-6,'pylon retains its attachment alignment when it breaks free');assert.notEqual(support.geometry,pylon.geometry);
-    assert(debris[0].object.visible);assert.equal(debris[0].object.parent,scene.scene);const before=debris[0].object.position.clone();scene.advanceDebris(debris[0],1);assert(debris[0].object.position.distanceTo(before)>20);
+    assert(debris[0].object.visible);assert.equal(debris[0].object.parent,scene.scene);const before=debris[0].object.position.clone();scene.advanceDebris(debris[0],1);assert(debris[0].object.position.distanceTo(before)>5);
+    const forward=B.direction(state),separationVelocity=debris[0].velocity.clone().sub(new T.Vector3(forward.x,forward.y,forward.z).multiplyScalar(state.speed));assert(separationVelocity.length()<20,'detached engines drift away gently');
     assert.notEqual(debris[0].object.children[0].geometry,ship.userData.nacelles[side].children[0].geometry,'disposing debris cannot dispose the reusable model');
     const geometry=ship.userData.nacelles[side].children[0].geometry;scene.disposeEffect(debris[0]);assert(geometry.attributes.position.count>0);
   }

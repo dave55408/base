@@ -6,10 +6,11 @@ window.BattleScene=class{
     const T=this.T=window.AlpineThree;this.sim=sim;this.host=host;this.effects=[];this.projectiles=new Map();this.mode='chase';this.zoom=1;this.orbit={x:0,y:0};this.clock=0;this.shake=0;
     this.renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));this.renderer.outputColorSpace=T.SRGBColorSpace;this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.3;host.append(this.renderer.domElement);
     this.scene=new T.Scene();this.scene.background=new T.Color(0x050914);this.camera=new T.PerspectiveCamera(46,1,.5,65000);
-    this.scene.add(new T.HemisphereLight(0xa6cee8,0x1d1429,1.8));
-    const sun=new T.DirectionalLight(0xe4f3ff,3.4);sun.position.set(-3000,4000,-800);this.scene.add(sun);
-    const rim=new T.DirectionalLight(0x5597df,2.7);rim.position.set(1200,300,2000);this.scene.add(rim);
-    const warm=new T.DirectionalLight(0xef946a,1.3);warm.position.set(-1800,-500,1200);this.scene.add(warm);this.sunLight=sun;this.rimLight=rim;this.warmLight=warm;
+    this.cinemaFlightMode='cautious';this.cinemaSpeedPercent=100;
+    this.scene.add(new T.HemisphereLight(0xa6cee8,0x1d1429,1.6));
+    const sun=new T.DirectionalLight(0xe4f3ff,3.5);sun.position.set(-3000,4000,-800);this.scene.add(sun);
+    const rim=new T.DirectionalLight(0x5597df,2.5);rim.position.set(1200,300,2000);this.scene.add(rim);
+    const warm=new T.DirectionalLight(0xef946a,1.2);warm.position.set(-1800,-500,1200);this.scene.add(warm);this.sunLight=sun;this.rimLight=rim;this.warmLight=warm;
     // Simplified cloudy gas giant adapted from the supplied cyan planet reference.
     this.planetMap=this.loadPlanetMap();
     this.ships={Enterprise:this.makeShip('Enterprise','NCC-1701',false),Yorktown:this.makeShip('Yorktown','NCC-1717',true)};
@@ -24,6 +25,7 @@ window.BattleScene=class{
     this.update(0,true);
   }
   get framingAspect(){return this.fullscreenFraming?.aspect??this.camera.aspect;}
+  get cinemaTopSpeed(){return this.sim.player&&this.sim.flightMobility?125*this.sim.flightMobility(this.sim.player)*1.5:220;}
   get framingFov(){return this.fullscreenFraming?.fov??this.camera.fov;}
   resizeViewport(){
     if(this.exportResolution){const {width,height}=this.exportResolution;this.renderer.setPixelRatio(1);this.renderer.setSize(width,height,false);this.camera.aspect=width/height;this.camera.updateProjectionMatrix();return;}
@@ -199,7 +201,7 @@ window.BattleScene=class{
     sphere(0,.474,-1.12,.18,.065,.18);sphere(0,.538,-1.12,.088,.035,.088);sphere(0,.228,-1.12,.22,.085,.22);sphere(0,.158,-1.12,.07,.024,.07,blue);
     const saucerTopLight=sphere(0,.554,-1.12,.063,.024,.063,blue);saucerTopLight.name='Upper saucer blue light';
     const rimline=mesh(new T.TorusGeometry(.681,.008,5,96),dark,0,.346,-1.12);rimline.rotation.x=Math.PI/2;
-    const rimWindows=[];for(let i=0;i<6;i++){const a=Math.PI+(i-2.5)*Math.PI/32;const w=box(Math.sin(a)*.688,.356,-1.12+Math.cos(a)*.688,.012,.011,.003,windowMat);w.rotation.y=a;rimWindows.push(w);}
+    const rimWindows=[];
     // ST Command's classic neck, spindle hull, and elevated warp nacelles.
     const aftShift=.18;
     const neck=beam([0,.08,-.58+aftShift],[0,.36,-.86+aftShift],.063,.25,neckHull);
@@ -238,13 +240,6 @@ window.BattleScene=class{
     pc.fillStyle=enemy?'#505b63':'#c0cbce';for(const y of [160,416,672])pc.fillRect(58,y,140,192);
     const pylonPaint=strutHull.clone();pylonPaint.map=this.texture(pylonCanvas);
     const nacelleCanvas=this.hullPanelCanvas(16,40,enemy?panelBase:hull.color.getStyle(),1024,1024);
-    const nc=nacelleCanvas.getContext('2d');
-    // After the mirrored nacelle rolls, U=0/1 is the inward-facing horizontal
-    // centerline on both tubes. Paint equal halves either side of that seam.
-    nc.fillStyle=dark.color.getStyle();nc.beginPath();
-    const stripeWidth=96,stripeLength=614,stripeTop=(nacelleCanvas.height-stripeLength)/2;
-    for(const center of [0,nacelleCanvas.width])nc.roundRect(center-stripeWidth/2,stripeTop,stripeWidth,stripeLength,12);
-    nc.fill();
     const nacellePaint=hull.clone();nacellePaint.color.set(0xffffff);nacellePaint.map=this.texture(nacelleCanvas);
     for(const side of [-1,1]){
       const pylon=beam([side*.075,.05,-.05],[side*.55,.51,.17],.035,.182,strutHull);
@@ -262,7 +257,6 @@ window.BattleScene=class{
       frontHousing.rotation.x=Math.PI/2;frontHousing.name='Gold nacelle front housing';
       const cap=sphere(x,.53,-.80,.079,.079,.06,red);
       const rear=sphere(x,.53,.69,.067,.067,.08,blue);engineGlows.push(rear);
-      box(x-side*.074,.53,-.00,.012,.025,1.1,blue);box(x+side*.074,.53,.13,.013,.036,.72,dark);
       for(let j=0;j<6;j++)box(x,.608,.39+j*.024,.065,.01,.009,dark);
       // Paired rear fittings retain their original orientation before the nacelle roll.
       for(const clockAngle of [-Math.PI/3,Math.PI/3]){
@@ -317,7 +311,7 @@ window.BattleScene=class{
   updateEngineTrails(ship,state){
     const trails=ship.userData.trails,speed=Math.abs(state.speed);
     const holding=this.sim?.freeFlight||this.sim?.running===false||this.sim?.result||this.sim?.turnBased&&['planning','review'].includes(this.sim.turn?.phase);
-    trails.visible=this.mode!=='cinematic'&&this.engineTrailsEnabled!==false&&!holding&&state.hull>0&&speed>.5;if(!trails.visible)return;
+    trails.visible=this.mode!=='cinematic'&&this.engineTrailsEnabled!==false&&!holding&&!state.coastingTurn&&state.hull>0&&speed>.5;if(!trails.visible)return;
     const fraction=Battle.clamp(speed/300,0,1),length=.3+4.5*fraction,reverse=state.speed<0;
     const start=(reverse?-.87:.79)+(ship.userData.nacelleAftOffset||0),direction=reverse?-1:1;
     const positions=trails.geometry.attributes.position,colors=trails.geometry.attributes.color;let index=0;
@@ -382,6 +376,7 @@ window.BattleScene=class{
     saucer(0,76,0,110);cylinder(0,94,0,34,5);tower(0,97,0,32,70,0x326bb8,10);
     link([0,171,0],[0,213,0],1.1);
     const beacon=mesh(new T.SphereGeometry(2.2,10,8),new T.MeshBasicMaterial({color:0xffe2a2}),0,214,0);
+    beacon.name='K7 navigation beacon';
     cylinder(0,-31,0,17,20);cylinder(0,-59,0,8,38);
     lathe([[0,-24],[35,-24],[46,-17],[46,17],[35,24],[0,24]],0,-100,0);
     // Wrap the hangar door, lintel and dividers around the lower drum.
@@ -397,13 +392,71 @@ window.BattleScene=class{
     link([cargo.armStart,cargo.armStartY,0],[cargo.armEnd,cargo.armStartY,0],10);
     lathe([[0,-33],[11,-31],[18,-22],[18,22],[11,31],[0,33]],cargo.x,cargo.y,0);
     const colors=[0xe9b94d,0xc8493f,0x3aab75];
+    // Small warm-white lenses sit inside apertures in the saucer plating.
+    const runningGeometry=new T.BufferGeometry(),runningVertices=[];
+    for(let i=0;i<32;i++){const a=i*Math.PI/16,b=(i+1)*Math.PI/16;runningVertices.push(0,0,0,Math.cos(a)*2,Math.sin(a)*2,0,Math.cos(b)*2,Math.sin(b)*2,0);}
+    runningGeometry.setAttribute('position',new T.Float32BufferAttribute(runningVertices,3));runningGeometry.computeVertexNormals();runningGeometry.userData.recessedLightRadius=2;
+    const runningWhite=new T.MeshBasicMaterial({color:0xffedcd,toneMapped:false});
+    const runningLights=[];
     state.pods.forEach(({x,z},i)=>{
       const length=Math.hypot(x,z);link([x/length*38,0,z/length*38],[x/length*246,0,z/length*246]);
       const collar=mesh(new T.BoxGeometry(30,25,32),hull,x*.84,0,z*.84);collar.rotation.y=-Math.atan2(z,x);
-      saucer(x,0,z,52);cylinder(x,10,z,19,4);tower(x,12,z,17,36,colors[i],5);
-      mesh(new T.SphereGeometry(2,10,8),new T.MeshBasicMaterial({color:colors[i]}),x*1.17,0,z*1.17);
+      const podSaucer=saucer(x,0,z,52);cylinder(x,10,z,19,4);tower(x,12,z,17,36,colors[i],5);
+      const lamp=new T.Group(),dx=x*.17,dz=z*.17,radius=Math.hypot(dx,dz);
+      lamp.name='K7 pod '+(i+1)+' underside running light';
+      const undersideY=-52*.08*(52-radius)/(52*.25);
+      lamp.position.set(x+dx,undersideY,z+dz);
+      lamp.quaternion.setFromUnitVectors(new T.Vector3(0,-1,0),new T.Vector3(dx/radius*.32,-1,dz/radius*.32).normalize());
+      const lens=new T.Mesh(runningGeometry,runningWhite);lens.name='White running light lens';lens.position.y=.12;lens.rotation.x=Math.PI/2;lamp.add(lens);
+      // Keep the same half-sized aperture and inward edge as the previous lamp.
+      const radial=new T.Vector3(dx/radius,0,dz/radius),localRadial=radial.clone().applyQuaternion(lamp.quaternion.clone().invert());
+      const innerOffset=-1.05*localRadial.y-Math.hypot(2*localRadial.x,1.4*localRadial.y,2*localRadial.z);
+      const recessedOffset=.5*(lens.position.y*localRadial.y-2*Math.hypot(localRadial.x,localRadial.z)),inset=innerOffset-recessedOffset;
+      lamp.scale.setScalar(.5);lamp.position.addScaledVector(radial,inset);lamp.position.y+=.32*inset;
+      this.recessStationLight(podSaucer,lamp,lens);
+      root.add(lamp);runningLights.push(lens);
     });
-    root.userData.beacon=beacon;return root;
+    root.userData.beacon=beacon;root.userData.runningLights=runningLights;return root;
+  }
+  recessStationLight(saucer,lamp,lens){
+    const T=this.T,g=saucer.geometry,p=g.attributes.position,uv=g.attributes.uv,normals=g.attributes.normal,index=g.index.array,keep=[],patch=[],patchUV=[],patchNormals=[];
+    const inverse=lamp.quaternion.clone().invert(),circle=Array.from({length:32},(_,i)=>({x:Math.cos(i*Math.PI/16)*2,z:Math.sin(i*Math.PI/16)*2}));
+    const vertex=j=>{const point=new T.Vector3().fromBufferAttribute(p,j),local=point.clone().add(saucer.position).sub(lamp.position).applyQuaternion(inverse).multiplyScalar(2);return {point,normal:new T.Vector3().fromBufferAttribute(normals,j),u:uv.getX(j),v:uv.getY(j),x:local.x,z:local.z};};
+    const mix=(a,b,t)=>({point:a.point.clone().lerp(b.point,t),normal:a.normal.clone().lerp(b.normal,t),u:a.u+(b.u-a.u)*t,v:a.v+(b.v-a.v)*t,x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t});
+    const clip=(polygon,a,b,inside)=>{
+      const output=[],side=v=>(b.x-a.x)*(v.z-a.z)-(b.z-a.z)*(v.x-a.x);
+      for(let i=0;i<polygon.length;i++){
+        const c=polygon[i],d=polygon[(i+1)%polygon.length],sc=side(c),sd=side(d),ic=inside?sc>=0:sc<=0,id=inside?sd>=0:sd<=0;
+        if(ic)output.push(c);if(ic!==id)output.push(mix(c,d,sc/(sc-sd)));
+      }
+      return output;
+    };
+    // Clip a circular aperture out of the existing underside triangles only.
+    for(let i=0;i<index.length;i+=3){
+      const ids=[index[i],index[i+1],index[i+2]],triangle=ids.map(vertex);
+      if(triangle.some(v=>v.point.y>1e-6)||Math.min(...triangle.map(v=>v.x))>2||Math.max(...triangle.map(v=>v.x))< -2||Math.min(...triangle.map(v=>v.z))>2||Math.max(...triangle.map(v=>v.z))< -2){keep.push(...ids);continue;}
+      let remaining=triangle;const pieces=[];
+      for(let j=0;j<32&&remaining.length>=3;j++){const a=circle[j],b=circle[(j+1)%32];pieces.push(clip(remaining,a,b,false));remaining=clip(remaining,a,b,true);}
+      if(remaining.length<3){keep.push(...ids);continue;}
+      for(const polygon of pieces)for(let j=1;j<polygon.length-1;j++)for(const v of [polygon[0],polygon[j],polygon[j+1]]){patch.push(...v.point.toArray());patchUV.push(v.u,v.v);patchNormals.push(...v.normal.toArray());}
+    }
+    g.setIndex(keep);g.clearGroups();g.addGroup(0,keep.length,0);
+    const patched=new T.BufferGeometry();patched.setAttribute('position',new T.Float32BufferAttribute(patch,3));patched.setAttribute('uv',new T.Float32BufferAttribute(patchUV,2));patched.setAttribute('normal',new T.Float32BufferAttribute(patchNormals,3));
+    const plating=new T.Mesh(patched,saucer.material);plating.name='K7 underside recessed-light aperture';saucer.add(plating);
+    const top=[],bottom=[],outward=new T.Vector3(0,-1,0).applyQuaternion(lamp.quaternion);
+    for(let i=0;i<32;i++){
+      const a=i*Math.PI/16,point=new T.Vector3(Math.cos(a)*2,lens.position.y,Math.sin(a)*2).multiplyScalar(.5).applyQuaternion(lamp.quaternion).add(lamp.position).sub(saucer.position);
+      const sector=Math.floor(((Math.atan2(point.x,point.z)+Math.PI*2)%(Math.PI*2))/(Math.PI/32)),mid=(sector+.5)*Math.PI/32;
+      const sx=.32*Math.sin(mid)/Math.cos(Math.PI/64),sz=.32*Math.cos(mid)/Math.cos(Math.PI/64);
+      const depth=(sx*point.x+sz*point.z-.32*52-point.y)/(outward.y-sx*outward.x-sz*outward.z);
+      bottom.push(point);top.push(point.clone().addScaledVector(outward,depth));
+    }
+    const walls=[];
+    for(let i=0;i<32;i++){
+      const j=(i+1)%32;for(const point of [top[i],bottom[i],top[j],top[j],bottom[i],bottom[j]])walls.push(...point.toArray());
+    }
+    const well=new T.BufferGeometry();well.setAttribute('position',new T.Float32BufferAttribute(walls,3));well.setAttribute('uv',new T.Float32BufferAttribute(Array(walls.length/3*2).fill(0),2));well.computeVertexNormals();
+    const recess=new T.Mesh(well,saucer.material);recess.material=recess.material.clone();recess.material.side=T.DoubleSide;recess.name='K7 recessed light inner wall';saucer.add(recess);
   }
   makePlanet(){
     const T=this.T,body=this.sim?.planet||Battle.PLANET,planet=new T.Group();planet.position.set(body.x,body.y,body.z);
@@ -531,11 +584,11 @@ window.BattleScene=class{
           const line=new T.LineSegments(geometry,new T.LineBasicMaterial({color,vertexColors:fade,transparent:true,opacity,depthWrite:false}));
           line.frustumCulled=false;this.scene.add(line);return line;
         };
-        this.tacticalPaths[name]={history:[],past:create(.9,true),future:create(.65,true)};
+        this.tacticalPaths[name]={history:[],warps:[],past:create(.9,true),future:create(.65,true)};
       }
     }
     if(this.pathSimulation!==sim||this.pathPlayer!==sim.player||now<(this.pathTime??-1)){
-      for(const path of Object.values(this.tacticalPaths))path.history=[];
+      for(const path of Object.values(this.tacticalPaths)){path.history=[];path.warps=[];}
       this.pathSimulation=sim;this.pathPlayer=sim.player;
     }
     this.pathTime=now;
@@ -544,16 +597,22 @@ window.BattleScene=class{
       const path=this.tacticalPaths[name],history=path.history;
       const known=name==='Enterprise'||sim.freeFlight||sim.contact;
       while(history.length&&history[0].time<now-30)history.shift();
+      path.warps=path.warps.filter(warp=>warp.time>=now-30);
       const last=history[history.length-1];
       if(known&&state.hull>0&&(!last||now-last.time>=.1-1e-6))history.push({time:now,x:state.x,y:state.y,z:state.z});
       const visible=this.mode==='tactical'&&!sim.replayShot&&!sim.result&&known&&state.hull>0;
       path.past.visible=path.future.visible=visible;
       if(!visible)continue;
       const vertices=[],colors=[],trace=[...history,{time:now,x:state.x,y:state.y,z:state.z}];
+      for(const warp of path.warps){
+        vertices.push(warp.from.x,warp.from.y,warp.from.z,warp.to.x,warp.to.y,warp.to.z);
+        const strength=Math.pow(Battle.clamp(1-(now-warp.time)/30,0,1),1.3);
+        for(let i=0;i<2;i++)colors.push(strength,strength,strength);
+      }
       const oldest=history[0]?.time??now,fadeSpan=Math.max(.1,now-oldest);
       for(let i=1;i<trace.length;i++){
         const a=trace[i-1],b=trace[i],elapsed=b.time-a.time;
-        // Do not join warps or gaps in sensor contact into a traveled segment.
+        // Warp events supply their exact jump lines; other gaps stay disconnected.
         if(elapsed<=0||elapsed>.3||Math.hypot(b.x-a.x,b.y-a.y,b.z-a.z)>Math.max(100,elapsed*400))continue;
         vertices.push(a.x,a.y,a.z,b.x,b.y,b.z);
         for(const point of [a,b]){const strength=Math.pow(Battle.clamp((point.time-oldest)/fadeSpan,0,1),1.3);colors.push(strength,strength,strength);}
@@ -635,9 +694,44 @@ window.BattleScene=class{
     const ship=this.ships.Enterprise,euler=ship.rotation.clone();
     euler.z=0;return ship.quaternion.clone().setFromEuler(euler);
   }
-  setCamera(mode){if(mode!==this.mode)this.cinemaTracking=null;if(mode==='tactical'&&this.mode!=='tactical')this.tacticalBaseDistance=null;const chaseStyle=value=>value==='chase'||value==='cinematic';const preserve=mode!==this.mode&&chaseStyle(mode)&&chaseStyle(this.mode);this.mode=mode;if(!preserve){this.closeFraming=false;this.orbit={x:0,y:0};this.zoom=1;if(mode!=='tactical'&&this.camera&&this.camera.zoom!==1){this.camera.zoom=1;this.camera.updateProjectionMatrix();}}}
+  setCamera(mode){
+    const previous=this.mode,shuttleView=value=>['cinematic','tactical'].includes(value);
+    if(mode==='tactical'&&previous!=='tactical'){
+      if(!this.cinemaShuttlePose&&this.camera)this.cinemaShuttlePose={position:this.camera.position.clone(),gaze:this.camera.getWorldDirection(new this.T.Vector3())};
+      this.cinemaViewControls=previous==='cinematic'?{zoom:this.zoom,orbit:{...this.orbit}}:{zoom:1,orbit:{x:0,y:0}};
+      this.tacticalBaseDistance=null;
+    }
+    if(mode!==previous&&!(shuttleView(mode)&&shuttleView(previous)))this.cinemaTracking=null;
+    const chaseStyle=value=>value==='chase'||value==='cinematic',preserve=mode!==previous&&chaseStyle(mode)&&chaseStyle(previous);
+    this.mode=mode;this.updateStationDetail();
+    if(!preserve){this.closeFraming=false;this.orbit={x:0,y:0};this.zoom=1;if(mode!=='tactical'&&this.camera&&this.camera.zoom!==1){this.camera.zoom=1;this.camera.updateProjectionMatrix();}}
+    if(mode==='cinematic'&&previous==='tactical'&&this.cinemaViewControls){this.zoom=this.cinemaViewControls.zoom;this.orbit={...this.cinemaViewControls.orbit};}
+  }
+  updateStationDetail(){
+    if(!this.station)return;
+    const simplified=this.mode==='tactical'&&!this.sim?.replayShot;
+    if(this.stationDetail?.station!==this.station){
+      const T=this.T,materials=new Map(),records=[];
+      const plain=material=>{
+        if(!materials.has(material))materials.set(material,new T.MeshStandardMaterial({color:material.color?.clone()||0xb8c1bc,roughness:.95,metalness:0,side:material.side}));
+        return materials.get(material);
+      };
+      this.station.traverse(part=>{
+        const hide=part.isInstancedMesh||part.isLineSegments||/K7 curved hangar|underside running light|K7 navigation beacon/.test(part.name);
+        if(hide)records.push({part,hide:true,visible:part.visible});
+        else if(part.isMesh&&part.material)records.push({part,material:part.material,plain:Array.isArray(part.material)?part.material.map(plain):plain(part.material)});
+      });
+      this.stationDetail={station:this.station,records,simplified:null};
+    }
+    if(this.stationDetail.simplified===simplified)return;
+    for(const record of this.stationDetail.records){
+      if(record.hide)record.part.visible=!simplified&&record.visible;
+      else record.part.material=simplified?record.plain:record.material;
+    }
+    this.stationDetail.simplified=simplified;
+  }
   trackFreeFlightCamera(position,target){
-    if(!this.sim.freeFlight||this.sim.replayShot||this.sim.result){this.freeFlightCamera=null;return false;}
+    if(!this.sim.freeFlight||this.sim.replayShot||this.sim.result||this.mode==='cinematic'){this.freeFlightCamera=null;return false;}
     const p=this.sim.player,anchor=new this.T.Vector3(p.x,p.y,p.z);
     if(this.mode==='chase'||this.mode==='cinematic'){
       const T=this.T,yaw=-(p.heading||0)*Math.PI/180,pitch=(p.pitch||0)*Math.PI/180,up=new T.Vector3(0,1,0),right=new T.Vector3(1,0,0);
@@ -665,7 +759,8 @@ window.BattleScene=class{
   }
   frameEnterpriseLow(dt=0,snap=false){
     // Extra wheel zoom uses the lens once the camera reaches safe hull clearance.
-    const eligible=(this.mode==='chase'||this.mode==='cinematic'&&this.sim.freeFlight)&&!this.sim.replayShot&&!this.sim.result;
+    if(this.sim.replayShot?.cinema||this.mode==='cinematic'&&!this.sim.replayShot&&!this.sim.result){this.camera.zoom=this.cinemaTracking?.lensZoom??1;this.camera.updateProjectionMatrix();return;}
+    const eligible=this.mode==='chase'&&!this.sim.replayShot&&!this.sim.result;
     if(this.mode!=='tactical'&&!this.sim.replayShot){
       const desired=eligible?Math.max(1,.5/(this.zoom||1)):1;
       this.gameplayLensZoom=snap||!Number.isFinite(this.gameplayLensZoom)||dt<=0?desired:this.gameplayLensZoom+(desired-this.gameplayLensZoom)*(1-Math.exp(-dt*3));
@@ -681,7 +776,7 @@ window.BattleScene=class{
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
   }
   applyReplayDrift(){
-    const shot=this.sim.replayShot,composition=this.replayComposition;if(!shot||!composition)return;
+    const shot=this.sim.replayShot,composition=this.replayComposition;if(!shot||!composition||shot.cinema)return;
     const age=Math.max(0,(shot.screenAt??shot.at??0)-composition.started),progress=Math.min(1,age/6),sign=composition.focus==='Yorktown'?-1:1;
     // A small film-plane pan leaves the chosen damage-facing angle and lens scale intact.
     this.camera.projectionMatrix.elements[8]+=sign*.08*progress;
@@ -696,48 +791,315 @@ window.BattleScene=class{
     camPos.copy(this.ships.Enterprise.position).add(offset);
     targetPos.copy(this.ships.Enterprise.position);
   }
+  tacticalShipOutline(ship){
+    if(!ship?.userData.model)return null;
+    this.tacticalOutlines??=new WeakMap();if(this.tacticalOutlines.has(ship))return this.tacticalOutlines.get(ship);
+    const T=this.T,model=ship.userData.model;model.updateWorldMatrix(true,true);
+    const inverse=model.matrixWorld.clone().invert(),point=new T.Vector3();
+    const hull=points=>{
+      points.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+      const cross=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+      const chain=items=>{const out=[];for(const p of items){while(out.length>1&&cross(out.at(-2),out.at(-1),p)<=1e-10)out.pop();out.push(p);}return out;};
+      return [...chain(points).slice(0,-1),...chain([...points].reverse()).slice(0,-1)];
+    };
+    const parts=(ship.userData.breakupParts||[]).map(part=>{
+      const points=[];part.traverse(mesh=>{
+        const vertices=mesh.geometry?.attributes.position;if(!vertices)return;
+        for(let i=0;i<vertices.count;i++){point.fromBufferAttribute(vertices,i).applyMatrix4(mesh.matrixWorld).applyMatrix4(inverse);points.push([point.x,point.z]);}
+      });
+      const side=part.userData.pylonSide||Object.entries(ship.userData.nacelles||{}).find(([,object])=>object===part)?.[0];
+      return {side,points:hull(points)};
+    }).filter(part=>part.points.length>2);
+    const z=parts.flatMap(part=>part.points.map(point=>point[1])),min=Math.min(...z),max=Math.max(...z);
+    const outline={parts,centerZ:(min+max)/2,length:max-min,scale:25/(max-min||1)};
+    this.tacticalOutlines.set(ship,outline);return outline;
+  }
+  cinemaSubject(ship){
+    const T=this.T;this.cinemaSubjectCenters??=new WeakMap();this.cinemaSubjectBounds??=new WeakMap();
+    if(!this.cinemaSubjectCenters.has(ship)){
+      ship.updateWorldMatrix(true,true);const min=new T.Vector3(Infinity,Infinity,Infinity),max=new T.Vector3(-Infinity,-Infinity,-Infinity),point=new T.Vector3();let found=false;
+      const inverse=ship.matrixWorld.clone().invert(),localMin=min.clone(),localMax=max.clone();
+      (ship.userData.model||ship).traverse(mesh=>{
+        if(!mesh.isMesh||!mesh.geometry)return;if(!mesh.geometry.boundingBox)mesh.geometry.computeBoundingBox();const box=mesh.geometry.boundingBox;
+        for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]){point.set(x,y,z).applyMatrix4(mesh.matrixWorld);min.min(point);max.max(point);point.applyMatrix4(inverse);localMin.min(point);localMax.max(point);found=true;}
+      });
+      this.cinemaSubjectCenters.set(ship,found?ship.worldToLocal(min.add(max).multiplyScalar(.5)):new T.Vector3());
+      const corners=[];
+      if(found)for(const x of [localMin.x,localMax.x])for(const y of [localMin.y,localMax.y])for(const z of [localMin.z,localMax.z])corners.push(new T.Vector3(x,y,z));
+      this.cinemaSubjectBounds.set(ship,corners);
+    }
+    return ship.localToWorld(this.cinemaSubjectCenters.get(ship).clone());
+  }
+  cinemaMotionAim(center,state,step){
+    const T=this.T,relative=center.clone().sub(state.position),time=state.elapsed;
+    if(!state.operator||state.operator.focus!==state.focus)state.operator={focus:state.focus,time,observed:relative.clone(),history:[{time,relative:relative.clone()}],velocity:new T.Vector3(),lead:new T.Vector3()};
+    const operator=state.operator,elapsed=time-operator.time;
+    if(elapsed>0)operator.history.push({time,relative:relative.clone()});
+    while(operator.history.length>2&&operator.history[1].time<time-1)operator.history.shift();
+    // ST-Command's shuttle operator: delayed observation, smoothed apparent
+    // velocity, and 1.1 seconds of transverse lead capped to 28% of half-frame.
+    const observedTime=time-(.28+.06*Math.sin(time*.85)),history=operator.history;let observed=history[0].relative.clone();
+    for(let i=1;i<history.length;i++){
+      const a=history[i-1],b=history[i];
+      if(observedTime<=b.time){observed.copy(a.relative).lerp(b.relative,Battle.clamp((observedTime-a.time)/(b.time-a.time),0,1));break;}
+      observed.copy(b.relative);
+    }
+    if(elapsed>0)operator.velocity.lerp(observed.clone().sub(operator.observed).multiplyScalar(1/elapsed),1-Math.exp(-step/.28));
+    const forward=relative.clone().normalize(),lead=operator.velocity.clone().addScaledVector(forward,-operator.velocity.dot(forward)).multiplyScalar(1.1);
+    operator.leadLimit=relative.length()*Math.tan(this.framingFov*Math.PI/360)/Math.max(.3,state.lensZoom)*Math.min(1,this.framingAspect)*.28;
+    if(lead.length()>operator.leadLimit)lead.setLength(operator.leadLimit);
+    operator.lead.lerp(lead,1-Math.exp(-step/.4));if(operator.lead.length()>operator.leadLimit)operator.lead.setLength(operator.leadLimit);
+    operator.observed.copy(observed);operator.time=time;
+    return state.position.clone().add(observed).add(operator.lead);
+  }
+  cinemaPreferredAzimuth(state){
+    const T=this.T,yaw=this.ships.Enterprise.rotation.y,aft=new T.Vector3(Math.sin(yaw),0,Math.cos(yaw));
+    const along=new T.Vector3(state.actionSide.z,0,-state.actionSide.x);
+    // Seek Enterprise's rear quarter on the established side of the action.
+    // Project the aft preference along the line instead of flipping camera sides.
+    const quarter=Math.atan2(aft.dot(along)*.9,.85),manual=Battle.clamp(this.orbit.x||0,-.3,.3);
+    return Math.atan2(state.actionSide.x,state.actionSide.z)+Battle.clamp(quarter+manual+Math.sin(state.elapsed*.025)*.08,-1.05,1.05);
+  }
+  relocateCinemaShuttle(state,a,b,paired,withdrawing){
+    const T=this.T,pair=paired&&!withdrawing&&a.distanceTo(b)<2200,center=pair?a.clone().lerp(b,.5):a.clone();
+    const range=pair?Math.max(900,Math.min(1800,a.distanceTo(b)*.95/Math.min(1,this.framingAspect))):650;
+    for(const elevation of [.18,.4,.55])for(const offset of [0,.55,-.55,1.05,-1.05]){
+      const axis=Math.atan2(state.actionSide.x,state.actionSide.z),preferred=this.cinemaPreferredAzimuth(state)-axis;
+      const azimuth=axis+Battle.clamp(preferred+offset,-1.05,1.05);
+      const direction=new T.Vector3(Math.sin(azimuth),elevation,Math.cos(azimuth)).normalize(),position=center.clone().addScaledVector(direction,range);
+      if(this.sim.stationTrace?.(position,position,100)||this.sim.stationTrace?.(position,center,20)||(this.sim.planetClearance?.(position)??Infinity)<200)continue;
+      state.position.copy(position);state.velocity.set(0,0,0);state.flightAcceleration?.set(0,0,0);state.gaze.copy(center).sub(position).normalize();
+      state.framingCenter=center;state.operator=null;state.panRotation=null;state.panRate=0;state.lensVelocity=0;state.lensZoom=pair?.5:1;
+      state.focus=pair?'pair':'Enterprise';state.detour=null;state.nextShot=state.elapsed+8;return true;
+    }
+    return false;
+  }
+  renderCinemaFade(){
+    const opacity=this.mode==='cinematic'&&!this.sim.result&&(!this.sim.replayShot||this.sim.replayShot.cinema)?this.cinemaTracking?.fadeOpacity||0:0;
+    if(opacity<=0)return;
+    if(!this.cinemaFade){
+      const T=this.T,scene=new T.Scene(),camera=new T.OrthographicCamera(-1,1,1,-1,0,2);camera.position.z=1;
+      const material=new T.MeshBasicMaterial({color:0x000000,transparent:true,opacity,depthTest:false,depthWrite:false,toneMapped:false});
+      scene.add(new T.Mesh(new T.PlaneGeometry(2,2),material));this.cinemaFade={scene,camera,material};
+    }
+    this.cinemaFade.material.opacity=opacity;
+    const autoClear=this.renderer.autoClear;this.renderer.autoClear=false;
+    try{this.renderer.render(this.cinemaFade.scene,this.cinemaFade.camera);}finally{this.renderer.autoClear=autoClear;}
+  }
   cinemaCamera(position,target,dt=0,snap=false){
-    const T=this.T,a=this.ships.Enterprise.position,b=this.ships.Yorktown.position;
-    const paired=this.sim.enemy.hull>0,center=paired?a.clone().lerp(b,.5):a.clone();
+    const T=this.T,a=this.cinemaSubject(this.ships.Enterprise),b=this.cinemaSubject(this.ships.Yorktown),paired=this.sim.enemy.hull>0;
+    const separation=a.distanceTo(b),step=Math.min(.1,Math.max(0,dt)),worldUp=new T.Vector3(0,1,0);
     if(!this.cinemaTracking){
-      const along=b.clone().sub(a);along.y=0;
-      if(along.lengthSq()<1)along.set(0,0,-1);along.normalize();
-      // Establish one viewing side, then let the ships turn within the shot.
+      const seed=this.mode==='tactical'?this.cinemaShuttlePose:null,eye=seed?.position||this.camera.position;
+      const along=b.clone().sub(a);along.y=0;if(along.lengthSq()<1)along.set(0,0,-1);along.normalize();
       const side=new T.Vector3(-along.z,0,along.x);
-      const direction=side.addScaledVector(along,-.3);direction.y=.4;direction.normalize();
-      const initial=snap?center.clone():this.camera.getWorldDirection(new T.Vector3()).multiplyScalar(Math.max(360,this.camera.position.distanceTo(center))).add(this.camera.position);
-      this.cinemaTracking={direction,center:initial,previousCenter:center.clone(),offset:this.camera.position.clone().sub(initial)};
-      if(this.cinemaTracking.offset.length()<110)this.cinemaTracking.offset.copy(direction).multiplyScalar(400);
+      if(eye.clone().sub(a.clone().lerp(b,.5)).dot(side)<0)side.negate();
+      this.cinemaTracking={position:eye.clone(),velocity:new T.Vector3(),gaze:seed?.gaze.clone()||this.camera.getWorldDirection(new T.Vector3()),elapsed:0,shot:0,nextShot:8,focus:paired&&separation<2200?'pair':'Enterprise',azimuth:Math.atan2(side.x,side.z),lensZoom:this.mode==='tactical'?1:this.camera.zoom||1,maxSpeed:this.cinemaTopSpeed};
+      this.cinemaTracking.actionSide=side;
     }
-    const state=this.cinemaTracking,step=Math.min(.1,Math.max(0,dt));
-    const direction=state.direction.clone().applyAxisAngle(new T.Vector3(0,1,0),this.orbit.x);
-    direction.y=Battle.clamp(direction.y+this.orbit.y*.4,.15,.8);direction.normalize();
-    const right=new T.Vector3().crossVectors(direction,new T.Vector3(0,1,0)).normalize();
-    const up=new T.Vector3().crossVectors(right,direction).normalize();
-    const tan=Math.tan(this.framingFov*Math.PI/360),aspect=this.framingAspect;
-    const subjects=paired?[a,b]:[a],radius=100;
-    let distance=360*Math.max(1,1/aspect);
-    for(const point of subjects){
-      const v=point.clone().sub(center),depth=v.dot(direction);
-      distance=Math.max(distance,depth+radius+(Math.abs(v.dot(right))+radius)/(tan*aspect*.8),depth+radius+(Math.abs(v.dot(up))+radius)/(tan*.78));
+    const state=this.cinemaTracking,previousFocus=state.focus;state.elapsed+=step;
+    state.maxSpeed=this.cinemaTopSpeed*Battle.clamp(this.cinemaSpeedPercent??100,0,100)/100;
+    // Treat the line of action as undirected so ships crossing one another
+    // do not suddenly reverse the established viewing side.
+    const actionLine=b.clone().sub(a);actionLine.y=0;
+    if(paired&&actionLine.length()>250){
+      actionLine.normalize();const side=new T.Vector3(-actionLine.z,0,actionLine.x);
+      if(side.dot(state.actionSide)<0)side.negate();state.actionSide.copy(side);
     }
-    distance*=Math.max(.8,this.zoom);
-    if(snap){state.center.copy(center);state.offset.copy(direction).multiplyScalar(distance);}
-    else if(step>0){
-      // Translate with the engagement; ease reframing independently of ship bank.
-      state.center.add(center.clone().sub(state.previousCenter)).lerp(center,1-Math.exp(-step*1.6));
-      const current=state.offset.clone().normalize(),angle=current.angleTo(direction);
-      const rotation=this.camera.quaternion.clone().setFromUnitVectors(current,direction);
-      rotation.slerp(this.camera.quaternion.clone().identity(),1-Math.min(1,step*Math.PI/10/Math.max(angle,1e-6)));
-      const length=state.offset.length()+(distance-state.offset.length())*(1-Math.exp(-step*.9));
-      state.offset.copy(current.applyQuaternion(rotation)).multiplyScalar(Math.max(110,length));
+    const turn=this.sim.turn,turnActive=!!turn&&['closing','approach','attack','withdraw'].includes(turn.phase);
+    const keepDistance=turn?.maneuver==='distance';
+    const withdrawing=['withdraw','disengage'].includes(turn?.phase)||turn?.maneuver==='flee'||this.sim.enemyRetreating||this.sim.replayShot?.kind==='withdrawal';
+    const enterpriseCentered=withdrawing||keepDistance;
+    if(turnActive&&(!state.turnActive||state.turnNumber!==turn.number)){
+      state.establishUntil=state.elapsed+5;state.nextShot=state.establishUntil;state.focus=paired?'pair':'Enterprise';state.operator=null;
     }
-    state.previousCenter.copy(center);
-    target.copy(state.center);position.copy(target).add(state.offset);
-    this.camera.up.set(0,1,0);
+    state.turnActive=turnActive;state.turnNumber=turn?.number;
+    const establishing=paired&&!enterpriseCentered&&(turn?.phase==='closing'||state.elapsed<(state.establishUntil||0));state.establishing=establishing;
+    const sightA=a.clone().sub(state.position),sightB=b.clone().sub(state.position);
+    // Hold a two-ship composition through an exchange instead of cutting back
+    // and forth as either ship briefly approaches the edge of the picture.
+    const pairAngle=sightA.angleTo(sightB),canPair=paired&&pairAngle<(state.focus==='pair'?1.9:1.65)&&Math.min(sightA.length(),sightB.length())>150;
+    const score=point=>{const sight=point.clone().sub(state.position);return sight.angleTo(state.gaze)+(sight.length()<150?2:0);};
+    const visibleFocus=()=>paired&&score(b)+.25<score(a)?'Yorktown':'Enterprise';
+    if(!establishing&&state.elapsed>=state.nextShot){
+      state.shot++;state.nextShot=state.elapsed+8;
+      const firing=this.effects?.find(effect=>effect.kind==='beam'&&effect.life<effect.max);
+      const planned=state.shot%3===2&&firing?.from==='Yorktown'?'Yorktown':'Enterprise';
+      state.focus=!paired?'Enterprise':state.shot%3===0&&canPair?'pair':score(planned==='Yorktown'?b:a)<1?planned:visibleFocus();
+    }
+    if(establishing||canPair)state.focus='pair';
+    else if(!paired)state.focus='Enterprise';
+    else if(state.focus==='pair'&&!canPair||state.focus!=='pair'&&score(state.focus==='Yorktown'?b:a)>1.1)state.focus=visibleFocus();
+    if(enterpriseCentered)state.focus='Enterprise';
+    if(state.focus==='pair'&&previousFocus!=='pair')state.widenUntil=state.elapsed+.8;
+    const subjects=state.focus==='pair'?[a,b]:[state.focus==='Yorktown'?b:a];
+    const center=subjects.length===2?a.clone().lerp(b,.5):subjects[0].clone();
+    const azimuth=this.cinemaPreferredAzimuth(state);
+    const direction=new T.Vector3(Math.sin(azimuth),Battle.clamp(.14+(this.orbit.y||0)*.2,.05,.4),Math.cos(azimuth)).normalize();
+    const standOff=subjects.length===2?Math.max(650,Math.min(2200,separation*.95/Math.min(1,Math.max(.7,this.framingAspect)))):340;
+    const flightCenter=establishing?center:a.clone().lerp(center,state.focus==='pair'?.55:state.focus==='Yorktown'?.25:0);
+    let destination=flightCenter.clone().addScaledVector(direction,standOff);
+    if(this.cinemaFlightMode==='reckless'){
+      // Follow Enterprise into the fight while the existing operator continues
+      // choosing subjects, lead room, pan speed and optical framing.
+      const forward=new T.Vector3(0,0,-1).applyQuaternion(this.ships.Enterprise.quaternion);
+      destination=a.clone().addScaledVector(direction,300).addScaledVector(forward,(this.sim.player?.speed||0)*.75);
+    }
+    // Dolly backwards while looking at the action when the planned position
+    // would crowd the frame. Use the same ship clearance and framing margins
+    // as the lens, instead of turning the shuttle away to make room.
+    const lookingAtAction=state.gaze.dot(center.clone().sub(state.position).normalize())>.85;
+    if(lookingAtAction&&subjects.every(point=>point.clone().sub(state.position).dot(state.gaze)>0)){
+      const right=new T.Vector3().crossVectors(state.gaze,worldUp).normalize(),up=new T.Vector3().crossVectors(right,state.gaze).normalize();
+      const tan=Math.tan(this.framingFov*Math.PI/360);let reverseRoom=0;
+      for(const point of subjects){
+        const offset=point.clone().sub(destination),depth=offset.dot(state.gaze);
+        const room=65+Math.max((Math.abs(offset.dot(right))+65)*.8/(tan*this.framingAspect*.8),(Math.abs(offset.dot(up))+65)*.8/(tan*.76));
+        reverseRoom=Math.max(reverseRoom,room-depth);
+      }
+      if(reverseRoom>0)destination.addScaledVector(state.gaze,-Math.min(1800,reverseRoom+40));
+    }
+    const obstruction=this.sim.stationTrace?.(state.position,destination,20);
+    if(obstruction&&(!state.detour||state.elapsed>=state.detourUntil)){
+      state.detour=obstruction.pos?new T.Vector3(obstruction.pos.x,obstruction.pos.y,obstruction.pos.z).addScaledVector(new T.Vector3(obstruction.normal.x,obstruction.normal.y,obstruction.normal.z),120):state.position.clone();
+      state.detour.y=Math.max(state.detour.y,this.sim.station.y+350);state.detourUntil=state.elapsed+3;
+    }
+    if(state.detour&&state.elapsed<state.detourUntil)destination=state.detour;
+    // Fly on the established side, with room to brake before the axis.
+    const axisCenter=a.clone().lerp(b,.5),sideDistance=destination.clone().sub(axisCenter).dot(state.actionSide),sideMargin=Math.min(300,standOff*.35);
+    if(paired&&sideDistance<sideMargin)destination=destination.clone().addScaledVector(state.actionSide,sideMargin-sideDistance);
+    if(step>0){
+      // The shuttle has its own momentum. Never translate it with the capital ships.
+      const travel=destination.clone().sub(state.position),wanted=travel.clone();
+      if(wanted.length()>0)wanted.setLength(Math.min(state.maxSpeed,travel.length()*.5));
+      // The light shuttle responds faster than the capital ships, while
+      // retaining independent momentum and smoothly changing its thrust.
+      const oldVelocity=state.velocity.clone(),acceleration=wanted.clone().sub(state.velocity).multiplyScalar(1.4);
+      if(acceleration.length()>42)acceleration.setLength(42);
+      state.flightAcceleration??=new T.Vector3();
+      const thrustChange=acceleration.sub(state.flightAcceleration);
+      if(thrustChange.length()>64*step)thrustChange.setLength(64*step);
+      state.flightAcceleration.add(thrustChange);state.velocity.addScaledVector(state.flightAcceleration,step);
+      // A lower speed setting brakes existing momentum instead of erasing it.
+      const limit=Math.max(state.maxSpeed,oldVelocity.length());
+      if(state.velocity.length()>limit)state.velocity.setLength(limit);
+      if(wanted.lengthSq()<1e-8&&oldVelocity.dot(state.velocity)<=0){state.velocity.set(0,0,0);state.flightAcceleration.set(0,0,0);}
+      const next=state.position.clone().addScaledVector(state.velocity,step);
+      if(this.sim.stationTrace?.(state.position,next,18))state.velocity.multiplyScalar(.3);else state.position.copy(next);
+      state.reversing=state.velocity.dot(state.gaze)<-1;
+      const rawAim=state.focus==='pair'||enterpriseCentered?center:this.cinemaMotionAim(center,state,step);
+      state.framingCenter??=rawAim.clone();
+      state.framingCenter.lerp(rawAim,1-Math.exp(-step/(state.focus==='pair'?.65:.12)));
+      const aim=state.framingCenter;
+      if(state.focus==='pair'||enterpriseCentered)state.operator=null;
+      const desired=aim.clone().sub(state.position),horizontal=Math.max(1,Math.hypot(desired.x,desired.z));
+      desired.y=Battle.clamp(desired.y,-horizontal*.577,horizontal*.577);desired.normalize();
+      // ST-Command's close-pass operator pans around after the ships, including
+      // an exact 180-degree reversal where a direction cross-product is zero.
+      const rotationFor=direction=>{const view=new T.Group();view.up.copy(worldUp);view.lookAt(direction);view.rotateY(Math.PI);return view.quaternion.clone();};
+      state.panRotation??=rotationFor(state.gaze);
+      const view=rotationFor(desired),largePan=Battle.clamp((state.gaze.angleTo(center.clone().sub(state.position))-25*Math.PI/180)/(60*Math.PI/180),0,1);
+      const response=.17+.035*Math.sin(state.elapsed*1.1+.7)+largePan*.28,maxRate=(55-25*largePan)*Math.PI/180;
+      const angle=state.panRotation.angleTo(view),desiredRate=Math.min(maxRate,angle*(1-Math.exp(-step/response))/step);
+      const panAcceleration=65*Math.PI/180*step;
+      state.panRate=(state.panRate||0)+Battle.clamp(desiredRate-(state.panRate||0),-panAcceleration,panAcceleration);
+      const panStep=Math.min(angle,state.panRate*step);
+      if(angle>1e-9)state.panRotation.slerp(view,panStep/angle);
+      state.gaze.set(0,0,-1).applyQuaternion(state.panRotation).normalize();
+      // World-up framing stays level even while the operator eases a pan.
+      state.gaze.y=Battle.clamp(state.gaze.y,-.5,.5);state.gaze.normalize();
+      const right=new T.Vector3().crossVectors(state.gaze,worldUp).normalize(),up=new T.Vector3().crossVectors(right,state.gaze).normalize(),tan=Math.tan(this.framingFov*Math.PI/360);
+      const lensSubjects=paired&&canPair?[a,b]:subjects;
+      const twoShipShot=lensSubjects.length===2,horizontalMargin=twoShipShot?.9:.8,verticalMargin=twoShipShot?.86:.76;
+      let fit=twoShipShot?6:4;
+      for(const point of lensSubjects){
+        const offset=point.clone().sub(state.position),depth=offset.dot(state.gaze)-65;
+        fit=depth<=1?.18:Math.min(fit,depth*tan*this.framingAspect*horizontalMargin/(Math.abs(offset.dot(right))+65),depth*tan*verticalMargin/(Math.abs(offset.dot(up))+65));
+      }
+      const pullingWide=establishing||state.elapsed<(state.widenUntil||0);
+      // Continuously tighten a shared shot whenever both complete ships fit,
+      // including the opening. Smooth lens motion supplies the transition.
+      const desiredZoom=twoShipShot?fit/Math.max(1,this.zoom||1):.9*fit/(this.zoom||1);
+      const zoom=Battle.clamp(desiredZoom,twoShipShot?.18:.5,twoShipShot?6:pullingWide?.8:4);
+      // A critically damped lens in log space eases both ends of each zoom,
+      // including reversals, with a consistent perceived magnification speed.
+      const logZoom=Math.log(state.lensZoom),error=logZoom-Math.log(zoom),omega=2,decay=Math.exp(-omega*step);
+      const velocity=state.lensVelocity||0,change=(velocity+omega*error)*step;
+      state.lensZoom=Math.exp(Math.log(zoom)+(error+change)*decay);
+      state.lensVelocity=(velocity-omega*change)*decay;
+    }
+    const actionDistance=state.focus==='pair'?Math.min(state.position.distanceTo(a),state.position.distanceTo(b)):state.position.distanceTo(state.focus==='Yorktown'?b:a);
+    state.farTime=actionDistance>3200?(state.farTime||0)+step:0;
+    if(step>0&&!state.relocation&&state.farTime>=.6&&state.elapsed>=(state.nextRelocation||0))state.relocation={elapsed:0,moved:false};
+    if(state.relocation&&step>0){
+      const cut=state.relocation;cut.elapsed+=step;
+      if(!cut.moved&&cut.elapsed>=.24){
+        this.relocateCinemaShuttle(state,a,b,paired,enterpriseCentered);cut.moved=true;cut.elapsed=.24;state.fadeOpacity=1;
+        state.farTime=0;state.nextRelocation=state.elapsed+10;
+      }else state.fadeOpacity=cut.moved?Math.max(0,1-(cut.elapsed-.24)/.28):Math.min(1,cut.elapsed/.24);
+      if(cut.elapsed>=.52){state.relocation=null;state.fadeOpacity=0;}
+    }
+    // Aim five percent of the visible frame toward the lower-right. Keep the
+    // camera aboard the shuttle and show the same optical axis in Tactical.
+    const halfHeight=Math.tan(this.framingFov*Math.PI/360)/state.lensZoom;
+    const opticalRight=new T.Vector3().crossVectors(state.gaze,worldUp).normalize(),opticalUp=new T.Vector3().crossVectors(opticalRight,state.gaze).normalize();
+    const opticalGaze=state.gaze.clone().addScaledVector(opticalRight,.1*halfHeight*this.framingAspect).addScaledVector(opticalUp,-.1*halfHeight).normalize();
+    position.copy(state.position);target.copy(position).addScaledVector(opticalGaze,Math.max(200,position.distanceTo(center)));
+    this.cinemaShuttlePose={position:state.position.clone(),gaze:opticalGaze,horizontalFov:2*Math.atan(Math.tan(this.framingFov*Math.PI/360)*this.framingAspect/state.lensZoom)};
+    this.camera.up.copy(worldUp);
+  }
+  updateTacticalShuttle(dt=0,snap=false){
+    if(this.mode==='tactical'&&!this.sim.replayShot&&!this.sim.result){
+      // Advance the same Cinema flight without using Tactical's orbit or lens.
+      const controls=this.cinemaViewControls||{zoom:1,orbit:{x:0,y:0}},zoom=this.zoom,orbit=this.orbit,up=this.camera.up.clone();
+      try{
+        this.zoom=controls.zoom;this.orbit=controls.orbit;
+        this.cinemaCamera(new this.T.Vector3(),new this.T.Vector3(),dt,snap);
+      }finally{this.zoom=zoom;this.orbit=orbit;this.camera.up.copy(up);}
+    }
+    const T=this.T,pose=this.cinemaShuttlePose;
+    if(!this.tacticalShuttle&&this.mode==='tactical'&&pose&&window.BattleCameraShuttleOutline){
+      const yorktown=this.tacticalShipOutline(this.ships.Yorktown),modelScale=this.ships.Yorktown.userData.model?.scale.z||57;
+      const size=(yorktown?.length*modelScale||200)*.5,points=[];
+      for(const path of window.BattleCameraShuttleOutline.paths)for(let i=0;i<path.length;i++){
+        const a=path[i],b=path[(i+1)%path.length];points.push([a[0]*size,0,a[1]*size],[b[0]*size,0,b[1]*size]);
+      }
+      points.push([0,0,-size*.5],[0,0,-size*.5-210]);
+      const dashes=[];
+      for(let i=0;i<points.length;i+=2){const start=new T.Vector3(...points[i]),end=new T.Vector3(...points[i+1]),length=start.distanceTo(end);for(let d=0;d<length;d+=17)dashes.push(start.clone().lerp(end,d/length),start.clone().lerp(end,Math.min(length,d+10)/length));}
+      const geometry=new T.BufferGeometry().setFromPoints(dashes);
+      this.tacticalShuttle=new T.LineSegments(geometry,new T.LineBasicMaterial({color:0xeab273,transparent:true,opacity:.9,depthTest:false,depthWrite:false}));
+      this.tacticalShuttle.scale.setScalar(1);this.tacticalShuttle.renderOrder=20;this.scene.add(this.tacticalShuttle);
+      const fanGeometry=new T.BufferGeometry();fanGeometry.setAttribute('position',new T.Float32BufferAttribute(new Float32Array(48*9),3));
+      const arcGeometry=new T.BufferGeometry();arcGeometry.setAttribute('position',new T.Float32BufferAttribute(new Float32Array((48*2+4)*3),3));
+      const fan=new T.Mesh(fanGeometry,new T.MeshBasicMaterial({color:0xf5dc62,transparent:true,opacity:.07,depthTest:false,depthWrite:false,side:T.DoubleSide}));
+      fan.visible=false;
+      const arc=new T.LineSegments(arcGeometry,new T.LineBasicMaterial({color:0xf5dc62,transparent:true,opacity:.3,depthTest:false,depthWrite:false}));
+      fan.renderOrder=18;arc.renderOrder=19;fan.frustumCulled=arc.frustumCulled=false;
+      this.tacticalShuttle.add(fan,arc);this.tacticalShuttle.userData.fov={fan,arc,baseRadius:size*.5+210,radius:size*.5+210};
+    }
+    if(!this.tacticalShuttle)return;
+    this.tacticalShuttle.visible=this.mode==='tactical'&&!!pose&&!this.sim.replayShot;
+    if(pose){
+      this.tacticalShuttle.position.copy(pose.position);this.tacticalShuttle.rotation.y=Math.atan2(-pose.gaze.x,-pose.gaze.z);
+      const fov=this.tacticalShuttle.userData.fov,{fan,arc}=fov,half=(pose.horizontalFov??Math.PI/3)/2;
+      const aspect=this.camera.aspect||1,span=2500*Math.max(1,1/aspect)*Math.max(.5,this.zoom||1);
+      const center=this.ships.Enterprise.position.clone().lerp(this.ships.Yorktown.position,.5);
+      const radius=Math.max(fov.baseRadius,Math.hypot(pose.position.x-center.x,pose.position.z-center.z)+span*.6*Math.hypot(1,aspect));
+      fov.radius=radius;
+      const fill=fan.geometry.attributes.position,edge=arc.geometry.attributes.position;
+      for(let i=0;i<48;i++){
+        const a=-half+2*half*i/48,b=-half+2*half*(i+1)/48;
+        const ax=Math.sin(a)*radius,az=-Math.cos(a)*radius,bx=Math.sin(b)*radius,bz=-Math.cos(b)*radius;
+        fill.setXYZ(i*3,0,0,0);fill.setXYZ(i*3+1,ax,0,az);fill.setXYZ(i*3+2,bx,0,bz);
+        edge.setXYZ(i*2,ax,0,az);edge.setXYZ(i*2+1,bx,0,bz);
+      }
+      for(const [i,angle] of [[96,-half],[98,half]]){edge.setXYZ(i,0,0,0);edge.setXYZ(i+1,Math.sin(angle)*radius,0,-Math.cos(angle)*radius);}
+      fill.needsUpdate=edge.needsUpdate=true;
+    }
   }
   trackGameplayCamera(position,dt,snap=false){
-    if(this.sim.replayShot||this.sim.result||!['chase','cinematic'].includes(this.mode)||this.mode==='cinematic'&&!this.sim.freeFlight){this.gameplayCameraOffset=null;return false;}
+    if(this.sim.replayShot||this.sim.result||!['chase','cinematic'].includes(this.mode)||this.mode==='cinematic'){this.gameplayCameraOffset=null;return false;}
     const ship=this.ships.Enterprise;
     const frame=this.levelChaseRotation();
     const offset=position.clone().sub(ship.position).applyQuaternion(frame.clone().invert());
@@ -771,6 +1133,26 @@ window.BattleScene=class{
       if(visible&&side===.25)break;
     }
     return best;
+  }
+  replayCinemaCamera(camPos,targetPos,dt=0){
+    // Keep the replay editor's close-up timing and damage-facing angles. All
+    // other coverage comes from the same shuttle operator as live Cinema.
+    if(this.replayCut==null)this.cinemaTracking=null;
+    const cut=this.replayCamera(camPos,targetPos),shot=this.sim.replayShot;
+    const close=this.replayComposition.framing==='close';
+    if(!this.cinemaTracking){
+      this.camera.position.copy(camPos);this.camera.lookAt(targetPos);this.camera.updateMatrixWorld();
+    }
+    const cinemaPosition=new this.T.Vector3(),cinemaTarget=new this.T.Vector3();
+    this.cinemaCamera(cinemaPosition,cinemaTarget,shot.frameDt??dt);
+    shot.cinema=!close;
+    if(close)return cut;
+    camPos.copy(cinemaPosition);targetPos.copy(cinemaTarget);
+    shot.cameraKind=this.cinemaTracking.establishing?'establishing':'tracking';
+    shot.cameraFocus=this.cinemaTracking.focus==='pair'?'Enterprise & Yorktown':this.cinemaTracking.focus;
+    shot.framing=this.cinemaTracking.focus==='pair'?'wide':'medium';
+    shot.zoom=this.cinemaTracking.lensZoom;
+    return false;
   }
   replayCamera(camPos,targetPos){
     const T=this.T,sim=this.sim,screenAt=sim.replayShot.screenAt??sim.replayShot.at;let shot=sim.replayShot;
@@ -996,7 +1378,10 @@ window.BattleScene=class{
   event(event){
     const T=this.T;
     if(event.type==='station-impact'||event.type==='station-collision'||event.type==='ship-collision'){this.burst(new T.Vector3(event.pos.x,event.pos.y,event.pos.z),0xffc486,30);}
+    if(event.type==='station-collision'||event.type==='ship-collision')this.collisionDebris(event);
     if(event.type==='warp'){
+      this.updateTacticalPaths();
+      if(event.from&&event.to)this.tacticalPaths.Enterprise.warps.push({time:this.sim.time||0,from:{...event.from},to:{...event.to}});
       // Move the viewscreen immediately to the destination instead of flying the camera across the gap.
       this.update(0,true);
       const points=[],q=this.ships.Enterprise.quaternion;
@@ -1296,7 +1681,7 @@ window.BattleScene=class{
     }
     piece.traverse(mesh=>{if(mesh.geometry)mesh.geometry=new T.BufferGeometry().copy(mesh.geometry);if(mesh.material)mesh.material=Array.isArray(mesh.material)?mesh.material.map(m=>this.cloneHullMaterial(m)):this.cloneHullMaterial(mesh.material);});
     part.visible=false;
-    const sign=side==='port'?-1:1,forward=Battle.direction(state),outward=new T.Vector3(sign*35,-12,8).applyQuaternion(ship.quaternion);
+    const sign=side==='port'?-1:1,forward=Battle.direction(state),outward=new T.Vector3(sign*14,-5,3).applyQuaternion(ship.quaternion);
     const velocity=new T.Vector3(forward.x,forward.y,forward.z).multiplyScalar(state.speed||0).add(outward);
     this.scene.add(piece);this.effects.push({object:piece,kind:'nacelle-debris',ship:name,side,life:0,max:30,velocity,spin:new T.Vector3(.12,sign*.16,sign*.22)});
     this.burst(piece.position,0xff793c,35);
@@ -1313,21 +1698,39 @@ window.BattleScene=class{
       const piece=part.clone(true);piece.position.copy(part.getWorldPosition(new T.Vector3()));part.getWorldQuaternion(piece.quaternion);piece.scale.copy(part.getWorldScale(new T.Vector3()));
       piece.traverse(mesh=>{if(mesh.geometry)mesh.geometry=new T.BufferGeometry().copy(mesh.geometry);if(mesh.material){mesh.material=Array.isArray(mesh.material)?mesh.material.map(m=>this.cloneHullMaterial(m)):this.cloneHullMaterial(mesh.material);for(const material of [].concat(mesh.material)){material.color?.multiplyScalar(.7);material.emissive?.setRGB(.6,.09,.005);}}});
       const outward=piece.position.clone().sub(origin);if(outward.length()<1)outward.set(random()-.5,random()-.5,random()-.5);
-      register(piece,outward.normalize().multiplyScalar(35+random()*45).add(drift),new T.Vector3(random()-.5,random()-.5,random()-.5).multiplyScalar(1.1));
+      register(piece,outward.normalize().multiplyScalar(12+random()*16).add(drift),new T.Vector3(random()-.5,random()-.5,random()-.5).multiplyScalar(1.1));
     }
     for(let i=0;i<18;i++){
       const shard=new T.Mesh(new T.BoxGeometry(3+random()*6,1+random()*3,3+random()*8),new T.MeshStandardMaterial({color:0x42464a,roughness:.85,emissive:0x8b2507}));
       shard.position.copy(origin).add(new T.Vector3(random()-.5,random()-.5,random()-.5).multiplyScalar(45));
-      register(shard,new T.Vector3(random()-.5,random()-.5,random()-.5).normalize().multiplyScalar(50+random()*75).add(drift),new T.Vector3(random()-.5,random()-.5,random()-.5).multiplyScalar(3));
+      register(shard,new T.Vector3(random()-.5,random()-.5,random()-.5).normalize().multiplyScalar(18+random()*22).add(drift),new T.Vector3(random()-.5,random()-.5,random()-.5).multiplyScalar(3));
     }
     this.burst(origin,0xffa14c,180);
     const object=new T.Group();this.scene.add(object);
     const centers=[.2,.45,.7,1.0].map(at=>({at,position:origin.clone().add(new T.Vector3(random()-.5,random()-.5,random()-.5).multiplyScalar(85))}));
     this.effects.push({object,kind:'detonations',life:0,max:Battle.DESTRUCTION_DURATION,centers});
   }
+  collisionDebris(event){
+    const T=this.T,now=this.clock||0,key=event.type+':'+(event.ship||'Enterprise');
+    this.collisionDebrisTimes??=new Map();
+    if(now-(this.collisionDebrisTimes.get(key)??-Infinity)<.3)return;
+    this.collisionDebrisTimes.set(key,now);
+    const count=Math.min(event.type==='ship-collision'?12:8,80-this.effects.filter(effect=>effect.kind==='collision-debris').length);
+    const origin=new T.Vector3(event.pos.x,event.pos.y,event.pos.z),state=event.ship===this.sim?.enemy?.name?this.sim.enemy:this.sim?.player;
+    const forward=Battle.direction({heading:state?.heading||0,pitch:state?.pitch||0}),drift=new T.Vector3(forward.x,forward.y,forward.z).multiplyScalar((state?.speed||0)*.25);
+    let seed=(Math.round(origin.x*17+origin.y*31+origin.z*47)^0x4b719)>>>0;
+    const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+    for(let i=0;i<count;i++){
+      const size=2+random()*4,direction=new T.Vector3(random()-.5,random()-.5,random()-.5).normalize();
+      const shard=new T.Mesh(new T.BoxGeometry(size,.5+random(),size*(.7+random())),new T.MeshStandardMaterial({color:[0xb8c1bc,0x647079,0x333a40][i%3],metalness:.5,roughness:.7,emissive:i<3?0x8b2507:0x000000,transparent:true,opacity:1}));
+      shard.name='Collision hull fragment';shard.position.copy(origin).addScaledVector(direction,2+random()*6);shard.rotation.set(random()*Math.PI,random()*Math.PI,random()*Math.PI);
+      this.scene.add(shard);this.effects.push({object:shard,kind:'collision-debris',life:0,max:2.5+random()*1.5,velocity:direction.multiplyScalar(12+random()*20).add(drift),spin:new T.Vector3(random()-.5,random()-.5,random()-.5).multiplyScalar(5)});
+    }
+  }
   advanceDebris(effect,dt){
     effect.object.position.addScaledVector(effect.velocity,dt);effect.object.rotation.x+=effect.spin.x*dt;effect.object.rotation.y+=effect.spin.y*dt;effect.object.rotation.z+=effect.spin.z*dt;
     effect.object.traverse(mesh=>{for(const material of [].concat(mesh.material||[])){material.emissive?.multiplyScalar(Math.exp(-dt*2));if(material.uniforms?.emberTime)material.uniforms.emberTime.value+=dt;}});
+    if(effect.kind==='collision-debris')effect.object.material.opacity=Battle.clamp((effect.max-effect.life)/.7,0,1);
   }
   burst(position,color,count){
     const T=this.T,positions=new Float32Array(count*3),velocity=[];for(let i=0;i<count;i++)velocity.push(new T.Vector3((Math.random()-.5)*100,(Math.random()-.5)*100,(Math.random()-.5)*100));
@@ -1341,6 +1744,7 @@ window.BattleScene=class{
   update(dt,snap=false){
     const T=this.T,sim=this.sim,p=sim.player,e=sim.enemy;this.clock+=dt;
     this.updateStationRotation();
+    this.updateStationDetail();
     this.updatePlanetRotation();
     if(!sim.replayShot&&!['tactical','chase','cinematic'].includes(this.mode)&&this.camera.zoom!==1){this.camera.zoom=1;this.camera.updateProjectionMatrix();}
     for(const [name,state] of [['Enterprise',p],['Yorktown',e]]){
@@ -1351,15 +1755,15 @@ window.BattleScene=class{
       u.damageGlows.forEach((o,i)=>{o.material.opacity=state.hull<(85-i*10)?(.4+Math.sin(this.clock*7+i)*.3):0;});
       for(const scar of u.scars)for(const layer of scar.children)if(layer.material?.uniforms?.emberTime)layer.material.uniforms.emberTime.value=this.clock;
     }
-    if(this.sunLight){this.sunLight.intensity=sim.replayShot?3.8:3.4;this.rimLight.intensity=sim.replayShot?2.2:2.7;this.warmLight.intensity=sim.replayShot?.35:1.3;}
+    if(this.sunLight){this.sunLight.intensity=sim.replayShot?3.8:3.5;this.rimLight.intensity=sim.replayShot?2.2:2.5;this.warmLight.intensity=sim.replayShot?.35:1.2;}
     this.nebula.visible=sim.environment==='nebula'&&!sim.replayShot;this.nebula.position.copy(this.ships.Enterprise.position);this.stars.position.copy(this.ships.Enterprise.position);
     const targetPos=new T.Vector3(),camPos=new T.Vector3(),forward=new T.Vector3(...Object.values(Battle.direction(p))),q=this.ships.Enterprise.quaternion;
-    if(sim.replayShot){snap=this.replayCamera(camPos,targetPos)||snap;
+    if(sim.replayShot){snap=this.replayCinemaCamera(camPos,targetPos,dt)||snap;
     }else if(this.mode==='forward'){
       camPos.copy(this.ships.Enterprise.position).add(new T.Vector3(0,30,-90).applyQuaternion(q));targetPos.copy(camPos).addScaledVector(forward,1000);this.ships.Enterprise.visible=false;
     }else if(this.mode==='tactical'){
       this.tacticalCamera(camPos,targetPos);
-    }else if(this.mode==='cinematic'&&!sim.freeFlight&&!sim.result){
+    }else if(this.mode==='cinematic'&&!sim.result){
       this.cinemaCamera(camPos,targetPos,dt,snap);
     }else{
       this.chaseCamera(camPos,targetPos);
@@ -1377,18 +1781,19 @@ window.BattleScene=class{
     if(sim.freeFlight||!sim.replayShot&&!sim.result&&['chase','cinematic'].includes(this.mode))this.shake=0;
     if(sim.replayShot){
       this.gameplayCameraOffset=null;
-      this.trackReplayCamera(camPos,targetPos,sim.replayShot.frameDt??dt,snap);
+      if(sim.replayShot.cinema)this.camera.position.copy(camPos);
+      else this.trackReplayCamera(camPos,targetPos,sim.replayShot.frameDt??dt,snap);
     }else if(!this.trackGameplayCamera(camPos,dt,snap)){
-      if(snap||this.mode==='tactical'||this.mode==='cinematic'&&!sim.freeFlight&&!sim.result)this.camera.position.copy(camPos);else this.camera.position.lerp(camPos,1-Math.exp(-dt*5));
+      if(snap||this.mode==='tactical'||this.mode==='cinematic'&&!sim.result)this.camera.position.copy(camPos);else this.camera.position.lerp(camPos,1-Math.exp(-dt*5));
     }
     this.shake=Math.max(0,this.shake-dt);if(this.shake>0&&!sim.replayShot)this.camera.position.add(new T.Vector3(Math.sin(this.clock*100),Math.cos(this.clock*119),0).multiplyScalar(this.shake*1.4));
-    if(sim.replayShot)this.keepReplayScreenDirection(this.camera.position,targetPos);
+    if(sim.replayShot&&!sim.replayShot.cinema)this.keepReplayScreenDirection(this.camera.position,targetPos);
     this.keepCameraOutsidePlanet();this.camera.lookAt(targetPos);this.camera.updateMatrixWorld();this.frameEnterpriseLow(dt,snap);this.applyReplayDrift();this.updateRedSun();
     const active=new Set();for(const t of sim.projectiles){active.add(t.id);let o=this.projectiles.get(t.id);if(!o){o=new T.Sprite(new T.SpriteMaterial({map:this.glowMap(),color:t.from==='Enterprise'?0xffbe77:0xff6555,depthWrite:false,blending:T.AdditiveBlending}));o.scale.setScalar(22);this.scene.add(o);this.projectiles.set(t.id,o);}o.position.set(t.pos.x,t.pos.y,t.pos.z);}
     for(const [id,o] of this.projectiles)if(!active.has(id)){this.scene.remove(o);o.material.dispose();this.projectiles.delete(id);}
     for(const fx of [...this.effects]){
       fx.life+=dt;const t=fx.life/fx.max;
-      if(fx.kind==='debris'||fx.kind==='nacelle-debris')this.advanceDebris(fx,dt);
+      if(fx.kind==='debris'||fx.kind==='nacelle-debris'||fx.kind==='collision-debris')this.advanceDebris(fx,dt);
       if(fx.kind==='detonations')while(fx.centers.length&&fx.centers[0].at<=fx.life)this.burst(fx.centers.shift().position,0xff843b,90);
       if(t>=1){this.disposeEffect(fx);this.effects.splice(this.effects.indexOf(fx),1);continue;}
       if(fx.kind==='burst'){const a=fx.object.geometry.attributes.position;fx.velocity.forEach((v,i)=>a.setXYZ(i,v.x*fx.life,v.y*fx.life,v.z*fx.life));a.needsUpdate=true;fx.object.material.opacity=1-t;}
@@ -1403,8 +1808,9 @@ window.BattleScene=class{
         fx.object.children.forEach((o,i)=>{o.material.opacity=[.2,.8,1][i]*fade*pulse;o.scale.x=o.scale.z=1+Math.sin(fx.life*70)*.12;});
       }
     }
-    this.updateSpatialGuides();this.updateTacticalPaths();
+    this.updateSpatialGuides();this.updateTacticalPaths();this.updateTacticalShuttle(dt,snap);
     this.renderer.render(this.scene,this.camera);
+    this.renderCinemaFade();
   }
   project(state){const v=new this.T.Vector3(state.x,state.y,state.z).project(this.camera);return {x:(v.x+1)/2,y:(1-v.y)/2,visible:v.z<1&&v.z>-1&&Math.abs(v.x)<.92&&Math.abs(v.y)<.88};}
   keepCameraOutsidePlanet(){
@@ -1418,5 +1824,5 @@ window.BattleScene=class{
     for(const object of this.projectiles.values()){this.scene.remove(object);object.material.dispose();}this.projectiles.clear();
     this.replayReactions=[];this.replayDetail=null;this.shake=0;
   }
-  reset(){this.destroyedShips=new Set();this.destructionFocus=null;for(const fx of this.effects)this.disposeEffect(fx);this.effects=[];for(const o of this.projectiles.values()){this.scene.remove(o);o.material.dispose();}this.projectiles.clear();for(const s of Object.values(this.ships)){for(const scar of s.userData.scars)this.disposeScar(scar);s.userData.scars=[];s.userData.mountScars={};s.userData.detachedVisuals?.clear();for(const part of [...Object.values(s.userData.nacelles||{}),...s.userData.breakupParts.filter(part=>part.userData.pylonSide)])part.visible=true;}this.shake=0;this.setCamera('chase');this.update(0,true);}
+  reset(){this.cinemaShuttlePose=null;if(this.tacticalShuttle)this.tacticalShuttle.visible=false;this.collisionDebrisTimes?.clear();this.destroyedShips=new Set();this.destructionFocus=null;for(const fx of this.effects)this.disposeEffect(fx);this.effects=[];for(const o of this.projectiles.values()){this.scene.remove(o);o.material.dispose();}this.projectiles.clear();for(const s of Object.values(this.ships)){for(const scar of s.userData.scars)this.disposeScar(scar);s.userData.scars=[];s.userData.mountScars={};s.userData.detachedVisuals?.clear();for(const part of [...Object.values(s.userData.nacelles||{}),...s.userData.breakupParts.filter(part=>part.userData.pylonSide)])part.visible=true;}this.shake=0;this.setCamera('chase');this.update(0,true);}
 };

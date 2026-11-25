@@ -8,13 +8,10 @@ function setup(route='direct',next=null){
 }
 function disrupt(s){s.damage(s.enemy,s.player,1,'phaser','weapons');s.time=1;s.damage(s.enemy,s.player,1,'phaser','weapons');}
 
-test('ordinary completed maneuvers enter review within half a second without a withdrawal leg',()=>{
+test('ordinary completed maneuvers enter review immediately without a withdrawal leg',()=>{
   const s=setup();s.fire=()=>false;
   for(const order of [...s.turn.orders,...s.turn.enemyOrders])order.status='hit';
   s.turn.remaining=0;s.advanceTurn(0);
-  let aim;s.steerFlight=(ship,point)=>{if(ship===s.player)aim=point;};s.autoHelm(.1);
-  assert.equal(s.turn.navigation.retiring,false);assert(aim.z<s.player.z);
-  assert.notEqual(s.turn.phase,'review');s.time=.5;s.advanceTurn(0);
   assert.equal(s.turn.phase,'review');assert(s.range<1400,'review does not require opening separation');
   assert(!s.events.some(event=>event.type==='phase'&&event.phase==='disengage'));
   assert(!s.events.some(event=>event.type==='message'&&/breakaway|breaking away/i.test(event.text)));
@@ -77,6 +74,6 @@ test('Yorktown can execute the same combo and quick plans keep attacks eligible 
   assert(s.events.filter(e=>e.type==='impact').at(-1).combo);
   for(const style of ['timid','disabling','strong','aggressive','berserk']){
     const plan=new B.Simulation();assert(plan.applyPlanPreset(style));
-    for(const order of plan.turn.draft){assert(order.maneuvers.length>=2);assert(order.maneuvers.every(i=>!['flee','ram'].includes(plan.turn.draftManeuvers[i])));}
+    for(const order of plan.turn.draft){assert.equal(order.maneuvers.length,plan.turn.draftManeuvers.filter(route=>!['flee','ram'].includes(route)).length);assert(order.maneuvers.every(i=>!['flee','ram'].includes(plan.turn.draftManeuvers[i])));}
   }
 });

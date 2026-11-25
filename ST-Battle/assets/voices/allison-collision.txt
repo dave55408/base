@@ -1,0 +1,4 @@
+Collision! / Allison
+Source: assets/Station collision. Deflecting_Allison.mp3
+Extracted 0.595-1.200 seconds; mono 48 kHz PCM WAV with 5 ms entry and
+15 ms exit fades. Uses the existing Allison performance, without synthesis.
